@@ -103,17 +103,24 @@ export function requirementProgress(
     (line) => line.courseId || line.subject,
   );
   const matchedLines = new Set<DegreeAuditLine>();
+  // Every course the audit counts anywhere; Pack Planner rows for those
+  // (e.g. this term's enrolled classes) aren't "planned" here.
+  const auditedLines = [...groups.values()].flatMap((g) =>
+    g.lines.filter(
+      (l) => l.status === "C" || l.status === "E" || l.status === "P",
+    ),
+  );
   let plannerOnly = 0;
   for (const course of catalogCourses) {
     const courseId = stripLeadingZeros(course.course_id);
+    const matches = (l: DegreeAuditLine) =>
+      (courseId !== "" && l.courseId === courseId) ||
+      (l.subject.toUpperCase() === course.course_abr.toUpperCase() &&
+        normalizedCatalog(l.catalogNbr) ===
+          normalizedCatalog(course.catalog_num));
     const line =
       appliedLines.find((l) => courseId && l.courseId === courseId) ??
-      appliedLines.find(
-        (l) =>
-          l.subject.toUpperCase() === course.course_abr.toUpperCase() &&
-          normalizedCatalog(l.catalogNbr) ===
-            normalizedCatalog(course.catalog_num),
-      );
+      appliedLines.find(matches);
     if (line) {
       matchedLines.add(line);
     }
@@ -122,14 +129,15 @@ export function requirementProgress(
       courses.set(courseKeyOf(course), state);
       continue;
     }
-    const plannedTerm = planner
-      ? plannedTermFor(
-          planner,
-          course.course_id,
-          course.course_abr,
-          course.catalog_num,
-        )
-      : null;
+    const plannedTerm =
+      planner && !auditedLines.some(matches)
+        ? plannedTermFor(
+            planner,
+            course.course_id,
+            course.course_abr,
+            course.catalog_num,
+          )
+        : null;
     if (plannedTerm) {
       plannerOnly++;
       courses.set(courseKeyOf(course), {

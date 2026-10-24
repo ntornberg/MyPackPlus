@@ -134,22 +134,41 @@ describe("requirementProgress", () => {
     expect(progress.planned).toBe(1);
   });
 
+  it("doesn't mark a course planned when the audit counts it elsewhere", () => {
+    const planner = plannerIndex({
+      "2268": {
+        strm: "2268",
+        term: "2026 Fall Term",
+        // Enrolled per the audit's Core group, so not "planned" for Electives.
+        courses: [{ courseId: "99", subject: "TST", catalogNbr: "202" }],
+      },
+    });
+    const progress = requirementProgress(
+      "555",
+      [course("99", "TST", "202")],
+      groups,
+      planner,
+    );
+    expect(progress.courses.has("TST 202")).toBe(false);
+    expect(progress.planned).toBe(0);
+  });
+
   it("uses Pack Planner even without an audit for the requirement", () => {
     const planner = plannerIndex({
       "2271": {
         strm: "2271",
         term: "",
-        courses: [{ courseId: "1", subject: "TST", catalogNbr: "101" }],
+        courses: [{ courseId: "1", subject: "TST", catalogNbr: "909" }],
       },
     });
     const progress = requirementProgress(
       "555",
-      [course("1", "TST", "101")],
+      [course("1", "TST", "909")],
       groups,
       planner,
     );
     expect(progress.status).toBe("unknown");
-    expect(progress.courses.get("TST 101")?.term).toBe("Pack Planner");
+    expect(progress.courses.get("TST 909")?.term).toBe("Pack Planner");
   });
 
   it("is unknown when no audit covers the requirement", () => {
