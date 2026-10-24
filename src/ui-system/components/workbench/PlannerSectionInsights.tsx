@@ -37,16 +37,14 @@ export function seatTallyHeatBackground(
     return ENROLLMENT_HEAT_FALLBACK;
   }
 
-  const enrolled = Number.parseInt(match[1]!, 10);
+  // The registrar's tally is "available/capacity" ("60/60" = empty section).
+  const available = Number.parseInt(match[1]!, 10);
   const capacity = Number.parseInt(match[2]!, 10);
-  if (Number.isNaN(enrolled) || Number.isNaN(capacity) || capacity <= 0) {
+  if (Number.isNaN(available) || Number.isNaN(capacity) || capacity <= 0) {
     return ENROLLMENT_HEAT_FALLBACK;
   }
 
-  const openSeatRatio = Math.max(
-    0,
-    Math.min(1, (capacity - enrolled) / capacity),
-  );
+  const openSeatRatio = Math.max(0, Math.min(1, available / capacity));
 
   return ENROLLMENT_HEAT_SCALE(openSeatRatio).hex();
 }

@@ -19,6 +19,9 @@ import { createProfessorCard } from "../professor/ratingService";
 // Cache map to store course data in memory
 const courseDataCache = new Map<string, SingleCourseDataResponse>();
 
+// TTL for answers with neither grades nor a professor rating (30 minutes).
+const EMPTY_RESULT_CACHE_TTL_MS = 30 * 60 * 1000;
+
 /**
  * Fetches combined course and professor data from the backend API with layered caching.
  * Attempts in-memory, then persistent storage before making network request.
@@ -104,9 +107,13 @@ async function fetchInlineCourseMetadata(
     const courseHash = await generateCacheKey(
       course.abr + " " + course.instructor,
     );
-    await setGenericCache("courseList", {
-      [courseHash]: JSON.stringify(combinedData),
-    });
+    // Empty answers expire sooner so newly added grades/ratings show up quickly.
+    const isEmpty = !combinedData.CourseData && !combinedData.RateMyProfInfo;
+    await setGenericCache(
+      "courseList",
+      { [courseHash]: JSON.stringify(combinedData) },
+      isEmpty ? EMPTY_RESULT_CACHE_TTL_MS : undefined,
+    );
 
     return combinedData;
   } catch (error) {

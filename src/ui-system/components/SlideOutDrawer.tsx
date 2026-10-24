@@ -19,6 +19,7 @@ import {
   CourseSearchDataInitialState,
   GepSearchDataInitialState,
   MajorPlanSearchDataInitialState,
+  restoredTerm,
   type CourseSearchData,
   type GepSearchData,
   type MajorPlanSearchData,
@@ -131,6 +132,7 @@ function mergeCourseSearchData(
   return {
     ...CourseSearchDataInitialState,
     ...stored,
+    selectedTerm: restoredTerm(stored?.selectedTerm),
     selectedCourseInfo:
       storedCourseInfo === null
         ? null
@@ -146,11 +148,17 @@ function mergeCourseSearchData(
 function mergeMajorPlanSearchData(
   stored: Partial<MajorPlanSearchData> | undefined,
 ): MajorPlanSearchData {
+  const selectedTerm = restoredTerm(stored?.selectedTerm);
+  // Saved results belong to the saved term; drop them if the term moved on.
+  const termChanged =
+    stored?.selectedTerm !== undefined && selectedTerm !== stored.selectedTerm;
   const restored = {
     ...MajorPlanSearchDataInitialState,
     ...stored,
+    selectedTerm,
     openCourses:
-      stored?.openCourses ?? MajorPlanSearchDataInitialState.openCourses,
+      (termChanged ? undefined : stored?.openCourses) ??
+      MajorPlanSearchDataInitialState.openCourses,
   };
 
   if (restored.isLoaded === false) {
@@ -168,11 +176,20 @@ function mergeMajorPlanSearchData(
 function mergeGepData(
   stored: Partial<GepSearchData> | undefined,
 ): GepSearchData {
+  const selectedTerm = restoredTerm(stored?.selectedTerm);
+  // Saved results belong to the saved term; drop them if the term moved on.
+  const termChanged =
+    stored?.selectedTerm !== undefined && selectedTerm !== stored.selectedTerm;
   const restored = {
     ...GepSearchDataInitialState,
     ...stored,
-    courseData: stored?.courseData ?? GepSearchDataInitialState.courseData,
-    courses: stored?.courses ?? GepSearchDataInitialState.courses,
+    selectedTerm,
+    courseData:
+      (termChanged ? undefined : stored?.courseData) ??
+      GepSearchDataInitialState.courseData,
+    courses:
+      (termChanged ? undefined : stored?.courses) ??
+      GepSearchDataInitialState.courses,
   };
 
   if (restored.isLoaded === false) {

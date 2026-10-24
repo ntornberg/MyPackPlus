@@ -315,6 +315,32 @@
   /* border-spacing composite (same hard pattern, no fallback) */
   --tw-border-spacing-x: 0;
   --tw-border-spacing-y: 0;
+  /*
+   * Gradient stack (bg-gradient-to-* + from/via/to). The stop positions are
+   * referenced without fallbacks, so leaving them unset drops the whole
+   * background-image — e.g. the "Add to cart" button rendered white-on-white.
+   */
+  --tw-gradient-position: initial;
+  --tw-gradient-from: #0000;
+  --tw-gradient-via: #0000;
+  --tw-gradient-to: #0000;
+  --tw-gradient-stops: initial;
+  --tw-gradient-via-stops: initial;
+  --tw-gradient-from-position: 0%;
+  --tw-gradient-via-position: 50%;
+  --tw-gradient-to-position: 100%;
+  /*
+   * `translate: var(--tw-translate-x) var(--tw-translate-y)` — a one-axis
+   * utility (e.g. the cart toast's -translate-x-1/2, the tooltip arrow) leaves
+   * the other axis unset and the whole translate is dropped.
+   */
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-translate-z: 0;
+  /* `outline` utilities emit outline-style: var(--tw-outline-style). */
+  --tw-outline-style: solid;
+  /* before:/after: utilities emit content: var(--tw-content) (tab underline, checkbox hit area). */
+  --tw-content: "";
 }
 
 #extension-overlay-root button:not(:disabled),

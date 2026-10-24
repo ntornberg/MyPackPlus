@@ -12,6 +12,7 @@ import {
   CALENDAR_COLOR_ENROLLED_CLASS,
 } from "../../types/calendar";
 import type { SectionLinkedMeeting } from "../../types/section";
+import { datePart, semesterOfItem } from "../../utils/semester";
 
 import CalendarGrid, { toMinutes } from "./CalendarGrid";
 
@@ -254,6 +255,7 @@ function buildEventsFromTableEntries(
       const sectionType = section.type || "Section";
       const subject =
         `${scheduleEntry.classs?.trim() || ""} ${sectionType}`.trim();
+      const semester = semesterOfItem(scheduleEntry, null);
       events.push({
         id: eventId++,
         subj: subject,
@@ -261,6 +263,7 @@ function buildEventsFromTableEntries(
         end: endTime,
         days: recurrRule.map((day) => ({ day, isOverlapping: false })),
         color,
+        ...(semester ? { semester } : {}),
       });
     }
   }
@@ -470,6 +473,7 @@ function buildEventsFromCalendarEntries(
         "course_title",
         "description",
       ]) ?? "Class";
+    const semester = semesterOfItem(entry, datePart(startRaw));
     events.push({
       id: eventId++,
       subj,
@@ -477,10 +481,35 @@ function buildEventsFromCalendarEntries(
       end,
       days,
       color,
+      ...(semester ? { semester } : {}),
     });
   }
 
   return events;
+}
+
+/**
+ * Table rows have no dates; rows stored before terms were captured inherit
+ * the semester of the same category's calendar events (the most common one),
+ * or stay unknown.
+ */
+function tagTableEventsWithSemester(
+  tableEvents: ScheduleEvent[],
+  calendarEvents: ScheduleEvent[],
+): ScheduleEvent[] {
+  const counts = new Map<string, number>();
+  for (const event of calendarEvents) {
+    if (event.semester) {
+      counts.set(event.semester, (counts.get(event.semester) ?? 0) + 1);
+    }
+  }
+  const [semester] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+  return semester
+    ? tableEvents.map((event) =>
+        // Rows captured with a term already know their semester.
+        event.semester ? event : { ...event, semester },
+      )
+    : tableEvents;
 }
 
 function normalizedCourseToken(subject: string): string | null {
@@ -545,10 +574,13 @@ export const loadScheduleEvents = async (): Promise<ScheduleEvent[]> => {
       );
 
       const tableEntries = await getCacheCategory("scheduleTableData");
-      const tableEvents = buildEventsFromTableEntries(
-        tableEntries,
-        CALENDAR_COLOR_ENROLLED_CLASS,
-        1 + calendarEvents.length,
+      const tableEvents = tagTableEventsWithSemester(
+        buildEventsFromTableEntries(
+          tableEntries,
+          CALENDAR_COLOR_ENROLLED_CLASS,
+          1 + calendarEvents.length,
+        ),
+        calendarEvents,
       );
       const events = mergeScheduleSources(tableEvents, calendarEvents);
       if (generation === getScheduleCacheGeneration()) {
@@ -586,10 +618,13 @@ export const loadCartScheduleEvents = async (): Promise<ScheduleEvent[]> => {
       );
 
       const tableEntries = await getCacheCategory("shopCartTableData");
-      const tableEvents = buildEventsFromTableEntries(
-        tableEntries,
-        CALENDAR_COLOR_CART_CLASS,
-        10_000 + calendarEvents.length,
+      const tableEvents = tagTableEventsWithSemester(
+        buildEventsFromTableEntries(
+          tableEntries,
+          CALENDAR_COLOR_CART_CLASS,
+          10_000 + calendarEvents.length,
+        ),
+        calendarEvents,
       );
       const events = mergeScheduleSources(tableEvents, calendarEvents);
       if (generation === getScheduleCacheGeneration()) {
@@ -702,7 +737,7 @@ export const CalendarView = (params: CalendarViewProps) => {
   if (isLoading) {
     return (
       <div
-        className={`flex h-full min-h-[400px] items-center justify-center rounded-2xl border border-border/60 bg-muted/30 text-sm text-muted-foreground ${plannerPreview ? "min-w-[460px] sm:min-w-[560px]" : ""}`}
+        className={`flex h-full min-h-[480px] items-center justify-center rounded-2xl border border-border/60 bg-muted/30 text-sm text-muted-foreground ${plannerPreview ? "min-w-[460px] sm:min-w-[560px]" : ""}`}
       >
         Loading schedule...
       </div>

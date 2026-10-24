@@ -57,6 +57,31 @@ type BusySlot = {
   days: Set<string>;
 };
 
+/** "CSC 316" from labels like "CSC316 Lecture" or "CSC 316 (001)". */
+export function courseCodeOf(label: string): string | null {
+  const match = label.toUpperCase().match(/\b([A-Z]{1,5})\s*(\d{3}[A-Z]?)\b/);
+  return match ? `${match[1]} ${match[2]}` : null;
+}
+
+/**
+ * Background (cart + enrolled) events that any of the section's meetings
+ * overlap. Another section of the same course isn't a conflict — you'd swap
+ * it, not take both.
+ */
+export function findScheduleConflicts(
+  section: ScheduleEvent[],
+  background: ScheduleEvent[],
+): ScheduleEvent[] {
+  return background.filter((busy) => {
+    const busyCode = courseCodeOf(busy.subj);
+    return section.some(
+      (block) =>
+        (busyCode === null || busyCode !== courseCodeOf(block.subj)) &&
+        eventsTimeOverlap(block, busy),
+    );
+  });
+}
+
 /** True when none of the section’s meetings overlap cart + enrolled background. */
 export function sectionFitsSchedule(
   section: ScheduleEvent[],

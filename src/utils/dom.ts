@@ -374,9 +374,12 @@ export function waitForCart(): Promise<Element> {
         '[id$="divPSPAGECONTAINER"] iframe',
       )?.contentDocument;
       if (!iframe) return null;
-      const plannerParent = iframe.querySelector("#enroll-wizard-container");
-      if (!plannerParent) return null;
-      return plannerParent.querySelector("#classSearchTable");
+      // Search result dialogs may be attached outside the wizard container
+      // (jQuery UI dialogs often move to the end of <body>).
+      return (
+        iframe.querySelector("#enroll-wizard-container #classSearchTable") ??
+        iframe.querySelector(".ui-dialog #classSearchTable")
+      );
     };
 
     const existingTable = findTable();
@@ -401,14 +404,9 @@ export function waitForCart(): Promise<Element> {
       '[id$="divPSPAGECONTAINER"] iframe',
     );
     if (initialIframe?.contentDocument) {
-      const plannerParent = initialIframe.contentDocument.querySelector(
-        "#enroll-wizard-container",
-      );
-      if (plannerParent) {
-        targetNodeToObserve = plannerParent; // Observe #enroll-wizard-container if available
-      } else {
-        targetNodeToObserve = initialIframe.contentDocument; // Observe iframe document if #enroll-wizard-container is not
-      }
+      // Whole iframe document: the table can appear inside the wizard
+      // container or in a dialog appended elsewhere.
+      targetNodeToObserve = initialIframe.contentDocument;
     }
     observer.observe(targetNodeToObserve, { childList: true, subtree: true });
   });

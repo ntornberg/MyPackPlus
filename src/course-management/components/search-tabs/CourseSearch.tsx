@@ -11,7 +11,7 @@ import {
 import { DEPT_COURSES } from "../../../generated/catalogs/course-search/departmentCourses.typed";
 import { TermIdByName } from "../../../generated/catalogs/termIds";
 import {
-  ScheduleFitField,
+  SectionSortField,
   SearchSubmitButton,
 } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
@@ -75,7 +75,9 @@ export default function CourseSearch({
   const [error, setError] = useState<Error | null>(null);
   const skipResultsCacheRestoreRef = useRef(false);
   const portalContainer = useOverlayPortalContainer();
-  const scheduleBackground = useScheduleBackgroundEvents();
+  const scheduleBackground = useScheduleBackgroundEvents(
+    courseSearchData.selectedTerm,
+  );
 
   const resultsCacheKey = useMemo(
     () =>
@@ -406,12 +408,11 @@ export default function CourseSearch({
           </FieldDescription>
         </Field>
 
-        <ScheduleFitField
-          id="course-schedule-fit"
-          checked={courseSearchData.scheduleFitOnly}
-          onCheckedChange={(checked) =>
-            setCourseSearchTabData("scheduleFitOnly", checked)
-          }
+        <SectionSortField
+          id="course-sort"
+          scheduleKnown={scheduleBackground !== null}
+          value={courseSearchData.sortMode}
+          onValueChange={(value) => setCourseSearchTabData("sortMode", value)}
         />
 
         <SearchSubmitButton
@@ -464,7 +465,7 @@ export default function CourseSearch({
           selectedPreviewId={selectedPreviewId}
           onPreviewSectionChange={onPreviewSectionChange}
           instructorFilter={courseSearchData.instructorFilter}
-          scheduleFitOnly={courseSearchData.scheduleFitOnly}
+          sortMode={courseSearchData.sortMode}
           scheduleBackground={scheduleBackground}
           compact={courseSearchData.compactSections}
         />

@@ -1,0 +1,688 @@
+import {
+  CalendarClock,
+  CheckCircle2,
+  ChevronRight,
+  Circle,
+  CircleDot,
+  Info,
+  RefreshCw,
+} from "lucide-react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
+
+import type {
+  DegreeAuditGroup,
+  DegreeAuditLine,
+} from "../../../degree-planning/services/degreeAudit";
+import type { PlannerIndex } from "../../../degree-planning/services/packPlanner";
+import {
+  auditLineState,
+  courseKeyOf,
+  requirementProgress,
+  type CourseAuditState,
+  type DegreeUnitsProgress,
+  type RequirementProgress,
+  type RequirementStatus,
+} from "../../../degree-planning/services/requirementProgress";
+import type { RequiredCourse } from "../../../degree-planning/types/Plans";
+import type { PlanningSyncState } from "../../../ui-system/components/workbench/usePlanningData";
+import type { ScheduleEvent } from "../../types/calendar";
+import type { MergedCourseData } from "../../types/section";
+import type { RequirementFilter } from "../tab-state/tabState";
+
+import { groupedSectionFit } from "./CourseSectionsCardList";
+
+export type RequirementTreeEntry = {
+  requirementKey: string;
+  requirementId: string;
+  courses: readonly RequiredCourse[];
+};
+
+type CourseRowModel = {
+  /** Unique within its requirement; a course can be applied more than once. */
+  id: string;
+  course: RequiredCourse;
+  key: string;
+  audit: CourseAuditState | null;
+  sectionCount: number;
+  openCount: number;
+  fitCount: number;
+  /** null when the schedule is unknown, so fit can't be judged. */
+  scheduleKnown: boolean;
+};
+
+type RequirementModel = {
+  entry: RequirementTreeEntry;
+  progress: RequirementProgress;
+  courses: CourseRowModel[];
+  /** Still-needed courses with sections this term. */
+  offered: number;
+  /** Still-needed courses with a section that fits the schedule. */
+  fitting: number;
+};
+
+const isNeeded = (row: CourseRowModel) =>
+  !row.audit || row.audit.status === "other";
+
+/** Needed and fitting first, finished work last. */
+function courseRowRank(row: CourseRowModel): number {
+  if (isNeeded(row)) {
+    if (row.fitCount > 0) return 0;
+    if (row.sectionCount > 0) return 1;
+    return 2;
+  }
+  switch (row.audit?.status) {
+    case "enrolled":
+      return 3;
+    case "planned":
+      return 4;
+    default:
+      return 5;
+  }
+}
+
+function buildCourseRow(
+  id: string,
+  course: RequiredCourse,
+  audit: CourseAuditState | null,
+  openCourses: Record<string, MergedCourseData>,
+  scheduleBackground: ScheduleEvent[] | null,
+): CourseRowModel {
+  const key = courseKeyOf(course);
+  const sections = Object.values(openCourses[key]?.sections ?? {});
+  let openCount = 0;
+  let fitCount = 0;
+  for (const section of sections) {
+    if (section.lecture?.availability?.toLowerCase().includes("open")) {
+      openCount++;
+    }
+    if (groupedSectionFit(section, scheduleBackground) === "fits") {
+      fitCount++;
+    }
+  }
+  return {
+    id,
+    course,
+    key,
+    audit,
+    sectionCount: sections.length,
+    openCount,
+    fitCount,
+    scheduleKnown: scheduleBackground !== null,
+  };
+}
+
+export const STATUS_META: Record<
+  RequirementStatus,
+  { label: string; icon: typeof Circle; className: string }
+> = {
+  complete: {
+    label: "Complete",
+    icon: CheckCircle2,
+    className: "text-emerald-600 dark:text-emerald-400",
+  },
+  enrolled: {
+    label: "Enrolled",
+    icon: CircleDot,
+    className: "text-primary",
+  },
+  planned: {
+    label: "Planned",
+    icon: CalendarClock,
+    className: "text-violet-600 dark:text-violet-400",
+  },
+  needed: {
+    label: "Needs courses",
+    icon: Circle,
+    className: "text-amber-600 dark:text-amber-400",
+  },
+  unknown: {
+    label: "",
+    icon: Circle,
+    className: "text-muted-foreground",
+  },
+};
+
+const AUDIT_CHIP: Record<
+  CourseAuditState["status"],
+  { label: string; className: string }
+> = {
+  completed: {
+    label: "Completed",
+    className:
+      "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300",
+  },
+  enrolled: {
+    label: "Enrolled",
+    className: "bg-primary/10 text-primary",
+  },
+  planned: {
+    label: "Planned",
+    className:
+      "bg-violet-500/10 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300",
+  },
+  other: {
+    label: "Applied",
+    className: "bg-muted text-muted-foreground",
+  },
+};
+
+export function AuditChip({ state }: { state: CourseAuditState }) {
+  const chip = state.fromPlanner
+    ? { ...AUDIT_CHIP.planned, label: "In Pack Planner" }
+    : AUDIT_CHIP[state.status];
+  const detail = [state.grade, state.term].filter(Boolean).join(" · ");
+  return (
+    <Badge className={chip.className}>
+      {chip.label}
+      {detail ? <span className="font-normal">· {detail}</span> : null}
+    </Badge>
+  );
+}
+
+function AvailabilityChips({ row }: { row: CourseRowModel }) {
+  if (row.sectionCount === 0) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        Not offered this term
+      </span>
+    );
+  }
+  return (
+    <>
+      <Badge variant="outline" className="font-normal">
+        {row.sectionCount} {row.sectionCount === 1 ? "section" : "sections"}
+        {row.openCount > 0 ? ` · ${row.openCount} open` : ""}
+      </Badge>
+      {row.scheduleKnown ? (
+        row.fitCount > 0 ? (
+          <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
+            {row.fitCount} fit
+          </Badge>
+        ) : (
+          <Badge className="bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
+            Conflicts
+          </Badge>
+        )
+      ) : null}
+    </>
+  );
+}
+
+function CourseRow({
+  row,
+  expanded,
+  onToggle,
+  renderSections,
+}: {
+  row: CourseRowModel;
+  expanded: boolean;
+  onToggle: () => void;
+  renderSections: (course: RequiredCourse) => ReactNode;
+}) {
+  const expandable = row.sectionCount > 0;
+  const done = row.audit?.status === "completed";
+  const label = (
+    <>
+      <ChevronRight
+        className={cn(
+          "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+          expanded && "rotate-90",
+          !expandable && "invisible",
+        )}
+        aria-hidden
+      />
+      <span className="w-20 shrink-0 font-mono text-xs text-muted-foreground">
+        {row.course.course_abr}{" "}
+        {Number.parseInt(row.course.catalog_num, 10) || row.course.catalog_num}
+      </span>
+      <span className="min-w-0 flex-1 truncate">
+        {row.course.course_descrip}
+      </span>
+      <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        {row.audit && !isNeeded(row) ? (
+          <AuditChip state={row.audit} />
+        ) : (
+          <AvailabilityChips row={row} />
+        )}
+      </span>
+    </>
+  );
+
+  return (
+    <div className="border-t border-border first:border-t-0">
+      {expandable ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          className={cn(
+            "flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors hover:bg-muted/50",
+            done && "text-muted-foreground",
+          )}
+        >
+          {label}
+        </button>
+      ) : (
+        <div
+          className={cn(
+            "flex w-full items-center gap-2 px-4 py-2 text-sm",
+            done && "text-muted-foreground",
+          )}
+        >
+          {label}
+        </div>
+      )}
+      {expanded && expandable ? (
+        <div className="px-4 pb-3">{renderSections(row.course)}</div>
+      ) : null}
+    </div>
+  );
+}
+
+/** A course the audit applied that the catalog doesn't list for the requirement. */
+function auditLineCourse(line: DegreeAuditLine): RequiredCourse {
+  return {
+    course_id: line.courseId,
+    course_abr: line.subject,
+    catalog_num: line.catalogNbr,
+    course_descrip: line.title,
+  };
+}
+
+function requirementSummary(model: RequirementModel): string {
+  const { progress, courses } = model;
+  if (progress.status === "unknown") {
+    return `${courses.length} course ${courses.length === 1 ? "option" : "options"}`;
+  }
+  const parts = [
+    progress.completed ? `${progress.completed} completed` : null,
+    progress.enrolled ? `${progress.enrolled} enrolled` : null,
+    progress.planned ? `${progress.planned} planned` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "Nothing applied yet";
+}
+
+function RequirementRow({
+  model,
+  expandedCourses,
+  onToggleCourse,
+  renderSections,
+}: {
+  model: RequirementModel;
+  expandedCourses: Set<string>;
+  onToggleCourse: (id: string) => void;
+  renderSections: (course: RequiredCourse) => ReactNode;
+}) {
+  const { entry, progress, courses } = model;
+  const meta = STATUS_META[progress.status];
+  const StatusIcon = meta.icon;
+
+  return (
+    <details className="plan-req-disclosure overflow-hidden rounded-lg border border-border bg-card/50 shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          className="plan-req-chevron size-4 shrink-0 text-muted-foreground transition-transform duration-200"
+          aria-hidden
+        />
+        <StatusIcon
+          className={cn("size-4 shrink-0", meta.className)}
+          aria-label={meta.label || undefined}
+          aria-hidden={!meta.label}
+        />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-base font-semibold text-foreground">
+            {entry.requirementKey}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {meta.label && progress.status !== "complete"
+              ? `${meta.label} · `
+              : ""}
+            {requirementSummary(model)}
+          </span>
+        </span>
+        <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {progress.status === "complete" ? (
+            <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
+              Complete
+            </Badge>
+          ) : (
+            <>
+              {model.offered > 0 ? (
+                <Badge variant="outline" className="font-normal">
+                  {model.offered} offered
+                </Badge>
+              ) : null}
+              {model.fitting > 0 ? (
+                <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
+                  {model.fitting} fit
+                </Badge>
+              ) : null}
+            </>
+          )}
+        </span>
+      </summary>
+      <div className="border-t border-border">
+        {courses.map((row) => {
+          const id = `${entry.requirementKey}|${row.id}`;
+          return (
+            <CourseRow
+              key={id}
+              row={row}
+              expanded={expandedCourses.has(id)}
+              onToggle={() => onToggleCourse(id)}
+              renderSections={renderSections}
+            />
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
+function UnitsBar({ units }: { units: DegreeUnitsProgress }) {
+  const pct = (value: number) =>
+    `${Math.min(100, (value / units.required) * 100)}%`;
+  const parts = [
+    `${units.completed} completed`,
+    units.enrolled ? `${units.enrolled} enrolled` : null,
+    units.planned ? `${units.planned} planned` : null,
+  ].filter(Boolean);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between text-xs">
+        <span className="font-medium text-foreground">Degree units</span>
+        <span className="text-muted-foreground">
+          {parts.join(" · ")} of {units.required}
+        </span>
+      </div>
+      <div
+        className="flex h-2 w-full overflow-hidden rounded-full bg-muted"
+        role="img"
+        aria-label={`${parts.join(", ")} of ${units.required} units`}
+      >
+        <div
+          className="bg-emerald-500"
+          style={{ width: pct(units.completed) }}
+        />
+        <div className="bg-primary" style={{ width: pct(units.enrolled) }} />
+        <div className="bg-violet-500" style={{ width: pct(units.planned) }} />
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-muted/50 px-3 py-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-lg font-semibold text-foreground">{value}</div>
+    </div>
+  );
+}
+
+const FILTER_OPTIONS: { value: RequirementFilter; label: string }[] = [
+  { value: "needed", label: "Still needed" },
+  { value: "fits", label: "Fits my schedule" },
+  { value: "all", label: "All" },
+];
+
+/** "just now", "12 min ago", "3 hr ago", or a date. */
+function syncedLabel(syncedAt: number, now = Date.now()): string {
+  const minutes = Math.round((now - syncedAt) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 24 * 60) return `${Math.round(minutes / 60)} hr ago`;
+  return new Date(syncedAt).toLocaleDateString();
+}
+
+export function PlanningSyncStatus({
+  sync,
+  syncedAt,
+  onRefresh,
+}: {
+  sync: PlanningSyncState;
+  syncedAt: number | null;
+  onRefresh: () => void;
+}) {
+  const syncing = sync.status === "syncing";
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+      <span
+        className="min-w-0 truncate"
+        title={sync.status === "failed" ? sync.message : undefined}
+      >
+        {syncing
+          ? "Syncing your degree audit and Pack Planner…"
+          : sync.status === "failed"
+            ? "Couldn't refresh from MyPack."
+            : syncedAt
+              ? `Degree audit synced ${syncedLabel(syncedAt)}`
+              : "Degree audit not synced yet"}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onRefresh}
+        disabled={syncing}
+        className="h-7 shrink-0 gap-1 px-2 text-xs"
+      >
+        <RefreshCw
+          className={cn("size-3", syncing && "animate-spin")}
+          aria-hidden
+        />
+        Refresh
+      </Button>
+    </div>
+  );
+}
+
+export function RequirementTree({
+  entries,
+  auditGroups,
+  hasAudit,
+  planner,
+  sync,
+  syncedAt,
+  onRefresh,
+  units,
+  openCourses,
+  scheduleBackground,
+  hideNoSections,
+  filter,
+  onFilterChange,
+  renderSections,
+}: {
+  entries: RequirementTreeEntry[];
+  auditGroups: Map<string, DegreeAuditGroup>;
+  hasAudit: boolean;
+  planner: PlannerIndex | null;
+  sync: PlanningSyncState;
+  syncedAt: number | null;
+  onRefresh: () => void;
+  units: DegreeUnitsProgress | null;
+  openCourses: Record<string, MergedCourseData>;
+  scheduleBackground: ScheduleEvent[] | null;
+  hideNoSections: boolean;
+  filter: RequirementFilter;
+  onFilterChange: (filter: RequirementFilter) => void;
+  renderSections: (course: RequiredCourse) => ReactNode;
+}) {
+  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const toggleCourse = useCallback((id: string) => {
+    setExpandedCourses((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const models = useMemo(
+    () =>
+      entries.map((entry): RequirementModel => {
+        const progress = requirementProgress(
+          entry.requirementId,
+          entry.courses,
+          auditGroups,
+          planner,
+        );
+        const courses = [
+          ...entry.courses.map((course) =>
+            buildCourseRow(
+              courseKeyOf(course),
+              course,
+              progress.courses.get(courseKeyOf(course)) ?? null,
+              openCourses,
+              scheduleBackground,
+            ),
+          ),
+          ...progress.extraCourses.map((line, index) =>
+            buildCourseRow(
+              `extra:${index}`,
+              auditLineCourse(line),
+              auditLineState(line),
+              openCourses,
+              scheduleBackground,
+            ),
+          ),
+        ].sort((a, b) => courseRowRank(a) - courseRowRank(b));
+        const needed = courses.filter(isNeeded);
+        return {
+          entry,
+          progress,
+          courses,
+          offered: needed.filter((row) => row.sectionCount > 0).length,
+          fitting: needed.filter((row) => row.fitCount > 0).length,
+        };
+      }),
+    [entries, auditGroups, planner, openCourses, scheduleBackground],
+  );
+
+  const visible = useMemo(
+    () =>
+      models
+        .filter((model) => {
+          if (filter === "needed") {
+            return model.progress.status !== "complete";
+          }
+          if (filter === "fits") {
+            return model.fitting > 0;
+          }
+          return true;
+        })
+        .map((model) => ({
+          ...model,
+          courses: model.courses.filter((row) => {
+            if (!isNeeded(row)) {
+              return true;
+            }
+            if (filter === "fits") {
+              return row.fitCount > 0;
+            }
+            return !hideNoSections || row.sectionCount > 0;
+          }),
+        }))
+        .filter((model) => model.courses.length > 0),
+    [models, filter, hideNoSections],
+  );
+
+  const known = models.filter((m) => m.progress.status !== "unknown");
+  const complete = known.filter((m) => m.progress.status === "complete");
+  const offeredNeeds = models.filter(
+    (m) => m.progress.status !== "complete" && m.offered > 0,
+  );
+  const fittingNeeds = models.filter(
+    (m) => m.progress.status !== "complete" && m.fitting > 0,
+  );
+
+  return (
+    <div className="flex flex-col gap-3">
+      <PlanningSyncStatus
+        sync={sync}
+        syncedAt={syncedAt}
+        onRefresh={onRefresh}
+      />
+      {hasAudit ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card/50 p-3">
+          {units ? <UnitsBar units={units} /> : null}
+          <div className="grid grid-cols-3 gap-2">
+            <SummaryStat
+              label="Requirements done"
+              value={`${complete.length} / ${known.length}`}
+            />
+            <SummaryStat
+              label="Offered this term"
+              value={String(offeredNeeds.length)}
+            />
+            <SummaryStat
+              label="Fit your schedule"
+              value={scheduleBackground ? String(fittingNeeds.length) : "—"}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <p>
+            {sync.status === "syncing"
+              ? "Loading your degree audit…"
+              : "Progress comes from your MyPack degree audit. Refresh to load it, or open Planning & Enrollment → Degree Audit."}
+          </p>
+        </div>
+      )}
+
+      <ToggleGroup
+        type="single"
+        value={filter}
+        onValueChange={(next) => {
+          const option = FILTER_OPTIONS.find((o) => o.value === next);
+          if (option) {
+            onFilterChange(option.value);
+          }
+        }}
+        variant="outline"
+        size="sm"
+        spacing={1}
+        aria-label="Requirement filter"
+        className="flex-wrap"
+      >
+        {FILTER_OPTIONS.map((option) => (
+          <ToggleGroupItem key={option.value} value={option.value}>
+            {option.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+
+      {visible.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {visible.map((model) => (
+            <RequirementRow
+              key={model.entry.requirementKey}
+              model={model}
+              expandedCourses={expandedCourses}
+              onToggleCourse={toggleCourse}
+              renderSections={renderSections}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="p-3 text-center text-sm text-muted-foreground">
+          {filter === "fits"
+            ? "No remaining courses have a section that fits your schedule."
+            : filter === "needed" && hasAudit
+              ? "Every requirement in this plan is complete."
+              : "No courses match the current filters."}
+        </p>
+      )}
+    </div>
+  );
+}

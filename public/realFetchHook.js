@@ -14,7 +14,11 @@
         "_getCustEventsTableData",
         "_getPlanTermTableData",
         "_getShopCartCalEvents",
+        "IScript_getDegreeDetails",
+        "IScript_getTermDetails",
     ];
+    // Responses the content script parses itself, with the request URL.
+    const rawTextKeywords = ["IScript_getDegreeDetails", "IScript_getTermDetails"];
 
     const receiverPromise = (function () {
         if (window.__receiverPromise) return window.__receiverPromise;
@@ -54,7 +58,24 @@
                     const matchedKeyword = keywords.find((keyword) =>
                         this._url.includes(keyword)
                     );
-                    if (matchedKeyword) {
+                    if (matchedKeyword && rawTextKeywords.includes(matchedKeyword)) {
+                        await receiverPromise;
+                        window.postMessage(
+                            {
+                                source: "realFetchHook",
+                                type: "CLASS_DATA",
+                                payload: {
+                                    data: this.responseText,
+                                    responseType: matchedKeyword,
+                                    // The plan or term is only named in the request URL.
+                                    url: this._url,
+                                },
+                            },
+                            window.location.origin !== "null"
+                                ? window.location.origin
+                                : "*"
+                        );
+                    } else if (matchedKeyword) {
                         let data = JSON.parse(this.responseText);
                         if (matchedKeyword === "_getClassSearchResults") {
                             data = data.data;

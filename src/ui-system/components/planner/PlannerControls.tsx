@@ -1,4 +1,4 @@
-import { SearchIcon } from "lucide-react";
+import { ChevronDownIcon, SearchIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -6,39 +6,63 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
-type ScheduleFitFieldProps = {
+import {
+  SECTION_SORT_OPTIONS,
+  type SectionSortMode,
+} from "../../../course-management/types/sectionSorting";
+
+type SectionSortFieldProps = {
   id: string;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-  description?: ReactNode;
+  value: SectionSortMode;
+  onValueChange: (value: SectionSortMode) => void;
+  /** Whether the cart/enrolled schedule for the selected term is known. */
+  scheduleKnown: boolean;
 };
 
-export function ScheduleFitField({
+function sortHint(mode: SectionSortMode, scheduleKnown: boolean): string {
+  if (!scheduleKnown) {
+    return "To check which sections fit, open your shopping cart or schedule for this term in MyPack once.";
+  }
+  return mode === "recommended"
+    ? "Sections that fit your cart and enrolled classes for this term come first."
+    : "Each card shows whether it fits your cart and enrolled classes.";
+}
+
+export function SectionSortField({
   id,
-  checked,
-  onCheckedChange,
-  description = "Hide sections that overlap classes in your cart or enrolled schedule.",
-}: ScheduleFitFieldProps) {
+  value,
+  onValueChange,
+  scheduleKnown,
+}: SectionSortFieldProps) {
   return (
     <Field>
-      <div className="flex items-start gap-3 rounded-lg border-2 border-border bg-card p-3.5 shadow-sm dark:bg-card/95">
-        <PlannerCheckbox
+      <FieldLabel htmlFor={id}>Sort by</FieldLabel>
+      <div className="relative">
+        <select
           id={id}
-          checked={checked}
-          onCheckedChange={onCheckedChange}
+          value={value}
+          onChange={(event) =>
+            onValueChange(event.target.value as SectionSortMode)
+          }
           aria-describedby={`${id}-desc`}
-          className="mt-0.5"
+          // Matches InputGroup (border-2, primary focus ring). Native option
+          // lists ignore page styles unless colors/color-scheme are set here.
+          className="h-9 w-full cursor-pointer appearance-none rounded-lg border-2 border-border bg-background pr-9 pl-3 text-sm text-foreground transition-colors outline-none focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-ring/30 dark:bg-input/40 dark:[color-scheme:dark] [&>option]:bg-popover [&>option]:text-popover-foreground"
+        >
+          {SECTION_SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDownIcon
+          className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
         />
-        <div className="min-w-0 space-y-1">
-          <FieldLabel
-            htmlFor={id}
-            className="cursor-pointer text-sm font-medium text-foreground"
-          >
-            Fits my schedule
-          </FieldLabel>
-          <FieldDescription id={`${id}-desc`}>{description}</FieldDescription>
-        </div>
       </div>
+      <FieldDescription id={`${id}-desc`}>
+        {sortHint(value, scheduleKnown)}
+      </FieldDescription>
     </Field>
   );
 }

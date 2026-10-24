@@ -106,6 +106,10 @@ function extractPlannerCourseInfo(classDetailRow: Element): Course {
  */
 function addCourseInfoCell(courseHeaderRow: Element | null, course: Course) {
   if (!courseHeaderRow) return;
+  // Rescans run whenever rows change, so replace rather than stack the cell.
+  courseHeaderRow
+    .querySelectorAll(":scope > td.mypack-course-info-cell")
+    .forEach((cell) => cell.remove());
   const doc = courseHeaderRow.ownerDocument ?? document;
   const headerCell = doc.createElement("td");
   headerCell.className = "mypack-course-info-cell";
@@ -132,11 +136,21 @@ function appendExtensionData(
   gradeElement: HTMLElement,
   profElement: HTMLElement,
 ) {
-  if (gradeElement.textContent !== "No grade data available.") {
+  const hasGrades = gradeElement.textContent !== "No grade data available.";
+  const hasProfessor = profElement.textContent !== "Professor not found.";
+  if (hasGrades) {
     extRow.appendChild(gradeElement);
   }
-  if (profElement.textContent !== "Professor not found.") {
+  if (hasProfessor) {
     extRow.appendChild(profElement);
+  }
+  // Without either, the header cell reads "Course information for ..." over an
+  // empty box, which looks broken.
+  if (!hasGrades && !hasProfessor) {
+    const empty = (extRow.ownerDocument ?? document).createElement("div");
+    empty.className = "mypack-ext-empty";
+    empty.textContent = "No grades or ratings found for this instructor yet.";
+    extRow.appendChild(empty);
   }
 }
 
@@ -392,7 +406,12 @@ export async function applyIframeStyles(
     if (dialog_inner) {
       dialog_parent = dialog_inner.closest('[role^="dialog"]');
     }
-    const style = iframeDoc.createElement("style");
+    // Reuse one tag: this runs on every rescan.
+    let style = iframeDoc.getElementById("mypack-iframe-styles");
+    if (!style) {
+      style = iframeDoc.createElement("style");
+      style.id = "mypack-iframe-styles";
+    }
     style.textContent = `
     .ui-dialog.cust-ui-dialog {
       position: fixed !important;
@@ -455,6 +474,12 @@ td.mypack-extension-cell {
 td.mypack-course-info-cell {
   white-space: normal;
 }
+.mypack-ext-empty {
+  padding: .5rem;
+  font-size: 12px;
+  font-style: italic;
+  color: #6b7280;
+}
 html.${EXT_HIDDEN_CLASS} td.mypack-extension-cell,
 html.${EXT_HIDDEN_CLASS} td.mypack-course-info-cell {
   display: none !important;
@@ -498,7 +523,7 @@ html.${EXT_HIDDEN_CLASS} td.mypack-course-info-cell {
   margin-top: 1rem;
 }
   `;
-    iframeDoc.head.appendChild(style);
+    if (!style.isConnected) iframeDoc.head.appendChild(style);
 
     // Sync the hidden-state class to the persisted preference before
     // applying width overrides, so the dialog either stays at its original

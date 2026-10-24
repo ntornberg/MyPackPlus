@@ -7,7 +7,24 @@ import {
   syncIndexedDBCacheEpoch,
 } from "../../course-management/cache/courseRetrieval";
 import { notifyScheduleDataChanged } from "../../course-management/cache/scheduleCacheSignal";
+import {
+  selectedTermLabel,
+  semesterOf,
+  semesterOfItem,
+  semesterOfTermName,
+  TERM_TAG_FIELD,
+} from "../../course-management/utils/semester";
 import { AppLogger } from "../../utils/logger";
+
+import {
+  DEGREE_DETAILS_RESPONSE,
+  storeDegreeDetailsResponse,
+} from "./degreeAudit";
+import {
+  PLANNER_TERM_DETAILS_RESPONSE,
+  storeTermDetailsResponse,
+} from "./packPlanner";
+import { markPlanningDataStale } from "./planningSync";
 
 function compositeCacheKeyFromItem(
   item: Record<string, unknown>,
@@ -108,15 +125,23 @@ function eventDate(item: unknown): string | null {
   return null;
 }
 
+const CALENDAR_CATEGORIES = Object.values(RESPONSE_STORAGE_RULES)
+  .filter((rule) => rule.rangeScoped)
+  .map((rule) => rule.category);
+
 /**
  * Stores calendar events for the response's date range. Stored events inside
- * that range (or without a date) are replaced; other weeks are kept, so viewing
- * a week where a class doesn't meet doesn't drop it from the weekly pattern.
+ * that range (or without a date) are replaced; other weeks of the same semester
+ * are kept, so viewing a week where a class doesn't meet doesn't drop it from
+ * the weekly pattern. Events from other semesters are dropped from every
+ * calendar category, so the preview never mixes terms (e.g. this term's
+ * enrolled classes under next term's cart).
  */
 async function storeCalendarRange(
   category: string,
   items: Record<string, unknown>[],
   entries: Record<string, unknown>,
+  term: string | null,
 ): Promise<void> {
   const dates = items.map(eventDate);
   if (dates.some((date) => date === null)) {
@@ -127,15 +152,32 @@ async function storeCalendarRange(
   const sorted = (dates as string[]).sort();
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
+  // The captured term wins: the cart calendar shows this week's dates even
+  // when you're shopping for next term.
+  const semester = semesterOfTermName(term) ?? semesterOf(first);
 
-  const stored = (await getCacheCategory(category)) ?? {};
-  const staleHashes = Object.entries(stored)
-    .filter(([, entry]) => {
-      const date = eventDate(entry.combinedData);
-      return date === null || (date >= first && date <= last);
-    })
-    .map(([hash]) => hash);
-  await removeGenericCacheEntries(category, staleHashes);
+  const categories = [
+    category,
+    ...CALENDAR_CATEGORIES.filter((other) => other !== category),
+  ];
+  for (const storedCategory of categories) {
+    const stored = (await getCacheCategory(storedCategory)) ?? {};
+    const staleHashes = Object.entries(stored)
+      .filter(([, entry]) => {
+        const date = eventDate(entry.combinedData);
+        const entrySemester = semesterOfItem(entry.combinedData, date);
+        if (entrySemester === null) return storedCategory === category;
+        if (entrySemester !== semester) return true;
+        return (
+          storedCategory === category &&
+          (date === null || (date >= first && date <= last))
+        );
+      })
+      .map(([hash]) => hash);
+    if (staleHashes.length > 0) {
+      await removeGenericCacheEntries(storedCategory, staleHashes);
+    }
+  }
   await setGenericCache(category, entries);
 }
 
@@ -157,14 +199,20 @@ async function storeResponse(responseType: string, data: unknown) {
     return;
   }
 
+  // Remember which term was selected on the page so cached classes can be
+  // matched to the term being searched later.
+  const term =
+    typeof document !== "undefined" ? selectedTermLabel(document) : null;
   const entries: Record<string, unknown> = {};
   for (const item of items) {
     const key = compositeCacheKeyFromItem(item, rule.keyFields);
-    entries[await generateCacheKey(key)] = item;
+    entries[await generateCacheKey(key)] = term
+      ? { ...item, [TERM_TAG_FIELD]: term }
+      : item;
   }
 
   if (rule.rangeScoped) {
-    await storeCalendarRange(rule.category, items, entries);
+    await storeCalendarRange(rule.category, items, entries, term);
   } else {
     // Each table response is the full current list, so replace rather than
     // merge: classes dropped from the cart/schedule must disappear.
@@ -173,6 +221,26 @@ async function storeResponse(responseType: string, data: unknown) {
 
   if (rule.affectsSchedule) {
     await notifyScheduleDataChanged();
+  }
+}
+
+async function storeSiteResponse(payload: {
+  responseType: string;
+  data: unknown;
+  url?: unknown;
+}): Promise<void> {
+  switch (payload.responseType) {
+    case DEGREE_DETAILS_RESPONSE:
+      await storeDegreeDetailsResponse(payload.data, payload.url);
+      return;
+    case PLANNER_TERM_DETAILS_RESPONSE:
+      // The saved audit may not show the edit yet; refetch it next time.
+      if (await storeTermDetailsResponse(payload.data, payload.url)) {
+        await markPlanningDataStale();
+      }
+      return;
+    default:
+      await storeResponse(payload.responseType, payload.data);
   }
 }
 
@@ -218,7 +286,7 @@ export async function setupListener() {
     AppLogger.info("Received message from page:", payload.responseType);
 
     storageQueue = storageQueue
-      .then(() => storeResponse(payload.responseType, payload.data))
+      .then(() => storeSiteResponse(payload))
       .catch((error) => {
         AppLogger.error("Failed to store site response:", error);
       });

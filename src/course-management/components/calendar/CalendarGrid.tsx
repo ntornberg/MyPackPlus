@@ -23,8 +23,8 @@ export function toMinutes(time: string) {
   return h * 60 + minutes;
 }
 
-function compactEventLabel(subject: string): string {
-  if (subject.length <= 15 || window.innerWidth >= 600) {
+function compactEventLabel(subject: string, narrow: boolean): string {
+  if (subject.length <= 15 || !narrow) {
     return subject;
   }
   const parts = subject.split(" ");
@@ -88,20 +88,16 @@ export default function CalendarGrid({
 }: {
   eventData: ScheduleEvent[];
 }) {
-  const { windowStart, windowEnd } = useMemo(() => {
+  // Always run to 10 PM so evening sections fit without the grid resizing.
+  const windowEnd = 22;
+  const windowStart = useMemo(() => {
     if (eventData.length === 0) {
-      return { windowStart: 8, windowEnd: 18 };
+      return 8;
     }
 
     const eventStarts = eventData.map((event) => toMinutes(event.start));
-    const eventEnds = eventData.map((event) => toMinutes(event.end));
     const earliestHour = Math.floor(Math.min(...eventStarts) / 60);
-    const latestHour = Math.ceil(Math.max(...eventEnds) / 60);
-
-    return {
-      windowStart: Math.max(8, earliestHour - 1),
-      windowEnd: Math.min(22, Math.max(latestHour + 1, earliestHour + 6)),
-    };
+    return Math.max(8, earliestHour - 1);
   }, [eventData]);
   const hours = Array.from(
     { length: windowEnd - windowStart + 1 },
@@ -110,9 +106,12 @@ export default function CalendarGrid({
   const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const events = eventData;
   const [bodyRef, body] = useSize<HTMLDivElement>();
+  // Size by the grid itself, not the window: in the drawer the window is wide
+  // while the preview calendar can be narrow.
+  const narrow = body.w > 0 && body.w < 360;
 
   return (
-    <div className="mx-auto grid h-[400px] min-h-[400px] w-full max-w-[1400px] grid-cols-[48px_repeat(5,minmax(52px,1fr))] grid-rows-[40px_1fr] overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-background via-muted/15 to-muted/35 shadow-sm dark:bg-[linear-gradient(165deg,rgba(6,12,22,0.98)_0%,rgba(10,18,32,0.99)_45%,rgba(8,14,26,1)_100%)] dark:shadow-none sm:grid-cols-[60px_repeat(5,minmax(56px,1fr))] sm:grid-rows-[48px_1fr]">
+    <div className="mx-auto grid h-[480px] min-h-[480px] w-full max-w-[1400px] grid-cols-[48px_repeat(5,minmax(52px,1fr))] grid-rows-[40px_1fr] overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-background via-muted/15 to-muted/35 dark:bg-[linear-gradient(165deg,rgba(6,12,22,0.98)_0%,rgba(10,18,32,0.99)_45%,rgba(8,14,26,1)_100%)] dark:shadow-none sm:grid-cols-[60px_repeat(5,minmax(56px,1fr))] sm:grid-rows-[48px_1fr]">
       <div
         className="border-b border-r border-border bg-muted/50 dark:border-white/10 dark:bg-white/[0.06]"
         style={{ gridColumn: 1, gridRow: 1 }}
@@ -141,6 +140,8 @@ export default function CalendarGrid({
         style={{ gridColumn: 1, gridRow: 2 }}
       >
         {hours.map((h) => {
+          // The closing hour is the bottom edge, so it gets no label.
+          if (h === windowEnd) return null;
           const top =
             body.h > 0
               ? (body.h / ((windowEnd - windowStart) * 60)) *
@@ -149,10 +150,10 @@ export default function CalendarGrid({
           return (
             <span
               key={h}
-              className="pointer-events-none absolute left-1 select-none text-[9px] tabular-nums text-muted-foreground sm:left-2 sm:text-[10px] md:left-3 md:text-[11px]"
-              style={{ top: top - 8 }}
+              className="pointer-events-none absolute right-1.5 select-none text-[9px] leading-none tabular-nums text-muted-foreground sm:right-2 sm:text-[10px] md:text-[11px]"
+              style={{ top: top + 4 }}
             >
-              {window.innerWidth < 600
+              {narrow
                 ? `${((h + 11) % 12) + 1}${h < 12 ? "a" : "p"}`
                 : `${((h + 11) % 12) + 1}${h < 12 ? "AM" : "PM"}`}
             </span>
@@ -215,14 +216,14 @@ export default function CalendarGrid({
                     <div
                       key={`${ev.id}-${day}`}
                       className={cn(
-                        "group/event absolute flex min-h-[18px] items-center overflow-hidden rounded-lg px-1.5 py-0.5 text-[8px] leading-snug font-semibold tracking-tight text-white transition-opacity sm:min-h-5 sm:px-2 sm:py-1 sm:text-[9px] md:text-[10px]",
+                        "group/event absolute flex min-h-[18px] items-center overflow-hidden rounded-lg px-1.5 py-0.5 text-[9px] leading-snug font-bold text-white transition-opacity sm:min-h-5 sm:px-2 sm:py-1 sm:text-[10px] md:text-xs",
                         isOverlap && "hover:opacity-[0.85]",
                       )}
                       title={isOverlap ? conflictLabel : undefined}
                       style={{
                         top: topPx,
-                        left: window.innerWidth < 640 ? 3 : 5,
-                        right: window.innerWidth < 640 ? 3 : 5,
+                        left: narrow ? 3 : 5,
+                        right: narrow ? 3 : 5,
                         height: Math.max(heightPx, 18),
                         zIndex: isOverlap ? 3 : 2,
                         ...(isOverlap
@@ -235,11 +236,11 @@ export default function CalendarGrid({
                           isOverlap && "group-hover/event:opacity-20",
                         )}
                       >
-                        {compactEventLabel(ev.subj)}
+                        {compactEventLabel(ev.subj, narrow)}
                       </span>
                       {isOverlap ? (
                         <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45 px-1 text-center text-[8px] font-semibold leading-tight opacity-0 transition-opacity group-hover/event:opacity-100 sm:text-[9px]">
-                          {compactEventLabel(conflictLabel)}
+                          {compactEventLabel(conflictLabel, narrow)}
                         </span>
                       ) : null}
                     </div>

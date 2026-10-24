@@ -8,13 +8,20 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 
+import {
+  courseStateLookup,
+  gepCategoriesByCourse,
+  gepProgress,
+} from "../../../degree-planning/services/gepProgress";
+import { plannerCourseCode } from "../../../degree-planning/services/packPlanner";
+import type { CourseAuditState } from "../../../degree-planning/services/requirementProgress";
 import type { RequiredCourse } from "../../../degree-planning/types/Plans";
 import { GEP_COURSES } from "../../../generated/catalogs/gep-search/gepCourses.typed";
 import { SubjectMenuValues } from "../../../generated/catalogs/subjectSearchValues";
 import { TermIdByName } from "../../../generated/catalogs/termIds";
 import {
   HideEmptySectionsField,
-  ScheduleFitField,
+  SectionSortField,
   SearchSubmitButton,
 } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
@@ -24,15 +31,19 @@ import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/
 import { formatSectionInstructors } from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
+import { usePlanningData } from "../../../ui-system/components/workbench/usePlanningData";
 import { useScheduleBackgroundEvents } from "../../../ui-system/components/workbench/useScheduleBackgroundEvents";
 import { type PlannerSectionPreview } from "../../../ui-system/components/workbench/workbenchTypes";
 import { AppLogger } from "../../../utils/logger";
 import { fetchGEPCourseData } from "../../services/api/planner-search/dataService";
 import type { ScheduleEvent } from "../../types/calendar";
 import type { MergedCourseData } from "../../types/section";
+import type { SectionSortMode } from "../../types/sectionSorting";
 import { type GepSearchData, type TabUpdater } from "../tab-state/tabState";
 
 import { CourseSectionsCardList } from "./CourseSectionsCardList";
+import { GepProgressGrid } from "./GepProgressGrid";
+import { AuditChip, PlanningSyncStatus } from "./RequirementTree";
 
 /* eslint-disable react/prop-types -- TypeScript props on memo inner components */
 
@@ -63,6 +74,11 @@ const GEP_SUBJECTS: { code: GepSubjectCode; label: string }[] = [
 ];
 
 const SUBJECT_OPTIONS = GEP_SUBJECTS.map((subject) => subject.label);
+
+const GEP_LABEL_BY_CODE = new Map(
+  GEP_SUBJECTS.map((subject) => [subject.code, subject.label]),
+);
+const GEP_CATEGORIES_BY_COURSE = gepCategoriesByCourse(GEP_COURSES);
 
 function findGepSubject(value: string | null) {
   if (!value) {
@@ -123,14 +139,18 @@ export interface GroupedCourse {
 
 interface GEPTreeProps {
   groupedData: GroupedCourse[];
+  /** Where a course stands per the audit and Pack Planner. */
+  courseState: (course: RequiredCourse) => CourseAuditState | null;
+  /** Other GEP categories the course also counts toward. */
+  alsoCountsFor: (course: RequiredCourse) => string[];
   expandedGroups: Record<string, boolean>;
   onToggleGroup: (courseAbr: string) => void;
   courseData: Record<string, MergedCourseData> | {};
   onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
   selectedPreviewId: string | null;
-  scheduleBackground: ScheduleEvent[];
+  scheduleBackground: ScheduleEvent[] | null;
   instructorFilter: string | null;
-  scheduleFitOnly: boolean;
+  sortMode: SectionSortMode;
   compactSections: boolean;
 }
 
@@ -142,16 +162,16 @@ const CourseSections = React.memo(
     selectedPreviewId,
     scheduleBackground,
     instructorFilter,
-    scheduleFitOnly,
+    sortMode,
     compactSections,
   }: {
     courseDataEntry: MergedCourseData | undefined;
     courseKeyPrefix: string;
     onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
     selectedPreviewId: string | null;
-    scheduleBackground: ScheduleEvent[];
+    scheduleBackground: ScheduleEvent[] | null;
     instructorFilter: string | null;
-    scheduleFitOnly: boolean;
+    sortMode: SectionSortMode;
     compactSections: boolean;
   }) => {
     const sections = useMemo(() => {
@@ -171,7 +191,7 @@ const CourseSections = React.memo(
             selectedPreviewId={selectedPreviewId}
             onPreviewSectionChange={onPreviewSectionChange}
             instructorFilter={instructorFilter}
-            scheduleFitOnly={scheduleFitOnly}
+            sortMode={sortMode}
             scheduleBackground={scheduleBackground}
             compact={compactSections}
           />
@@ -190,6 +210,8 @@ const CourseSections = React.memo(
 const GEPTree: React.FC<GEPTreeProps> = React.memo(
   ({
     groupedData,
+    courseState,
+    alsoCountsFor,
     expandedGroups,
     onToggleGroup,
     courseData,
@@ -197,7 +219,7 @@ const GEPTree: React.FC<GEPTreeProps> = React.memo(
     selectedPreviewId,
     scheduleBackground,
     instructorFilter,
-    scheduleFitOnly,
+    sortMode,
     compactSections,
   }) => {
     return (
@@ -225,19 +247,27 @@ const GEPTree: React.FC<GEPTreeProps> = React.memo(
                 const courseDataEntry = (
                   courseData as Record<string, MergedCourseData>
                 )[courseKey];
+                const state = courseState(course);
+                const alsoCounts = alsoCountsFor(course);
                 return (
                   <div
                     key={`course-${courseKey}`}
                     className="flex min-h-0 flex-col items-stretch border-b border-border py-2 pl-5"
                   >
                     <div className="flex w-full flex-col">
-                      <div className="mb-2 min-w-0">
-                        <p className="text-sm font-medium text-foreground">
-                          {`${course.course_descrip} (${course.course_abr} ${parseInt(course.catalog_num, 10)})`}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {courseKey}
-                        </p>
+                      <div className="mb-2 flex min-w-0 items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">
+                            {`${course.course_descrip} (${course.course_abr} ${parseInt(course.catalog_num, 10)})`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {courseKey}
+                            {alsoCounts.length > 0
+                              ? ` · Also counts toward ${alsoCounts.join(", ")}`
+                              : ""}
+                          </p>
+                        </div>
+                        {state ? <AuditChip state={state} /> : null}
                       </div>
                       <CourseSections
                         courseDataEntry={courseDataEntry}
@@ -246,7 +276,7 @@ const GEPTree: React.FC<GEPTreeProps> = React.memo(
                         selectedPreviewId={selectedPreviewId}
                         scheduleBackground={scheduleBackground}
                         instructorFilter={instructorFilter}
-                        scheduleFitOnly={scheduleFitOnly}
+                        sortMode={sortMode}
                         compactSections={compactSections}
                       />
                     </div>
@@ -294,7 +324,7 @@ export default function GepSearch({
     progress,
     progressLabel,
     instructorFilter,
-    scheduleFitOnly,
+    sortMode,
     compactSections,
   } = GepSearchData;
   const selectedSubject = findGepSubject(searchSubject);
@@ -302,7 +332,7 @@ export default function GepSearch({
   const selectedSubjectLabel = selectedSubject?.label ?? searchSubject;
   const isSearchDisabled = !selectedTerm || !selectedSubjectCode;
   const portalContainer = useOverlayPortalContainer();
-  const scheduleBackground = useScheduleBackgroundEvents();
+  const scheduleBackground = useScheduleBackgroundEvents(selectedTerm);
 
   const gepInstructorOptions = useMemo(() => {
     const names = new Set<string>();
@@ -325,79 +355,85 @@ export default function GepSearch({
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [courseData]);
 
-  const courseSearch = useCallback(async () => {
-    setExpandedGroups({});
-    onPreviewSectionChange(null);
-    setGepSearchTabData({
-      progress: 10,
-      progressLabel: "Initializing GEP course search...",
-      isLoaded: false,
-      courses: [],
-      courseData: {},
-    });
-    AppLogger.info("Course search clicked with:", {
-      selectedTerm,
-      searchSubject: selectedSubjectLabel,
-      searchSubjectCode: selectedSubjectCode,
-    });
-
-    try {
-      if (selectedSubjectCode && selectedTerm) {
-        const courseInfo = GEP_COURSES[selectedSubjectCode];
-        if (courseInfo) {
-          const coursesResult = Object.entries(courseInfo).map(
-            ([course_title, course_info_val]) => {
-              const title = course_title as string;
-              const course_entry = course_info_val as {
-                course_title: string;
-                course_id: string;
-              };
-              return {
-                course_id: course_entry.course_id,
-                course_abr: title.split("-")[0].trim(),
-                catalog_num: title.split("-")[1].trim(),
-                course_descrip: course_entry.course_title,
-                term: selectedTerm,
-              } as RequiredCourse;
-            },
-          );
-
-          setGepSearchTabData({
-            courses: coursesResult,
-            progressLabel: `Processing ${coursesResult.length} GEP courses for ${selectedSubjectLabel ?? selectedSubjectCode}`,
-          });
-
-          const courseDataResult = await fetchGEPCourseData(
-            coursesResult,
-            selectedTerm,
-            (progressValue, statusMessage) => {
-              setGepSearchTabData({
-                progress: progressValue,
-                ...(statusMessage ? { progressLabel: statusMessage } : {}),
-              });
-            },
-          );
-
-          setGepSearchTabData("courseData", courseDataResult || {});
-        }
-      }
-    } catch (error) {
-      AppLogger.error("Error fetching course data:", error);
-      setGepSearchTabData("progressLabel", "Error fetching GEP course data");
-    } finally {
+  const courseSearch = useCallback(
+    async (subjectCode: GepSubjectCode | null = selectedSubjectCode) => {
+      const subjectLabel = subjectCode
+        ? (GEP_LABEL_BY_CODE.get(subjectCode) ?? subjectCode)
+        : selectedSubjectLabel;
+      setExpandedGroups({});
+      onPreviewSectionChange(null);
       setGepSearchTabData({
-        progress: 100,
-        progressLabel: "Complete",
-        isLoaded: true,
+        progress: 10,
+        progressLabel: "Initializing GEP course search...",
+        isLoaded: false,
+        courses: [],
+        courseData: {},
       });
-    }
-  }, [
-    onPreviewSectionChange,
-    selectedSubjectCode,
-    selectedSubjectLabel,
-    selectedTerm,
-    setGepSearchTabData,
-  ]);
+      AppLogger.info("Course search clicked with:", {
+        selectedTerm,
+        searchSubject: subjectLabel,
+        searchSubjectCode: subjectCode,
+      });
+
+      try {
+        if (subjectCode && selectedTerm) {
+          const courseInfo = GEP_COURSES[subjectCode];
+          if (courseInfo) {
+            const coursesResult = Object.entries(courseInfo).map(
+              ([course_title, course_info_val]) => {
+                const title = course_title as string;
+                const course_entry = course_info_val as {
+                  course_title: string;
+                  course_id: string;
+                };
+                return {
+                  course_id: course_entry.course_id,
+                  course_abr: title.split("-")[0].trim(),
+                  catalog_num: title.split("-")[1].trim(),
+                  course_descrip: course_entry.course_title,
+                  term: selectedTerm,
+                } as RequiredCourse;
+              },
+            );
+
+            setGepSearchTabData({
+              courses: coursesResult,
+              progressLabel: `Processing ${coursesResult.length} GEP courses for ${subjectLabel ?? subjectCode}`,
+            });
+
+            const courseDataResult = await fetchGEPCourseData(
+              coursesResult,
+              selectedTerm,
+              (progressValue, statusMessage) => {
+                setGepSearchTabData({
+                  progress: progressValue,
+                  ...(statusMessage ? { progressLabel: statusMessage } : {}),
+                });
+              },
+            );
+
+            setGepSearchTabData("courseData", courseDataResult || {});
+          }
+        }
+      } catch (error) {
+        AppLogger.error("Error fetching course data:", error);
+        setGepSearchTabData("progressLabel", "Error fetching GEP course data");
+      } finally {
+        setGepSearchTabData({
+          progress: 100,
+          progressLabel: "Complete",
+          isLoaded: true,
+        });
+      }
+    },
+    [
+      onPreviewSectionChange,
+      selectedSubjectCode,
+      selectedSubjectLabel,
+      selectedTerm,
+      setGepSearchTabData,
+    ],
+  );
 
   const filteredCourses = useMemo(() => {
     if (!isLoaded || !courses || courses.length === 0) return [];
@@ -474,6 +510,49 @@ export default function GepSearch({
     [onPreviewSectionChange, setGepSearchTabData],
   );
 
+  const planningData = usePlanningData();
+  const { audits, planner } = planningData;
+  const auditList = useMemo(() => Object.values(audits), [audits]);
+  const categoryProgress = useMemo(
+    () => gepProgress(auditList, planner, GEP_COURSES),
+    [auditList, planner],
+  );
+  const hasAudit = auditList.length > 0;
+  const lookupCourseState = useMemo(
+    () => courseStateLookup(auditList, planner),
+    [auditList, planner],
+  );
+  const courseState = useCallback(
+    (course: RequiredCourse) =>
+      lookupCourseState(
+        course.course_id,
+        course.course_abr,
+        course.catalog_num,
+      ),
+    [lookupCourseState],
+  );
+  const alsoCountsFor = useCallback(
+    (course: RequiredCourse) =>
+      (
+        GEP_CATEGORIES_BY_COURSE.get(
+          plannerCourseCode(course.course_abr, course.catalog_num),
+        ) ?? []
+      )
+        .filter((code) => code !== selectedSubjectCode)
+        .map((code) => GEP_LABEL_BY_CODE.get(code) ?? code),
+    [selectedSubjectCode],
+  );
+
+  const handleCategorySelect = useCallback(
+    (code: GepSubjectCode) => {
+      handleSubjectChange(GEP_LABEL_BY_CODE.get(code) ?? code);
+      if (selectedTerm) {
+        void courseSearch(code);
+      }
+    },
+    [courseSearch, handleSubjectChange, selectedTerm],
+  );
+
   const controlsPanel = (
     <PlannerPanel
       eyebrow="GEP Search"
@@ -505,17 +584,16 @@ export default function GepSearch({
             Optional: limit section lists to one instructor.
           </FieldDescription>
         </Field>
-        <ScheduleFitField
-          id="gep-schedule-fit"
-          checked={scheduleFitOnly}
-          onCheckedChange={(checked) =>
-            setGepSearchTabData("scheduleFitOnly", checked)
-          }
+        <SectionSortField
+          id="gep-sort"
+          scheduleKnown={scheduleBackground !== null}
+          value={sortMode}
+          onValueChange={(value) => setGepSearchTabData("sortMode", value)}
         />
       </FieldGroup>
       <div className="mt-4 flex flex-col gap-3">
         <SearchSubmitButton
-          onClick={courseSearch}
+          onClick={() => void courseSearch()}
           disabled={isSearchDisabled}
         />
         <HideEmptySectionsField
@@ -548,9 +626,26 @@ export default function GepSearch({
         />
       }
     >
+      <div className="mb-4 flex flex-col gap-2">
+        <PlanningSyncStatus
+          sync={planningData.sync}
+          syncedAt={planningData.syncedAt}
+          onRefresh={planningData.refresh}
+        />
+        {hasAudit || planner ? (
+          <GepProgressGrid
+            categories={GEP_SUBJECTS}
+            progress={categoryProgress}
+            selectedCode={selectedSubjectCode}
+            onSelect={handleCategorySelect}
+          />
+        ) : null}
+      </div>
       {isLoaded && groupedAndFilteredCourses.length > 0 ? (
         <GEPTree
           groupedData={groupedAndFilteredCourses}
+          courseState={courseState}
+          alsoCountsFor={alsoCountsFor}
           expandedGroups={expandedGroups}
           onToggleGroup={handleToggleGroup}
           courseData={courseData}
@@ -558,13 +653,16 @@ export default function GepSearch({
           selectedPreviewId={selectedPreviewId}
           scheduleBackground={scheduleBackground}
           instructorFilter={instructorFilter}
-          scheduleFitOnly={scheduleFitOnly}
+          sortMode={sortMode}
           compactSections={compactSections}
         />
       ) : (
         <p className="p-4 text-center text-base text-muted-foreground">
-          No GEP courses found matching your criteria.{" "}
-          {hideNoSections &&
+          {courses.length === 0
+            ? "Choose a GEP category to see its courses."
+            : "No GEP courses found matching your criteria. "}
+          {courses.length > 0 &&
+            hideNoSections &&
             "Try unchecking 'Hide courses with no open sections'."}
         </p>
       )}

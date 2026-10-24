@@ -5,6 +5,8 @@ export interface ScheduleEvent {
   end: string;
   days: { day: string; isOverlapping: boolean; conflictsWith?: string[] }[];
   color: string;
+  /** Semester key (e.g. "2027-spring") for cached cart/enrolled events, when known. */
+  semester?: string;
 }
 
 /** Official schedule (enrolled) — neutral vs cart blue and preview green. */
@@ -23,7 +25,17 @@ export type CalendarBlockShellStyle = {
   background: string;
   boxShadow: string;
   border: string;
+  color: string;
 };
+
+/** WCAG relative luminance (0 = black, 1 = white) of an sRGB color. */
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const [lr, lg, lb] = [r, g, b].map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+}
 
 function parseHexRgb(hex: string | undefined): [number, number, number] {
   if (!hex) {
@@ -55,6 +67,11 @@ export function calendarBlockShellStyle(
     background: `linear-gradient(145deg, rgba(${rL},${gL},${bL},0.98) 0%, rgba(${r},${g},${b},1) 45%, rgba(${r2},${g2},${b2},1) 100%)`,
     boxShadow: "none",
     border: `1px solid rgba(${r2},${g2},${b2},0.78)`,
+    // Light fills (e.g. the green preview) need dark text to stay readable.
+    color:
+      relativeLuminance([r, g, b]) > 0.3
+        ? `rgb(${Math.round(r * 0.18)},${Math.round(g * 0.18)},${Math.round(b * 0.18)})`
+        : "#ffffff",
   };
 }
 
@@ -63,4 +80,5 @@ export const CALENDAR_CONFLICT_BLOCK_SHELL: CalendarBlockShellStyle = {
   background: "linear-gradient(145deg, #fb923c 0%, #ea580c 55%, #c2410c 100%)",
   boxShadow: "none",
   border: "1px solid rgba(124, 45, 18, 0.7)",
+  color: "#ffffff",
 };

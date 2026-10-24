@@ -2,10 +2,8 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { watchScheduleCacheChanges } from "../course-management/cache/scheduleCacheSignal";
-import {
-  debouncedScrapePlanner,
-  scrapeScheduleTable,
-} from "../course-management/services/scraper";
+import { watchPlannerFrame } from "../course-management/services/plannerWatcher";
+import { scrapeScheduleTable } from "../course-management/services/scraper";
 import { setupListener } from "../degree-planning/services/siteResponseStorage";
 import extensionCssRaw from "../index.css?inline";
 import SlideOutDrawer from "../ui-system/components/SlideOutDrawer";
@@ -170,45 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
     scrapeScheduleTable(scheduleElement);
 
     root.render(<RootOverlayDialogs />);
-    const initialIframe = document.querySelector<HTMLIFrameElement>(
-      '[id$="divPSPAGECONTAINER"] iframe',
-    );
-    if (initialIframe) {
-      const initialIframeDoc = initialIframe.contentDocument;
-      if (!initialIframeDoc) {
-        AppLogger.warn(
-          "Initial iframe document not found. Cannot set up event listener for button clicks.",
-        );
-        return;
-      }
-      initialIframeDoc.addEventListener("click", function (event) {
-        const target = event.target;
-        if (!target) return;
-        let buttonSpan = (target as HTMLElement).closest(
-          '[class^="showClassSectionsLink"]',
-        );
-        if (!buttonSpan) {
-          buttonSpan = (target as HTMLElement).closest(
-            '[class^=" control center"]',
-          );
-          if (buttonSpan) {
-            debouncedScrapePlanner();
-            AppLogger.info("Button clicked:", buttonSpan.textContent);
-          }
-        }
-        if (!buttonSpan) return;
-        if (buttonSpan.role === "button") {
-          AppLogger.info("Button clicked:", buttonSpan.textContent);
-          debouncedScrapePlanner();
-        }
-      });
-    } else {
-      AppLogger.warn(
-        "Initial iframe not found. Cannot set up event listener for button clicks.",
-      );
-    }
-
-    AppLogger.info("Initial planner element found, performing first scrape.");
+    watchPlannerFrame();
   } catch (error) {
     AppLogger.error(
       "An error occurred during the main execution block:",

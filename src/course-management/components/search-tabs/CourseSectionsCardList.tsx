@@ -19,9 +19,17 @@ import {
 } from "../../../ui-system/components/workbench/workbenchTypes";
 import type { ScheduleEvent } from "../../types/calendar";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
-import { sortSections } from "../../types/sectionSorting";
+import {
+  makeSectionComparator,
+  SECTION_SORT_OPTIONS,
+  type ScheduleFit,
+  type SectionSortMode,
+} from "../../types/sectionSorting";
 import { modifiedSectionToScheduleEvents } from "../../utils/modifiedSectionToScheduleEvents";
-import { sectionFitsSchedule } from "../../utils/scheduleFitFilter";
+import {
+  courseCodeOf,
+  findScheduleConflicts,
+} from "../../utils/scheduleFitFilter";
 import { ToCartGroupedSectionCell } from "../cart/ToCartButtonCell";
 
 type GroupedRow = GroupedSections & { uniqueRowId: string };
@@ -31,6 +39,8 @@ type CourseSectionCardRowProps = {
   isSelected: boolean;
   compact: boolean;
   selectedLabClassNumber?: string;
+  /** Names of cart/enrolled classes this section overlaps; [] when it fits; null when unknown. */
+  conflictsWith: string[] | null;
   onSelect: (rowId: string) => void;
   onLabClassChange: (rowId: string, classNbr: string) => void;
 };
@@ -41,6 +51,7 @@ const CourseSectionCardRow = memo(
     isSelected,
     compact,
     selectedLabClassNumber,
+    conflictsWith,
     onSelect,
     onLabClassChange,
   }: CourseSectionCardRowProps) {
@@ -82,6 +93,7 @@ const CourseSectionCardRow = memo(
         selectedLabClassNumber={multiLab ? selectedLabClassNumber : undefined}
         onLabClassChange={multiLab ? handleLabClassChange : undefined}
         addToCartSlot={addToCartSlot}
+        conflictsWith={conflictsWith}
       />
     );
   },
@@ -90,6 +102,8 @@ const CourseSectionCardRow = memo(
     prev.isSelected === next.isSelected &&
     prev.compact === next.compact &&
     prev.selectedLabClassNumber === next.selectedLabClassNumber &&
+    String(prev.conflictsWith) === String(next.conflictsWith) &&
+    (prev.conflictsWith === null) === (next.conflictsWith === null) &&
     prev.onSelect === next.onSelect &&
     prev.onLabClassChange === next.onLabClassChange,
 );
@@ -101,12 +115,48 @@ export type CourseSectionsCardListProps = {
   onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
   /** Avoid row id collisions when multiple lists mount (e.g. different catalog numbers). */
   rowKeyPrefix?: string;
-  sortFunc?: (a: GroupedSections, b: GroupedSections) => number;
   instructorFilter: string | null;
-  scheduleFitOnly: boolean;
-  scheduleBackground: ScheduleEvent[];
+  sortMode: SectionSortMode;
+  scheduleBackground: ScheduleEvent[] | null;
   compact?: boolean;
 };
+
+/** Cart/enrolled classes the row's meetings overlap, for one lab choice. */
+function conflictsFor(
+  row: GroupedSections,
+  labClass: string | undefined,
+  background: ScheduleEvent[],
+): ScheduleEvent[] | null {
+  const section = groupedSectionForPreview(row, labClass);
+  if (!section) {
+    return null;
+  }
+  return findScheduleConflicts(
+    modifiedSectionToScheduleEvents(section),
+    background,
+  );
+}
+
+/**
+ * Whether a grouped section fits cart + enrolled classes with *any* of its lab
+ * options, so picking a different lab doesn't change the answer.
+ */
+export function groupedSectionFit(
+  row: GroupedSections,
+  background: ScheduleEvent[] | null,
+): ScheduleFit {
+  if (!background) {
+    return "unknown";
+  }
+  const labs = (row.labs ?? []).filter(Boolean) as ModifiedSection[];
+  const options =
+    labs.length > 1 ? labs.map((lab) => String(lab.classNumber)) : [""];
+  const anyFits = options.some(
+    (labClass) =>
+      conflictsFor(row, labClass || undefined, background)?.length === 0,
+  );
+  return anyFits ? "fits" : "conflicts";
+}
 
 export function CourseSectionsCardList({
   tab,
@@ -114,9 +164,8 @@ export function CourseSectionsCardList({
   selectedPreviewId,
   onPreviewSectionChange,
   rowKeyPrefix = "",
-  sortFunc = sortSections,
   instructorFilter,
-  scheduleFitOnly,
+  sortMode,
   scheduleBackground,
   compact = false,
 }: CourseSectionsCardListProps) {
@@ -125,7 +174,7 @@ export function CourseSectionsCardList({
   >({});
 
   const processedRows = useMemo((): GroupedRow[] => {
-    return [...sections].sort(sortFunc).flatMap((section, index) => {
+    return sections.flatMap((section, index) => {
       if (section.lecture) {
         const id = section.lecture.classNumber || `grouped-${index}`;
         return [{ ...section, uniqueRowId: `${rowKeyPrefix}${id}` }];
@@ -142,45 +191,42 @@ export function CourseSectionsCardList({
       }
       return [];
     });
-  }, [sections, rowKeyPrefix, sortFunc]);
+  }, [sections, rowKeyPrefix]);
 
   useEffect(() => {
     setLabClassByRowId({});
   }, [sections, rowKeyPrefix]);
 
+  // Ordering uses the any-lab fit so cards don't jump when a lab is picked.
+  const sortFitByRowId = useMemo(() => {
+    const fits = new Map<string, ScheduleFit>();
+    for (const row of processedRows) {
+      fits.set(row.uniqueRowId, groupedSectionFit(row, scheduleBackground));
+    }
+    return fits;
+  }, [processedRows, scheduleBackground]);
+
   const filteredRows = useMemo(() => {
-    return processedRows.filter((row) => {
-      const lec = row.lecture;
-      if (!lec) {
-        return false;
-      }
-      if (!sectionMatchesInstructorFilter(lec, instructorFilter)) {
-        return false;
-      }
-      if (scheduleFitOnly) {
-        const pick = labClassByRowId[row.uniqueRowId];
-        const previewSec = groupedSectionForPreview(row, pick);
-        if (!previewSec) {
-          return false;
-        }
-        const evs = modifiedSectionToScheduleEvents(previewSec);
-        if (!sectionFitsSchedule(evs, scheduleBackground)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [
-    processedRows,
-    instructorFilter,
-    scheduleFitOnly,
-    labClassByRowId,
-    scheduleBackground,
-  ]);
+    // Restored tab state may predate a mode; fall back rather than misbehave.
+    const mode = SECTION_SORT_OPTIONS.some((o) => o.value === sortMode)
+      ? sortMode
+      : "recommended";
+    const comparator = makeSectionComparator(mode, (group) =>
+      sortFitByRowId.get((group as GroupedRow).uniqueRowId),
+    );
+    return processedRows
+      .filter(
+        (row) =>
+          row.lecture != null &&
+          sectionMatchesInstructorFilter(row.lecture, instructorFilter),
+      )
+      .sort(comparator);
+  }, [processedRows, instructorFilter, sortMode, sortFitByRowId]);
+
   const paginationResetKey = [
     rowKeyPrefix,
     instructorFilter ?? "",
-    scheduleFitOnly ? "1" : "0",
+    sortMode,
     compact ? "1" : "0",
   ].join("|");
   const {
@@ -245,6 +291,17 @@ export function CourseSectionsCardList({
           const pick =
             labClassByRowId[row.uniqueRowId] ?? defaultLabClassForGroup(row);
           const selectedId = previewIdForGroupedRow(row, pick);
+          // The badge reflects the lab currently picked on the card.
+          const conflicts = scheduleBackground
+            ? conflictsFor(row, pick, scheduleBackground)
+            : null;
+          const conflictsWith = conflicts
+            ? [
+                ...new Set(
+                  conflicts.map((ev) => courseCodeOf(ev.subj) ?? ev.subj),
+                ),
+              ]
+            : null;
 
           return (
             <CourseSectionCardRow
@@ -253,6 +310,7 @@ export function CourseSectionsCardList({
               isSelected={selectedId === selectedPreviewId}
               onSelect={handleCardSelect}
               compact={compact}
+              conflictsWith={conflictsWith}
               selectedLabClassNumber={pick}
               onLabClassChange={handleCardLabClassChange}
             />

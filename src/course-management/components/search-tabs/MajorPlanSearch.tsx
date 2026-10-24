@@ -1,4 +1,3 @@
-import { ChevronRight } from "lucide-react";
 import { useCallback, useMemo, memo } from "react";
 
 import {
@@ -8,10 +7,16 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 
+import { findDegreeAudit } from "../../../degree-planning/services/degreeAudit";
+import {
+  auditGroupsById,
+  degreeUnitsProgress,
+} from "../../../degree-planning/services/requirementProgress";
 import type {
   MajorPlan,
   MinorPlan,
   RequiredCourse,
+  Requirement,
   Subplan,
 } from "../../../degree-planning/types/Plans";
 import { majorPlans } from "../../../generated/catalogs/major-plan-search/majorPlans";
@@ -19,7 +24,7 @@ import { minorPlans } from "../../../generated/catalogs/major-plan-search/minorP
 import { TermIdByName } from "../../../generated/catalogs/termIds";
 import {
   HideEmptySectionsField,
-  ScheduleFitField,
+  SectionSortField,
   SearchSubmitButton,
 } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
@@ -29,18 +34,21 @@ import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/
 import { formatSectionInstructors } from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
+import { usePlanningData } from "../../../ui-system/components/workbench/usePlanningData";
 import { useScheduleBackgroundEvents } from "../../../ui-system/components/workbench/useScheduleBackgroundEvents";
 import { type PlannerSectionPreview } from "../../../ui-system/components/workbench/workbenchTypes";
 import { AppLogger } from "../../../utils/logger";
 import { fetchCourseSearchData } from "../../services/api/planner-search/dataService";
 import type { ScheduleEvent } from "../../types/calendar";
 import type { MergedCourseData } from "../../types/section";
+import type { SectionSortMode } from "../../types/sectionSorting";
 import {
   type MajorPlanSearchData,
   type TabUpdater,
 } from "../tab-state/tabState";
 
 import { CourseSectionsCardList } from "./CourseSectionsCardList";
+import { RequirementTree, type RequirementTreeEntry } from "./RequirementTree";
 
 const CourseDisplay = memo(
   ({
@@ -50,16 +58,16 @@ const CourseDisplay = memo(
     selectedPreviewId,
     scheduleBackground,
     instructorFilter,
-    scheduleFitOnly,
+    sortMode,
     compactSections,
   }: {
     course: RequiredCourse;
     openCourses: Record<string, MergedCourseData> | null;
     onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
     selectedPreviewId: string | null;
-    scheduleBackground: ScheduleEvent[];
+    scheduleBackground: ScheduleEvent[] | null;
     instructorFilter: string | null;
-    scheduleFitOnly: boolean;
+    sortMode: SectionSortMode;
     compactSections: boolean;
   }) => {
     const courseData =
@@ -83,7 +91,7 @@ const CourseDisplay = memo(
             selectedPreviewId={selectedPreviewId}
             onPreviewSectionChange={onPreviewSectionChange}
             instructorFilter={instructorFilter}
-            scheduleFitOnly={scheduleFitOnly}
+            sortMode={sortMode}
             scheduleBackground={scheduleBackground}
             compact={compactSections}
           />
@@ -121,7 +129,9 @@ export default function MajorPlanSearch({
   const major_options = useMemo(() => Object.keys(majorPlans), []);
   const minor_options = useMemo(() => Object.keys(minorPlans), []);
   const portalContainer = useOverlayPortalContainer();
-  const scheduleBackground = useScheduleBackgroundEvents();
+  const scheduleBackground = useScheduleBackgroundEvents(
+    majorPlanSearchData.selectedTerm,
+  );
 
   const planInstructorOptions = useMemo(() => {
     const names = new Set<string>();
@@ -337,143 +347,93 @@ export default function MajorPlanSearch({
     }
   };
 
-  const requirements = useMemo(() => {
-    if (
-      !(
-        (majorPlanSearchData.selectedMajor &&
-          majorPlanSearchData.selectedSubplan) ||
-        majorPlanSearchData.selectedMinor
-      ) ||
-      !majorPlanSearchData.selectedTerm
-    ) {
-      return {} as Record<string, { courses: readonly RequiredCourse[] }>;
-    }
-
-    const major_data = majorPlans[
-      majorPlanSearchData.selectedMajor as keyof typeof majorPlans
-    ] as MajorPlan;
-    const subplan_data = major_data?.subplans[
-      majorPlanSearchData.selectedSubplan as keyof typeof major_data.subplans
-    ] as Subplan | undefined;
-    const minor_data = minorPlans[
-      majorPlanSearchData.selectedMinor as keyof typeof minorPlans
-    ] as MinorPlan | undefined;
-    const major_requirements = subplan_data?.requirements ?? {};
-    const minor_requirements = minor_data?.requirements ?? {};
-
-    return {
-      ...minor_requirements,
-      ...major_requirements,
-    } as Record<string, { courses: readonly RequiredCourse[] }>;
+  const selectedPlans = useMemo(() => {
+    const major_data = majorPlanSearchData.selectedMajor
+      ? (majorPlans[
+          majorPlanSearchData.selectedMajor as keyof typeof majorPlans
+        ] as MajorPlan | undefined)
+      : undefined;
+    const subplan_data = majorPlanSearchData.selectedSubplan
+      ? (major_data?.subplans[
+          majorPlanSearchData.selectedSubplan as keyof typeof major_data.subplans
+        ] as Subplan | undefined)
+      : undefined;
+    const minor_data = majorPlanSearchData.selectedMinor
+      ? (minorPlans[
+          majorPlanSearchData.selectedMinor as keyof typeof minorPlans
+        ] as MinorPlan | undefined)
+      : undefined;
+    return { major_data, subplan_data, minor_data };
   }, [
     majorPlanSearchData.selectedMajor,
     majorPlanSearchData.selectedSubplan,
     majorPlanSearchData.selectedMinor,
-    majorPlanSearchData.selectedTerm,
   ]);
 
-  const requirementEntries = useMemo(
-    () =>
-      Object.entries(requirements)
-        .map(([requirementKey, requirement]) => ({
-          requirementKey,
-          courses: requirement.courses.filter((course: RequiredCourse) => {
-            if (!majorPlanSearchData.hideNoSections) {
-              return true;
-            }
-            const courseData = (
-              majorPlanSearchData.openCourses as Record<
-                string,
-                MergedCourseData
-              >
-            )?.[`${course.course_abr} ${course.catalog_num}`];
-            return (
-              !!courseData?.sections &&
-              Object.keys(courseData.sections).length > 0
-            );
-          }),
-        }))
-        .filter(({ courses }) => courses.length > 0),
-    [
-      requirements,
-      majorPlanSearchData.hideNoSections,
-      majorPlanSearchData.openCourses,
-    ],
+  const requirements = useMemo(() => {
+    const { subplan_data, minor_data } = selectedPlans;
+    if (!(subplan_data || minor_data) || !majorPlanSearchData.selectedTerm) {
+      return {} as Record<string, Requirement>;
+    }
+    return {
+      ...(minor_data?.requirements ?? {}),
+      ...(subplan_data?.requirements ?? {}),
+    } as Record<string, Requirement>;
+  }, [selectedPlans, majorPlanSearchData.selectedTerm]);
+
+  const planningData = usePlanningData();
+  const degreeAudits = planningData.audits;
+  const { majorAudit, auditGroups } = useMemo(() => {
+    const { major_data, subplan_data, minor_data } = selectedPlans;
+    const majorAudit = subplan_data
+      ? findDegreeAudit(degreeAudits, major_data?.id, subplan_data.id)
+      : null;
+    const minorAudit = minor_data
+      ? findDegreeAudit(degreeAudits, minor_data.id)
+      : null;
+    return {
+      majorAudit,
+      auditGroups: auditGroupsById([majorAudit, minorAudit]),
+    };
+  }, [degreeAudits, selectedPlans]);
+
+  const treeEntries = useMemo(
+    (): RequirementTreeEntry[] =>
+      Object.entries(requirements).map(([requirementKey, requirement]) => ({
+        requirementKey,
+        requirementId: requirement.id,
+        courses: requirement.courses,
+      })),
+    [requirements],
   );
   const hasMajorPlanSearchRun = Boolean(
     majorPlanSearchData.isLoaded &&
       (majorPlanSearchData.searchMajor || majorPlanSearchData.searchMinor),
   );
 
-  const requirementListKey = useMemo(
-    () => requirementEntries.map((e) => e.requirementKey).join("\u0001"),
-    [requirementEntries],
+  const renderSections = useCallback(
+    (course: RequiredCourse) => (
+      <CourseDisplay
+        course={course}
+        openCourses={majorPlanSearchData.openCourses}
+        onPreviewSectionChange={onPreviewSectionChange}
+        selectedPreviewId={selectedPreviewId}
+        scheduleBackground={scheduleBackground}
+        instructorFilter={majorPlanSearchData.instructorFilter}
+        sortMode={majorPlanSearchData.sortMode}
+        compactSections={majorPlanSearchData.compactSections}
+      />
+    ),
+    [
+      majorPlanSearchData.openCourses,
+      majorPlanSearchData.instructorFilter,
+      majorPlanSearchData.sortMode,
+      majorPlanSearchData.compactSections,
+      onPreviewSectionChange,
+      selectedPreviewId,
+      scheduleBackground,
+    ],
   );
-
-  const requirementsList = useMemo(() => {
-    if (requirementEntries.length === 0) {
-      return null;
-    }
-
-    return (
-      <div key={requirementListKey} className="flex flex-col gap-2">
-        {requirementEntries.map(({ requirementKey, courses }) => (
-          <details
-            key={requirementKey}
-            className="plan-req-disclosure overflow-hidden rounded-lg border border-border bg-card/50 shadow-sm"
-          >
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-base font-semibold text-foreground transition-colors hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
-              <ChevronRight
-                className="plan-req-chevron size-4 shrink-0 text-muted-foreground transition-transform duration-200"
-                aria-hidden
-              />
-              <span className="min-w-0 flex-1">{requirementKey}</span>
-            </summary>
-            <div className="flex w-full flex-col border-t border-border px-4 pt-2 pb-4">
-              {courses.map((course: RequiredCourse, index: number) => (
-                <div
-                  key={`${requirementKey}-${course.course_abr} ${course.catalog_num}-${index}`}
-                  className="mb-3"
-                >
-                  <h6 className="mb-2 border-b border-border pb-1 text-base font-medium text-foreground">
-                    {course.course_descrip} ({course.course_abr}{" "}
-                    {parseInt(course.catalog_num)})
-                  </h6>
-
-                  <div className="mb-2 w-full">
-                    <CourseDisplay
-                      course={course}
-                      openCourses={majorPlanSearchData.openCourses}
-                      onPreviewSectionChange={onPreviewSectionChange}
-                      selectedPreviewId={selectedPreviewId}
-                      scheduleBackground={scheduleBackground}
-                      instructorFilter={majorPlanSearchData.instructorFilter}
-                      scheduleFitOnly={majorPlanSearchData.scheduleFitOnly}
-                      compactSections={majorPlanSearchData.compactSections}
-                    />
-                  </div>
-
-                  {index < courses.length - 1 && (
-                    <div className="my-3 h-px w-full bg-border" />
-                  )}
-                </div>
-              ))}
-            </div>
-          </details>
-        ))}
-      </div>
-    );
-  }, [
-    onPreviewSectionChange,
-    majorPlanSearchData.instructorFilter,
-    majorPlanSearchData.openCourses,
-    majorPlanSearchData.compactSections,
-    majorPlanSearchData.scheduleFitOnly,
-    requirementEntries,
-    requirementListKey,
-    scheduleBackground,
-    selectedPreviewId,
-  ]);
 
   const controlsPanel = (
     <PlannerPanel
@@ -544,11 +504,12 @@ export default function MajorPlanSearch({
             Optional: limit section lists to one instructor.
           </FieldDescription>
         </Field>
-        <ScheduleFitField
-          id="plan-schedule-fit"
-          checked={majorPlanSearchData.scheduleFitOnly}
-          onCheckedChange={(checked) =>
-            setMajorPlanSearchTabData("scheduleFitOnly", checked)
+        <SectionSortField
+          id="plan-sort"
+          scheduleKnown={scheduleBackground !== null}
+          value={majorPlanSearchData.sortMode}
+          onValueChange={(value) =>
+            setMajorPlanSearchTabData("sortMode", value)
           }
         />
         <SearchSubmitButton
@@ -587,8 +548,27 @@ export default function MajorPlanSearch({
         />
       }
     >
-      {hasMajorPlanSearchRun && requirementsList ? (
-        requirementsList
+      {hasMajorPlanSearchRun && treeEntries.length > 0 ? (
+        <RequirementTree
+          entries={treeEntries}
+          auditGroups={auditGroups}
+          hasAudit={auditGroups.size > 0}
+          planner={planningData.planner}
+          sync={planningData.sync}
+          syncedAt={planningData.syncedAt}
+          onRefresh={planningData.refresh}
+          units={degreeUnitsProgress(majorAudit)}
+          openCourses={
+            majorPlanSearchData.openCourses as Record<string, MergedCourseData>
+          }
+          scheduleBackground={scheduleBackground}
+          hideNoSections={majorPlanSearchData.hideNoSections ?? false}
+          filter={majorPlanSearchData.requirementFilter ?? "needed"}
+          onFilterChange={(value) =>
+            setMajorPlanSearchTabData("requirementFilter", value)
+          }
+          renderSections={renderSections}
+        />
       ) : (
         <p className="p-3 text-center text-muted-foreground">
           No search results found for the selected plan and filters.

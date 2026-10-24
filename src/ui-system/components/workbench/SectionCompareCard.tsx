@@ -1,4 +1,11 @@
-import { BookMarkedIcon, ChevronDown, Clock, MapPinIcon } from "lucide-react";
+import {
+  BookMarkedIcon,
+  ChevronDown,
+  CircleCheck,
+  Clock,
+  MapPinIcon,
+  TriangleAlert,
+} from "lucide-react";
 import {
   type KeyboardEvent,
   memo,
@@ -248,7 +255,39 @@ export type SectionCompareCardProps = {
   onLabClassChange?: (classNbr: string) => void;
   /** Staging mock cart vs extension {@link ToCartGroupedSectionCell} */
   addToCartSlot: ReactNode;
+  /**
+   * Cart/enrolled classes this section overlaps: [] means it fits, null means
+   * there's no schedule to compare against (no indicator shown).
+   */
+  conflictsWith?: string[] | null;
 };
+
+function ScheduleFitIndicator({
+  conflictsWith,
+  compact,
+}: {
+  conflictsWith: string[];
+  compact: boolean;
+}) {
+  const fits = conflictsWith.length === 0;
+  const Icon = fits ? CircleCheck : TriangleAlert;
+  return (
+    <p
+      className={cn(
+        "flex items-center gap-1.5 font-medium",
+        compact ? "text-xs" : "text-sm",
+        fits
+          ? "text-emerald-700 dark:text-emerald-400"
+          : "text-amber-700 dark:text-amber-400",
+      )}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden />
+      {fits
+        ? "Fits your schedule"
+        : `Conflicts with ${conflictsWith.join(", ")}`}
+    </p>
+  );
+}
 
 function areSectionCompareCardPropsEqual(
   prev: SectionCompareCardProps,
@@ -261,7 +300,9 @@ function areSectionCompareCardPropsEqual(
     prev.compact === next.compact &&
     prev.selectedLabClassNumber === next.selectedLabClassNumber &&
     prev.onLabClassChange === next.onLabClassChange &&
-    prev.addToCartSlot === next.addToCartSlot
+    prev.addToCartSlot === next.addToCartSlot &&
+    String(prev.conflictsWith) === String(next.conflictsWith) &&
+    (prev.conflictsWith == null) === (next.conflictsWith == null)
   );
 }
 
@@ -273,6 +314,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
   selectedLabClassNumber,
   onLabClassChange,
   addToCartSlot,
+  conflictsWith = null,
 }: SectionCompareCardProps) {
   const linkedLabs = useMemo(
     () => section.linkedMeetings ?? [],
@@ -367,6 +409,12 @@ export const SectionCompareCard = memo(function SectionCompareCard({
           </div>
           {!compact && title ? (
             <p className="text-sm text-muted-foreground">{title}</p>
+          ) : null}
+          {conflictsWith ? (
+            <ScheduleFitIndicator
+              conflictsWith={conflictsWith}
+              compact={compact}
+            />
           ) : null}
         </div>
         <SectionGradeDistributionBlock section={section} compact={compact} />
