@@ -21,7 +21,7 @@ export type WhatsNewRelease = {
 };
 
 export const whatsNewByVersion: Record<string, WhatsNewRelease> = {
-  "3.8.16": {
+  "3.8.17": {
     title: "Spring 2027: plan around your degree",
     subtitle:
       "A new Instructors tab, requirement tracking built from your degree audit, and smarter section picking for Spring 2027 registration.",

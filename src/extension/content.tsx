@@ -18,6 +18,8 @@ import {
 } from "../utils/dom";
 import { AppLogger } from "../utils/logger";
 
+import { initializePageStorage } from "./storageMigration";
+
 declare global {
   interface Window {
     __savedDefine?: unknown;
@@ -39,16 +41,23 @@ function RootOverlayDialogs() {
   );
 }
 
-(async () => {
-  try {
-    await setupListener();
-  } catch (err) {
-    AppLogger.error(
-      "Failed to initialize siteResponseStorage listener early:",
-      err,
-    );
-  }
-})();
+const storageReady = setupListener(initializePageStorage());
+void storageReady.catch((error) => {
+  AppLogger.error("Failed to initialize extension storage", error);
+  const showError = () => {
+    const notice = document.createElement("div");
+    notice.setAttribute("role", "alert");
+    notice.textContent =
+      "MyPack Plus could not start. Refresh this page to retry. ";
+    const retry = document.createElement("button");
+    retry.textContent = "Refresh page";
+    retry.onclick = () => window.location.reload();
+    notice.appendChild(retry);
+    document.body.prepend(notice);
+  };
+  if (document.body) showError();
+  else document.addEventListener("DOMContentLoaded", showError, { once: true });
+});
 
 function injectXHRHookScript() {
   const script = document.createElement("script");
@@ -143,6 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
   try {
+    await storageReady;
     if (window.__mypackEnhancerInitialized) {
       AppLogger.warn("MyPack Enhancer already initialized. Skipping...");
       return;

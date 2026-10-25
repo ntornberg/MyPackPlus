@@ -80,6 +80,38 @@ const SIZE_THRESHOLD = 100 * 1024;
 const DB_NAME = "mypack-extension-cache";
 const STORE_NAME = "cache-store";
 const DB_VERSION = 1;
+const STORAGE_REVISION_DB_KEY = "__meta:storageRevision";
+
+/** Clear every legacy entry and commit the revision in the same transaction. */
+export async function resetCacheDatabase(revision: number): Promise<void> {
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const timeout = setTimeout(() => transaction.abort(), 5000);
+      transaction.oncomplete = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      transaction.onabort = transaction.onerror = () => {
+        clearTimeout(timeout);
+        reject(
+          transaction.error || new Error("Cache reset transaction failed"),
+        );
+      };
+      const request = store.get(STORAGE_REVISION_DB_KEY);
+      request.onsuccess = () => {
+        if (request.result?.revision >= revision) return;
+        store.clear();
+        store.put({ key: STORAGE_REVISION_DB_KEY, revision });
+      };
+    });
+  } finally {
+    db.close();
+  }
+}
+
 const EXTENSION_CACHE_CATEGORIES = [
   "courseList",
   "openCourses",

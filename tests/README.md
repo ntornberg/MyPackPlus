@@ -18,6 +18,20 @@ to verify that a failed choice list leaves the audit rows visible. The fixture
 includes separate elective groups, repeated topics, approved exceptions,
 overlapping eligibility, and courses without sections; it cannot add to cart.
 
+## Storage upgrade test
+
+```bash
+npx playwright install chromium
+npm run build
+node tests/storage-upgrade.mjs
+```
+
+This upgrades an older-version storage fixture to the built extension in a
+disposable Chromium profile under `test-results/`. It checks automatic refresh
+across three tabs and two origins, actual IndexedDB cleanup, preservation of
+unrelated website data, and repeat-update behavior. MyPack pages are simulated;
+this does not verify authenticated searches or cart operations.
+
 ## Authenticated extension smoke test
 
 The authenticated test builds the unpacked extension and opens a dedicated,

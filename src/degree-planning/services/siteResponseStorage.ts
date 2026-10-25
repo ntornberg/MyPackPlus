@@ -269,10 +269,11 @@ let storageQueue: Promise<void> = Promise.resolve();
  * Listens for messages posted from the hook script injected into page/iframes and
  * persists relevant class data in cache categories for later display.
  */
-export async function setupListener() {
+export async function setupListener(ready: Promise<void> = Promise.resolve()) {
   // Drop this origin's IndexedDB cache if the extension cleared caches since
   // (e.g. after an update); queued so no response is stored before it runs.
-  storageQueue = storageQueue.then(() => syncIndexedDBCacheEpoch());
+  const initialized = ready.then(() => syncIndexedDBCacheEpoch());
+  storageQueue = initialized;
   // Signal readiness within the same frame to avoid cross-origin top access
   const origin = window.location.origin;
   window.postMessage(
@@ -303,12 +304,16 @@ export async function setupListener() {
     AppLogger.info("Received message from page:", payload.responseType);
 
     storageQueue = storageQueue
-      .then(() => storeSiteResponse(payload))
+      .then(async () => {
+        // Keep the barrier even after a prior response's catch recovered the queue.
+        await initialized;
+        await storeSiteResponse(payload);
+      })
       .catch((error) => {
         AppLogger.error("Failed to store site response:", error);
       });
   });
-  return storageQueue;
+  return initialized;
 }
 
 /** Resolves once every queued site response has been stored (for tests). */

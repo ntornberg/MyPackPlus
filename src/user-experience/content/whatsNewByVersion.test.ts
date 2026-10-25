@@ -12,11 +12,11 @@ describe("compareVersions", () => {
 
 describe("latestReleaseFor", () => {
   it("returns the exact release when one exists", () => {
-    expect(latestReleaseFor("3.8.16")?.version).toBe("3.8.16");
+    expect(latestReleaseFor("3.8.17")?.version).toBe("3.8.17");
   });
 
   it("falls back to the newest earlier release for a patch bump", () => {
-    expect(latestReleaseFor("3.8.17")?.version).toBe("3.8.16");
+    expect(latestReleaseFor("3.8.18")?.version).toBe("3.8.17");
     expect(latestReleaseFor("3.8.14")?.version).toBe("3.8.13");
   });
 

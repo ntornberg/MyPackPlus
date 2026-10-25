@@ -1,10 +1,15 @@
 import { trackExtensionInstalled } from "../analytics/gaBackground";
-import { clearAllExtensionCaches } from "../course-management/cache/courseRetrieval";
 import {
   fetchStatusWorkerStatusDirect,
   isStatusWorkerFetchMessage,
 } from "../user-experience/status/statusWorker";
 import { AppLogger } from "../utils/logger";
+
+import {
+  initializeBackgroundStorage,
+  refreshMigratedTabs,
+  STORAGE_READY_MESSAGE,
+} from "./storageMigration";
 
 let isListenerRegistered = false;
 
@@ -18,6 +23,18 @@ function setupMessageListener() {
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     AppLogger.info("[Background] Received message:", message);
+
+    if (message?.type === STORAGE_READY_MESSAGE) {
+      void (async () => {
+        try {
+          const { revision } = await initializeBackgroundStorage();
+          sendResponse({ success: true, revision });
+        } catch (error) {
+          sendResponse({ success: false, error: String(error) });
+        }
+      })();
+      return true;
+    }
 
     if (message.type === "fetchData") {
       AppLogger.info(
@@ -93,18 +110,20 @@ async function handleInstalled(
   details: chrome.runtime.InstalledDetails,
 ): Promise<void> {
   AppLogger.info("[Background] Extension installed/updated:", details.reason);
+  const { migrated } = await initializeBackgroundStorage();
   if (details.reason === "install") {
     void trackExtensionInstalled();
   }
-  if (details.reason === "update") {
-    AppLogger.info("[Background] Extension updated; clearing local caches");
-    await clearAllExtensionCaches();
+  if (details.reason === "update" && migrated) {
+    await refreshMigratedTabs();
   }
   initializeServiceWorker();
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
-  void handleInstalled(details);
+  void handleInstalled(details).catch((error) => {
+    AppLogger.error("[Background] Storage initialization failed", error);
+  });
 });
 
 chrome.runtime.onStartup.addListener(() => {

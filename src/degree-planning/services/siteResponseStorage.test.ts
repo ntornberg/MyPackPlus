@@ -429,4 +429,38 @@ describe("siteResponseStorage listener", () => {
 
     expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
   });
+
+  it("queues early responses until storage initialization completes", async () => {
+    let release!: () => void;
+    const startup = setupListener(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const response = dispatch({
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: { responseType: "_getShopCartTableData", data: [{ id: 1 }] },
+    });
+    await Promise.resolve();
+    expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
+    release();
+    await startup;
+    await response;
+    expect(mocks.replaceGenericCache).toHaveBeenCalledTimes(1);
+  });
+
+  it("never stores responses after initialization fails, even after queue recovery", async () => {
+    await expect(
+      setupListener(Promise.reject(new Error("reset failed"))),
+    ).rejects.toThrow("reset failed");
+    const message = {
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: { responseType: "_getShopCartTableData", data: [{ id: 1 }] },
+    };
+    await dispatch(message);
+    await dispatch(message);
+    expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
+  });
 });
