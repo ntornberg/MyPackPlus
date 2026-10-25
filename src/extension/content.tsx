@@ -1,21 +1,6 @@
-import { useState } from "react";
-import { createRoot } from "react-dom/client";
-
-import { watchScheduleCacheChanges } from "../course-management/cache/scheduleCacheSignal";
 import { watchNativeCalendar } from "../course-management/components/calendar/nativeCalendar";
-import { watchPlannerFrame } from "../course-management/services/plannerWatcher";
-import { scrapeScheduleTable } from "../course-management/services/scraper";
 import { setupListener } from "../degree-planning/services/siteResponseStorage";
 import extensionCssRaw from "../index.css?inline";
-import SlideOutDrawer from "../ui-system/components/SlideOutDrawer";
-import WhatsNewDialog from "../user-experience/components/UserGuide/WhatsNewDialog";
-import {
-  attachExtensionShadowTailwindStyleOrderObserver,
-  ensureOverlayContainer,
-  extensionCssForShadowRoot,
-  rewriteCssAssetUrlsForExtension,
-  waitForScheduleTable,
-} from "../utils/dom";
 import { AppLogger } from "../utils/logger";
 
 import { initializePageStorage } from "./storageMigration";
@@ -28,17 +13,6 @@ declare global {
 }
 
 AppLogger.info("MyPack Enhancer script started.");
-
-function RootOverlayDialogs() {
-  const [showLauncherHint, setShowLauncherHint] = useState(false);
-
-  return (
-    <>
-      <WhatsNewDialog onResolved={() => setShowLauncherHint(true)} />
-      <SlideOutDrawer showLauncherHint={showLauncherHint} />
-    </>
-  );
-}
 
 const storageReady = setupListener(initializePageStorage());
 void storageReady
@@ -162,27 +136,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     window.__mypackEnhancerInitialized = true;
-    watchScheduleCacheChanges();
-
-    AppLogger.info("Initializing MyPack Drawer");
-
-    const scheduleElement = await waitForScheduleTable();
-    const shadowCss = extensionCssForShadowRoot(
-      rewriteCssAssetUrlsForExtension(extensionCssRaw),
-    );
-    const overlayElement = ensureOverlayContainer(shadowCss);
-    const shadowRoot = document.getElementById(
-      "extension-overlay-root",
-    )?.shadowRoot;
-    if (!shadowRoot) {
-      throw new Error("Extension overlay shadow root was not created.");
-    }
-    attachExtensionShadowTailwindStyleOrderObserver(shadowRoot);
-    const root = createRoot(overlayElement);
-    scrapeScheduleTable(scheduleElement);
-
-    root.render(<RootOverlayDialogs />);
-    watchPlannerFrame();
+    const { startTopFrame } = await import("./topFrame");
+    await startTopFrame(extensionCssRaw);
   } catch (error) {
     AppLogger.error(
       "An error occurred during the main execution block:",

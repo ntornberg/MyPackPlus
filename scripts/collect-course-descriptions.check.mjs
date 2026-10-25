@@ -26,10 +26,10 @@ test("matches existing codes and reports missing descriptions", async () => {
         : '<a href="/course-descriptions/csc/">CSC</a>',
     { CSC: { "CSC-500": {}, "CSC-999": {} } },
   );
-  assert.equal(
-    result.courses["CSC-500"].source,
-    "https://catalog.ncsu.edu/course-descriptions/csc/",
-  );
+  assert.deepEqual(result.courses["CSC-500"], {
+    description: "Process scheduling and memory.",
+  });
+  assert.equal(result.source, "https://catalog.ncsu.edu/course-descriptions/");
   assert.deepEqual(result.unmatched, ["CSC-999"]);
 });
 test("a failed collection preserves the previous output", async () => {

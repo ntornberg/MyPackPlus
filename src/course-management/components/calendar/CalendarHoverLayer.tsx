@@ -193,7 +193,17 @@ export function CalendarHoverLayer({
       found.addEventListener("focusout", scheduleClose);
     };
     const dismiss = () => setActive(null);
-    const observer = new MutationObserver(sync);
+    // sync forces layout, so coalesce bursts of page mutations to one per frame.
+    const view = doc.defaultView ?? window;
+    let frame = 0;
+    const scheduleSync = () => {
+      if (frame) return;
+      frame = view.requestAnimationFrame(() => {
+        frame = 0;
+        sync();
+      });
+    };
+    const observer = new MutationObserver(scheduleSync);
     observer.observe(doc.body, {
       childList: true,
       subtree: true,
@@ -203,6 +213,7 @@ export function CalendarHoverLayer({
     doc.addEventListener("change", dismiss);
     sync();
     return () => {
+      if (frame) view.cancelAnimationFrame(frame);
       observer.disconnect();
       release();
       doc.removeEventListener("change", dismiss);

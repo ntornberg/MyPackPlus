@@ -19,30 +19,42 @@ export interface SearchCourse {
   normalizedTitle: string;
   normalizedDescription: string;
   subjectWords: string[];
+  titleTokens: string[];
+  descriptionTokens: string[];
+  paddedTitle: string;
 }
 
 const descriptionRecords: Record<string, { description: string }> =
   descriptions.courses;
-export const courseSearchIndex: SearchCourse[] = Object.entries(
-  DEPT_COURSES,
-).flatMap(([subject, courses]) =>
-  Object.entries(courses).map(([code, course]) => {
-    const description = descriptionRecords[code]?.description ?? "";
-    return {
-      subject,
-      code,
-      title: course.course_title,
-      id: course.course_id,
-      catalogNum: code.match(/\d+[A-Za-z]?$/)?.[0] ?? "",
-      description,
-      label: `${code} ${course.course_title}`,
-      normalizedCode: normalizeSearchText(code).replaceAll(" ", ""),
-      normalizedTitle: normalizeSearchText(course.course_title),
-      normalizedDescription: normalizeSearchText(description),
-      subjectWords: normalizeSearchText(subject).split(" "),
-    };
-  }),
-);
+let courseSearchIndex: SearchCourse[] | undefined;
+
+const buildCourseSearchIndex = (): SearchCourse[] =>
+  Object.entries(DEPT_COURSES).flatMap(([subject, courses]) =>
+    Object.entries(courses).map(([code, course]) => {
+      const description = descriptionRecords[code]?.description ?? "";
+      const normalizedTitle = normalizeSearchText(course.course_title);
+      const normalizedDescription = normalizeSearchText(description);
+      return {
+        subject,
+        code,
+        title: course.course_title,
+        id: course.course_id,
+        catalogNum: code.match(/\d+[A-Za-z]?$/)?.[0] ?? "",
+        description,
+        label: `${code} ${course.course_title}`,
+        normalizedCode: normalizeSearchText(code).replaceAll(" ", ""),
+        normalizedTitle,
+        normalizedDescription,
+        subjectWords: normalizeSearchText(subject).split(" "),
+        titleTokens: normalizedTitle.split(" "),
+        descriptionTokens: normalizedDescription.split(" "),
+        paddedTitle: ` ${normalizedTitle} `,
+      };
+    }),
+  );
+
+export const getCourseSearchIndex = () =>
+  (courseSearchIndex ??= buildCourseSearchIndex());
 
 export function withinOneEdit(a: string, b: string): boolean {
   if (Math.abs(a.length - b.length) > 1) return false;
@@ -69,12 +81,14 @@ const topicAliases: Record<string, string> = {
 };
 const subjectAliases: Record<string, string> = { cs: "csc", math: "ma" };
 
-export function findCourses(query: string, courses = courseSearchIndex) {
+export function findCourses(query: string, courses = getCourseSearchIndex()) {
   const normalized = normalizeSearchText(query);
   const text = topicAliases[normalized] ?? normalized;
   if (!text) return [];
   const words = text.split(" ");
   const code = text.replaceAll(" ", "");
+  const numericCode = /^\d+$/.test(code);
+  const paddedText = ` ${text} `;
   const numbered = text.match(/^([a-z][a-z ]*?)?\s*(\d+[a-z]?)$/);
   if (numbered) {
     const subjectText = numbered[1]?.trim() ?? "";
@@ -112,24 +126,20 @@ export function findCourses(query: string, courses = courseSearchIndex) {
     if (course.normalizedCode === code) rank = 0;
     else if (
       course.normalizedCode.startsWith(code) ||
-      (/^\d+$/.test(code) && course.catalogNum.startsWith(code))
+      (numericCode && course.catalogNum.startsWith(code))
     )
       rank = 1;
     else if (course.normalizedTitle === text) rank = 1.5;
-    else if (` ${course.normalizedTitle} `.includes(` ${text} `)) rank = 2;
+    else if (course.paddedTitle.includes(paddedText)) rank = 2;
     else if (
       words.every((word) =>
-        course.normalizedTitle
-          .split(" ")
-          .some((token) => token.startsWith(word)),
+        course.titleTokens.some((token) => token.startsWith(word)),
       )
     )
       rank = 3;
     else if (
       words.every((word) =>
-        course.normalizedDescription
-          .split(" ")
-          .some((token) => token.startsWith(word)),
+        course.descriptionTokens.some((token) => token.startsWith(word)),
       )
     )
       rank = 4;
@@ -141,13 +151,11 @@ export function findCourses(query: string, courses = courseSearchIndex) {
     : ranked.filter(({ course }) =>
         words.every(
           (word) =>
-            course.normalizedTitle
-              .split(" ")
-              .some((token) => token.startsWith(word)) ||
+            course.titleTokens.some((token) => token.startsWith(word)) ||
             (/^[a-z]{5,}$/.test(word) &&
-              course.normalizedTitle
-                .split(" ")
-                .some((titleWord) => withinOneEdit(word, titleWord))),
+              course.titleTokens.some((titleWord) =>
+                withinOneEdit(word, titleWord),
+              )),
         ),
       );
   return matches

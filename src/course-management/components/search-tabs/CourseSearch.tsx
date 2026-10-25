@@ -23,7 +23,7 @@ import { type PlannerSectionPreview } from "../../../ui-system/components/workbe
 import { fetchPlannerCourseSections } from "../../services/api/planner-search/dataService";
 import type { GroupedSections } from "../../types/section";
 import {
-  courseSearchIndex,
+  getCourseSearchIndex,
   type SearchCourse,
 } from "../../utils/courseSearchIndex";
 import type { CourseSearchData, TabUpdater } from "../tab-state/tabState";
@@ -59,7 +59,7 @@ export default function CourseSearch({
     courseSearchData.selectedTerm,
   );
   const selectedCourse =
-    courseSearchIndex.find(
+    getCourseSearchIndex().find(
       (course) => course.code === courseSearchData.selectedCourseInfo?.code,
     ) ?? null;
   const {
@@ -107,14 +107,14 @@ export default function CourseSearch({
     });
   const courseOptions = useMemo(
     () =>
-      courseSearchIndex
+      getCourseSearchIndex()
         .filter((course) => course.subject === courseSearchData.searchSubject)
         .map((course) => course.label),
     [courseSearchData.searchSubject],
   );
   const handleCourseChange = (label: string | null) =>
     selectCourse(
-      courseSearchIndex.find((course) => course.label === label) ?? null,
+      getCourseSearchIndex().find((course) => course.label === label) ?? null,
     );
 
   const sectionsArray = useMemo((): GroupedSections[] => {
@@ -334,12 +334,12 @@ export default function CourseSearch({
   return (
     <div className="@container min-w-0 w-full p-3 @min-[640px]:p-4">
       <div className="grid min-w-0 gap-4 @min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="order-2 min-w-0 @min-[1100px]:sticky @min-[1100px]:top-0 @min-[1100px]:order-1 @min-[1100px]:self-start">
-          {previewContent}
-        </div>
-        <div className="order-1 min-w-0 space-y-4 @min-[1100px]:order-2">
+        <div className="min-w-0 space-y-4">
           {controlsPanel}
           {resultsPanel}
+        </div>
+        <div className="min-w-0 @min-[1100px]:sticky @min-[1100px]:top-0 @min-[1100px]:self-start">
+          {previewContent}
         </div>
       </div>
     </div>

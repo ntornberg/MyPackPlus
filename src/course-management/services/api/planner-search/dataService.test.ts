@@ -1,26 +1,53 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { mergeData } from "../../../../utils/course-search/mergeDataUtil";
+import { v2ToBatchResponse } from "../gradesV2";
+
 import {
   batchFetchCoursesData,
   fetchPlannerCourseSections,
 } from "./dataService";
 
-const mocks = vi.hoisted(() => ({
-  generateCacheKey: vi.fn(async (value: string) => `hash:${value}`),
-  getGenericCache: vi.fn(),
-  setGenericCache: vi.fn(),
-  searchOpenCoursesByParams: vi.fn(),
-  batchSearchOpenCourses: vi.fn(),
-  noteGradeDatasetVersion: vi.fn(async () => false),
-}));
+const mocks = vi.hoisted(() => {
+  const getGenericCache = vi.fn();
+  return {
+    generateCacheKey: vi.fn(async (value: string) => `hash:${value}`),
+    getGenericCache,
+    // Built on getGenericCache so per-key expectations apply to batched reads too.
+    getGenericCacheMany: vi.fn(async (category: string, hashes: string[]) => {
+      const entries: Record<string, unknown> = {};
+      for (const hash of hashes) {
+        const entry = await getGenericCache(category, hash);
+        if (entry) entries[hash] = entry;
+      }
+      return entries;
+    }),
+    setGenericCache: vi.fn(),
+    searchOpenCoursesByParams: vi.fn(),
+    batchSearchOpenCourses: vi.fn(),
+    noteGradeDatasetVersion: vi.fn(async () => false),
+  };
+});
 
 vi.mock("../../../cache/courseRetrieval", () => ({
   GRADE_DATA_CACHE_VERSION: "v2",
   generateCacheKey: mocks.generateCacheKey,
   getGenericCache: mocks.getGenericCache,
+  getGenericCacheMany: mocks.getGenericCacheMany,
   setGenericCache: mocks.setGenericCache,
   noteGradeDatasetVersion: mocks.noteGradeDatasetVersion,
 }));
+
+vi.mock(
+  "../../../../utils/course-search/mergeDataUtil",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../../../../utils/course-search/mergeDataUtil")
+      >();
+    return { ...actual, mergeData: vi.fn(actual.mergeData) };
+  },
+);
 
 vi.mock("./searchService", () => ({
   searchOpenCoursesByParams: mocks.searchOpenCoursesByParams,
@@ -292,5 +319,64 @@ describe("dataService v2 grade/RMP requests", () => {
     expect(mocks.generateCacheKey).toHaveBeenCalledWith(
       "v2-MA 241-Griggs,John Richard-Spring 2027",
     );
+  });
+
+  describe("batch requests for sections sharing an instructor", () => {
+    const course = {
+      course_abr: "MA",
+      catalog_num: "241",
+      course_descrip: "",
+      course_id: "id-1",
+    };
+    const twoSectionCourse = {
+      ...courseData,
+      sections: [
+        courseData.sections[0]!,
+        {
+          ...courseData.sections[0]!,
+          id: "002-5678",
+          section: "002",
+          classNumber: "5678",
+        },
+      ],
+    };
+
+    it("sends one grade request entry when nothing is cached", async () => {
+      mocks.getGenericCache.mockResolvedValue(null);
+      mocks.batchSearchOpenCourses.mockResolvedValueOnce([twoSectionCourse]);
+
+      await batchFetchCoursesData([course], "Spring 2027");
+
+      const fetchMock = vi.mocked(fetch);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toEqual([
+        {
+          course: "MA 241",
+          instructor_name: "Griggs,John Richard",
+          unity_id: "jrgriggs",
+        },
+      ]);
+      expect(mocks.getGenericCacheMany).toHaveBeenCalledWith("gradeProfData", [
+        "hash:v2-MA 241-Griggs,John Richard-Spring 2027",
+      ]);
+    });
+
+    it("merges cached grade data once instead of once per section", async () => {
+      const cachedGradeProf = v2ToBatchResponse(v2Response.data as never);
+      mocks.getGenericCache.mockImplementation(async (category: string) =>
+        category === "gradeProfData"
+          ? { combinedData: JSON.stringify(cachedGradeProf), timestamp: 1 }
+          : null,
+      );
+      mocks.batchSearchOpenCourses.mockResolvedValueOnce([twoSectionCourse]);
+
+      await batchFetchCoursesData([course], "Spring 2027");
+
+      expect(fetch).not.toHaveBeenCalled();
+      const gradeBatch = vi.mocked(mergeData).mock.calls[0]![1];
+      expect(gradeBatch.courses).toHaveLength(cachedGradeProf.courses!.length);
+      expect(gradeBatch.profs).toHaveLength(cachedGradeProf.profs!.length);
+      mocks.getGenericCache.mockReset();
+    });
   });
 });

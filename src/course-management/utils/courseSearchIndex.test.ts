@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  courseSearchIndex,
   findCourses,
+  getCourseSearchIndex,
   withinOneEdit,
 } from "./courseSearchIndex";
+
+const courseSearchIndex = getCourseSearchIndex();
 
 describe("course discovery", () => {
   it.each([
@@ -30,12 +32,18 @@ describe("course discovery", () => {
         code: "A-101",
         normalizedTitle: "advanced operating systems",
         normalizedDescription: "earth",
+        titleTokens: ["advanced", "operating", "systems"],
+        descriptionTokens: ["earth"],
+        paddedTitle: " advanced operating systems ",
       },
       {
         ...base,
         code: "Z-101",
         normalizedTitle: "operating systems",
         normalizedDescription: "",
+        titleTokens: ["operating", "systems"],
+        descriptionTokens: [""],
+        paddedTitle: " operating systems ",
       },
     ];
     expect(findCourses("operating systems", courses)[0].course.code).toBe(
@@ -107,6 +115,25 @@ describe("course discovery", () => {
     expect(withinOneEdit("systems", "system")).toBe(true);
     expect(withinOneEdit("systems", "systxms")).toBe(true);
     expect(withinOneEdit("systems", "syxxems")).toBe(false);
+  });
+  it("matches titles within one edit when no word prefix matches", () => {
+    const base = courseSearchIndex[0];
+    const courses = [
+      {
+        ...base,
+        code: "A-101",
+        normalizedCode: "a101",
+        normalizedTitle: "thermodynamics",
+        normalizedDescription: "",
+        titleTokens: ["thermodynamics"],
+        descriptionTokens: [""],
+        paddedTitle: " thermodynamics ",
+      },
+    ];
+    expect(findCourses("thermodynamcs", courses)).toEqual([
+      { course: courses[0], rank: 99 },
+    ]);
+    expect(findCourses("thermodnmcs", courses)).toEqual([]);
   });
   it("limits results and does not pick an arbitrary course for an empty query", () => {
     expect(findCourses("")).toEqual([]);

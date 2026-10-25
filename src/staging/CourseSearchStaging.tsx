@@ -8,7 +8,7 @@ import {
 } from "../course-management/components/tab-state/tabState";
 import type { fetchPlannerCourseSections } from "../course-management/services/api/planner-search/dataService";
 import type { MergedCourseData } from "../course-management/types/section";
-import { courseSearchIndex } from "../course-management/utils/courseSearchIndex";
+import { getCourseSearchIndex } from "../course-management/utils/courseSearchIndex";
 
 const loadSections: typeof fetchPlannerCourseSections = async (
   subject,
@@ -31,7 +31,7 @@ const loadSections: typeof fetchPlannerCourseSections = async (
 export function CourseSearchStaging() {
   const [data, setData] = useState<CourseSearchData>(() => {
     const code = new URLSearchParams(window.location.search).get("selected");
-    const course = courseSearchIndex.find((item) => item.code === code);
+    const course = getCourseSearchIndex().find((item) => item.code === code);
     return course
       ? {
           ...CourseSearchDataInitialState,

@@ -62,7 +62,8 @@ export async function collectDescriptions(fetchPage, catalog = DEPT_COURSES) {
   for (const department of Object.values(catalog)) {
     for (const code of Object.keys(department)) {
       const record = descriptions[normalizeCode(code)];
-      if (record) courses[code] = record;
+      // Only the description ships in the bundle; `source` stays top-level.
+      if (record) courses[code] = { description: record.description };
       else unmatched.push(code);
     }
   }

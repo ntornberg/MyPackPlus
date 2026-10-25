@@ -12,9 +12,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import GepSearch from "../../course-management/components/search-tabs/GepSearch";
 import InstructorSearch from "../../course-management/components/search-tabs/InstructorSearch";
-import MajorPlanSearch from "../../course-management/components/search-tabs/MajorPlanSearch";
 import {
   CourseSearchDataInitialState,
   GepSearchDataInitialState,
@@ -49,6 +47,13 @@ import {
 
 const CourseSearch = React.lazy(
   () => import("../../course-management/components/search-tabs/CourseSearch"),
+);
+const GepSearch = React.lazy(
+  () => import("../../course-management/components/search-tabs/GepSearch"),
+);
+const MajorPlanSearch = React.lazy(
+  () =>
+    import("../../course-management/components/search-tabs/MajorPlanSearch"),
 );
 
 const MemoizedCourseSearchTab = React.memo(
@@ -99,14 +104,22 @@ const MemoizedGepSearchTab = React.memo(
     selectedPreviewId: string | null;
     isActive: boolean;
   }) => (
-    <GepSearch
-      isActive={isActive}
-      setGepSearchTabData={setGepSearchTabData}
-      GepSearchData={GepSearchData}
-      onPreviewSectionChange={onPreviewSectionChange}
-      previewContent={previewContent}
-      selectedPreviewId={selectedPreviewId}
-    />
+    <React.Suspense
+      fallback={
+        <p role="status" className="p-4 text-sm">
+          Loading GEP search…
+        </p>
+      }
+    >
+      <GepSearch
+        isActive={isActive}
+        setGepSearchTabData={setGepSearchTabData}
+        GepSearchData={GepSearchData}
+        onPreviewSectionChange={onPreviewSectionChange}
+        previewContent={previewContent}
+        selectedPreviewId={selectedPreviewId}
+      />
+    </React.Suspense>
   ),
 );
 
@@ -124,13 +137,21 @@ const MemoizedMajorPlanSearchTab = React.memo(
     previewContent: React.ReactNode;
     selectedPreviewId: string | null;
   }) => (
-    <MajorPlanSearch
-      setMajorPlanSearchTabData={setMajorPlanSearchTabData}
-      majorPlanSearchData={majorPlanSearchData}
-      onPreviewSectionChange={onPreviewSectionChange}
-      previewContent={previewContent}
-      selectedPreviewId={selectedPreviewId}
-    />
+    <React.Suspense
+      fallback={
+        <p role="status" className="p-4 text-sm">
+          Loading major plan search…
+        </p>
+      }
+    >
+      <MajorPlanSearch
+        setMajorPlanSearchTabData={setMajorPlanSearchTabData}
+        majorPlanSearchData={majorPlanSearchData}
+        onPreviewSectionChange={onPreviewSectionChange}
+        previewContent={previewContent}
+        selectedPreviewId={selectedPreviewId}
+      />
+    </React.Suspense>
   ),
 );
 

@@ -6,6 +6,7 @@ import {
   generateCacheKey,
   getCacheCategory,
   getGenericCache,
+  getGenericCacheMany,
   isCacheEntryExpired,
   noteGradeDatasetVersion,
   resetGradeDatasetVersionForTests,
@@ -183,6 +184,102 @@ describe("CourseRetrieval cache expiration", () => {
     );
     expect(storageState.openCourses).toBeUndefined();
     expect(storageState.scheduleTableData).toBeUndefined();
+  });
+});
+
+describe("getGenericCacheMany", () => {
+  const cacheCategory = "gradeProfData";
+  const now = 100_000;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (globalThis as unknown as { chrome?: ChromeStorageMock }).chrome;
+  });
+
+  function seedStorage(): Record<string, Record<string, CacheEntry>> {
+    return {
+      [cacheCategory]: {
+        fresh1: { combinedData: "a", timestamp: now - 10, expiresAt: now + 1 },
+        fresh2: { combinedData: "b", timestamp: now - 10, expiresAt: now + 1 },
+        stale1: { combinedData: "c", timestamp: now - 10, expiresAt: now - 1 },
+        stale2: { combinedData: "d", timestamp: now - 10, expiresAt: now - 1 },
+      },
+    };
+  }
+
+  it("returns every hit from a single storage read", async () => {
+    const storageState = seedStorage();
+    const { chromeMock, setCalls } = installChromeStorageMock(storageState);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const result = await getGenericCacheMany(cacheCategory, [
+      "fresh1",
+      "fresh2",
+      "fresh1",
+    ]);
+
+    expect(result).toEqual({
+      fresh1: storageState[cacheCategory].fresh1,
+      fresh2: storageState[cacheCategory].fresh2,
+    });
+    expect(chromeMock.storage.local.get).toHaveBeenCalledTimes(1);
+    expect(setCalls).toHaveLength(0);
+  });
+
+  it("drops expired entries with one removal write", async () => {
+    const storageState = seedStorage();
+    const { chromeMock, setCalls } = installChromeStorageMock(storageState);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const result = await getGenericCacheMany(cacheCategory, [
+      "fresh1",
+      "stale1",
+      "stale2",
+    ]);
+
+    expect(Object.keys(result)).toEqual(["fresh1"]);
+    // One lookup read plus the removal's locked read-modify-write.
+    expect(chromeMock.storage.local.get).toHaveBeenCalledTimes(2);
+    expect(setCalls).toHaveLength(1);
+    expect(Object.keys(storageState[cacheCategory]).sort()).toEqual([
+      "fresh1",
+      "fresh2",
+    ]);
+  });
+
+  it("leaves misses out of the result", async () => {
+    const storageState = seedStorage();
+    const { chromeMock, setCalls } = installChromeStorageMock(storageState);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const result = await getGenericCacheMany(cacheCategory, [
+      "missing1",
+      "fresh2",
+      "missing2",
+    ]);
+
+    expect(Object.keys(result)).toEqual(["fresh2"]);
+    expect(chromeMock.storage.local.get).toHaveBeenCalledTimes(1);
+    expect(setCalls).toHaveLength(0);
+  });
+
+  it("skips storage entirely for an empty key list", async () => {
+    const { chromeMock } = installChromeStorageMock(seedStorage());
+
+    expect(await getGenericCacheMany(cacheCategory, [])).toEqual({});
+    expect(chromeMock.storage.local.get).not.toHaveBeenCalled();
+  });
+
+  it("keeps getGenericCache as a one-key lookup", async () => {
+    const storageState = seedStorage();
+    const { chromeMock } = installChromeStorageMock(storageState);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    expect(await getGenericCache(cacheCategory, "fresh1")).toEqual(
+      storageState[cacheCategory].fresh1,
+    );
+    expect(await getGenericCache(cacheCategory, "missing")).toBeNull();
+    expect(chromeMock.storage.local.get).toHaveBeenCalledTimes(2);
   });
 });
 
