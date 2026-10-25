@@ -90,6 +90,22 @@ const EXTENSION_CACHE_CATEGORIES = [
   "planTermTableData",
   "shopCartCalEventsData",
   "scheduleCalEventsData",
+  "instructorUpcoming",
+  "instructorSearch",
+];
+
+/**
+ * Prefix for grade/RMP cache keys. Bump when the backend response shape changes so entries
+ * written by older builds are never read back.
+ */
+export const GRADE_DATA_CACHE_VERSION = "v2";
+
+/** Categories holding grade/RMP responses that a new backend dataset makes stale. */
+const GRADE_DATASET_CATEGORIES = [
+  "gradeProfData",
+  "courseList",
+  "instructorUpcoming",
+  "instructorSearch",
 ];
 
 /**
@@ -869,6 +885,58 @@ export async function clearAllExtensionCaches(): Promise<void> {
   } catch (error) {
     AppLogger.error(`[CACHE ERROR] clearAllExtensionCaches failed`, error);
   }
+}
+
+const GRADE_DATASET_VERSION_STORAGE_KEY = "gradeDatasetVersion";
+let knownGradeDatasetVersion: string | null = null;
+
+/**
+ * Records the backend dataset version from a v2 response. When it differs from the last one
+ * seen, cached grade/RMP data was built from an older snapshot, so it is cleared here and the
+ * cache epoch is bumped so other origins' IndexedDB copies are dropped on their next sync.
+ *
+ * @param {string | null | undefined} version `meta.dataset_version` from the response
+ * @returns {Promise<boolean>} True when stale caches were cleared
+ */
+export async function noteGradeDatasetVersion(
+  version: string | null | undefined,
+): Promise<boolean> {
+  if (!version || version === knownGradeDatasetVersion) {
+    return false;
+  }
+  knownGradeDatasetVersion = version;
+  if (!isChromeStorageAvailable()) {
+    return false;
+  }
+  try {
+    const previous = (
+      await chrome.storage.local.get(GRADE_DATASET_VERSION_STORAGE_KEY)
+    )[GRADE_DATASET_VERSION_STORAGE_KEY];
+    if (previous === version) {
+      return false;
+    }
+    await chrome.storage.local.set({
+      [GRADE_DATASET_VERSION_STORAGE_KEY]: version,
+    });
+    if (typeof previous !== "string") {
+      // First v2 response: keys are already version-prefixed, nothing stale to read.
+      return false;
+    }
+    await Promise.all(GRADE_DATASET_CATEGORIES.map(clearGenericCache));
+    await chrome.storage.local.set({ [CACHE_EPOCH_STORAGE_KEY]: Date.now() });
+    AppLogger.info(
+      `[CACHE] Grade dataset changed ${previous} -> ${version}; cleared grade caches`,
+    );
+    return true;
+  } catch (error) {
+    AppLogger.error(`[CACHE ERROR] noteGradeDatasetVersion failed`, error);
+    return false;
+  }
+}
+
+/** Test hook: forget the in-memory dataset version. */
+export function resetGradeDatasetVersionForTests(): void {
+  knownGradeDatasetVersion = null;
 }
 
 /**

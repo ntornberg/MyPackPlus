@@ -9,10 +9,14 @@ function categoryDetail(progress: GepCategoryProgress): string {
   switch (progress.status) {
     case "complete":
     case "enrolled":
-      return progress.lines
-        .filter((line) => line.subject)
-        .map((line) => `${line.subject} ${line.catalogNbr}`)
-        .join(", ");
+      // Major and minor audits can both list the same course.
+      return [
+        ...new Set(
+          progress.lines
+            .filter((line) => line.subject)
+            .map((line) => `${line.subject} ${line.catalogNbr}`),
+        ),
+      ].join(", ");
     case "planned":
       return progress.plannedTerm
         ? `In Pack Planner · ${progress.plannedTerm}`

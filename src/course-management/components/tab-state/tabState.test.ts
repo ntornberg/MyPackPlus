@@ -15,8 +15,12 @@ describe("restoredTerm", () => {
     expect(restoredTerm("1999 Fall Term")).toBe(DEFAULT_TERM_NAME);
   });
 
-  it("keeps the default term and a cleared selection as-is", () => {
+  it("keeps the default term as-is", () => {
     expect(restoredTerm(DEFAULT_TERM_NAME)).toBe(DEFAULT_TERM_NAME);
-    expect(restoredTerm(null)).toBeNull();
+  });
+
+  it("restores the default after the term was cleared", () => {
+    expect(restoredTerm(null)).toBe(DEFAULT_TERM_NAME);
+    expect(restoredTerm("")).toBe(DEFAULT_TERM_NAME);
   });
 });

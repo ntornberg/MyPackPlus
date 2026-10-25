@@ -7,6 +7,8 @@ import {
   getCacheCategory,
   getGenericCache,
   isCacheEntryExpired,
+  noteGradeDatasetVersion,
+  resetGradeDatasetVersionForTests,
   setGenericCache,
   type CacheEntry,
 } from "./courseRetrieval.js";
@@ -196,5 +198,42 @@ describe("generateCacheKey", () => {
     expect(key).toMatch(/^hash_[0-9a-f]{16}$/);
     expect(await generateCacheKey("x".repeat(100))).toBe(key);
     expect(await generateCacheKey(`${"x".repeat(99)}y`)).not.toBe(key);
+  });
+});
+
+describe("noteGradeDatasetVersion", () => {
+  afterEach(() => {
+    resetGradeDatasetVersionForTests();
+  });
+
+  it("records the first version without clearing caches", async () => {
+    const storageState: Record<string, any> = {
+      gradeProfData: { a: { combinedData: "{}", timestamp: 1 } },
+    };
+    installChromeStorageMock(storageState);
+
+    expect(await noteGradeDatasetVersion("v-1")).toBe(false);
+    expect(storageState.gradeDatasetVersion).toBe("v-1");
+    expect(storageState.gradeProfData).toBeDefined();
+  });
+
+  it("clears grade caches and bumps the epoch when the version changes", async () => {
+    const storageState: Record<string, any> = {
+      gradeDatasetVersion: "v-1",
+      gradeProfData: { a: { combinedData: "{}", timestamp: 1 } },
+      courseList: { b: { combinedData: "{}", timestamp: 1 } },
+      openCourses: { c: { combinedData: "{}", timestamp: 1 } },
+    };
+    installChromeStorageMock(storageState);
+
+    expect(await noteGradeDatasetVersion("v-2")).toBe(true);
+    expect(storageState.gradeDatasetVersion).toBe("v-2");
+    expect(storageState.gradeProfData).toBeUndefined();
+    expect(storageState.courseList).toBeUndefined();
+    expect(storageState.openCourses).toBeDefined();
+    expect(typeof storageState.cacheEpoch).toBe("number");
+
+    // Same version again is a no-op.
+    expect(await noteGradeDatasetVersion("v-2")).toBe(false);
   });
 });

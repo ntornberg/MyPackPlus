@@ -7,7 +7,7 @@ export const DEGREE_DETAILS_RESPONSE = "IScript_getDegreeDetails";
 export const DEGREE_AUDITS_STORAGE_KEY = "degreeAudits";
 
 /** Bumped when the stored shape changes; older audits are dropped and refetched. */
-export const DEGREE_AUDIT_VERSION = 4;
+export const DEGREE_AUDIT_VERSION = 5;
 
 /**
  * Line status codes used by MyPack's audit page: Complete, Enrolled, Planned
@@ -50,6 +50,11 @@ export type DegreeAudit = {
   plan: string;
   subplan: string;
   planType: string;
+  /**
+   * MyPack's program status: "AC" for an active program, "IN" for an intended
+   * major the student hasn't been admitted to yet.
+   */
+  programStatus?: string;
   reqTerm: string;
   name: string;
   capturedAt: number;
@@ -238,6 +243,7 @@ export function parseDegreeDetailsResponse(
     plan,
     subplan: params.get("acad_sub_plan")?.trim() || "NOSUBPLAN",
     planType: params.get("acad_plan_type")?.trim() ?? "",
+    programStatus: params.get("prog_status")?.trim() ?? "",
     reqTerm: params.get("req_term")?.trim() ?? "",
     name: "",
     capturedAt,

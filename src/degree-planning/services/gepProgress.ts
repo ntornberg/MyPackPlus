@@ -62,6 +62,18 @@ function gepCatalogCode(key: string): string {
 }
 
 /**
+ * Audits whose GEP lines apply to the student. An intended major is audited
+ * against its own (often newer) catalog, so its GEP rules, e.g. Foundations
+ * of American Democracy, aren't the student's until they switch. Falls back
+ * to every audit when only intended programs are known.
+ */
+function gepAudits(audits: (DegreeAudit | null)[]): DegreeAudit[] {
+  const known = audits.filter((audit): audit is DegreeAudit => !!audit);
+  const active = known.filter((audit) => audit.programStatus !== "IN");
+  return active.length > 0 ? active : known;
+}
+
+/**
  * Category status from the audit lines whose requirement names the category,
  * using the audit page's own precedence. Categories a major covers through
  * its own requirements (math and science for engineers) may not appear.
@@ -71,7 +83,7 @@ export function gepProgress(
   planner: PlannerIndex | null,
   catalog: GepCatalog,
 ): Record<GEPCode, GepCategoryProgress> {
-  const lines = audits.flatMap((audit) =>
+  const lines = gepAudits(audits).flatMap((audit) =>
     (audit?.groups ?? []).flatMap((group) => group.lines),
   );
   const result = {} as Record<GEPCode, GepCategoryProgress>;

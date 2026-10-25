@@ -25,8 +25,8 @@ export function SectionDensityToggle({
         spacing={1}
         aria-label="Section density"
       >
-        <ToggleGroupItem value="comfy" aria-label="Comfy section cards">
-          Comfy
+        <ToggleGroupItem value="comfy" aria-label="Detailed section cards">
+          Detailed
         </ToggleGroupItem>
         <ToggleGroupItem value="compact" aria-label="Compact section cards">
           Compact

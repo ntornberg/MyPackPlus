@@ -67,7 +67,11 @@ export default function FirstStartDialog({
         </div>
 
         {/* Body */}
-        <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
+        <div
+          className="max-h-[60vh] touch-pan-y overflow-y-auto overscroll-y-contain px-5 py-4"
+          onWheelCapture={(e) => e.stopPropagation()}
+          onTouchMoveCapture={(e) => e.stopPropagation()}
+        >
           <div className="flex flex-col gap-4">
             <Section title="Course Search tab">
               <Item text="Open Planning & Enrollment → Enrollment Wizard, then use the Course Search button in the page header." />

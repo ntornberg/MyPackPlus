@@ -6,6 +6,7 @@ import {
   CircleDot,
   Info,
   RefreshCw,
+  TriangleAlert,
 } from "lucide-react";
 import {
   Fragment,
@@ -48,7 +49,7 @@ export type RequirementTreeEntry = {
   courses: readonly RequiredCourse[];
 };
 
-type CourseRowModel = {
+export type CourseRowModel = {
   /** Unique within its requirement; a course can be applied more than once. */
   id: string;
   course: RequiredCourse;
@@ -67,20 +68,24 @@ type RequirementModel = {
   entry: RequirementTreeEntry;
   progress: RequirementProgress;
   courses: CourseRowModel[];
-  /** Still-needed courses with sections this term. */
+  /** Still-needed or planned courses with sections this term. */
   offered: number;
-  /** Still-needed courses with a section that fits the schedule. */
+  /** Still-needed or planned courses with a section that fits the schedule. */
   fitting: number;
 };
 
 /** Still-needed options shown before "Show more". */
 const OPTION_LIMIT = 12;
 
-const isNeeded = (row: CourseRowModel) =>
+export const isNeeded = (row: CourseRowModel) =>
   !row.audit || row.audit.status === "other";
 
+/** Courses the student still has to register for: needed or only planned. */
+export const wantsSections = (row: CourseRowModel) =>
+  isNeeded(row) || row.audit?.status === "planned";
+
 /** Needed and fitting first, finished work last. */
-function courseRowRank(row: CourseRowModel): number {
+export function courseRowRank(row: CourseRowModel): number {
   if (isNeeded(row)) {
     if (row.fitCount > 0) return 0;
     if (row.sectionCount > 0) return 1;
@@ -96,7 +101,7 @@ function courseRowRank(row: CourseRowModel): number {
   }
 }
 
-function buildCourseRow(
+export function buildCourseRow(
   id: string,
   course: RequiredCourse,
   audit: CourseAuditState | null,
@@ -234,16 +239,19 @@ function AvailabilityChips({ row }: { row: CourseRowModel }) {
   );
 }
 
-function CourseRow({
+export function CourseRow({
   row,
   expanded,
   onToggle,
   renderSections,
+  detail,
 }: {
   row: CourseRowModel;
   expanded: boolean;
   onToggle: () => void;
   renderSections: (course: RequiredCourse) => ReactNode;
+  /** Optional muted line under the title. */
+  detail?: string;
 }) {
   const expandable = row.sectionCount > 0;
   const done = row.audit?.status === "completed";
@@ -261,15 +269,21 @@ function CourseRow({
         {row.course.course_abr}{" "}
         {Number.parseInt(row.course.catalog_num, 10) || row.course.catalog_num}
       </span>
-      <span className="min-w-0 flex-1 truncate">
-        {row.course.course_descrip}
-      </span>
+      {detail ? (
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate">{row.course.course_descrip}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {detail}
+          </span>
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate">
+          {row.course.course_descrip}
+        </span>
+      )}
       <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        {row.audit && !isNeeded(row) ? (
-          <AuditChip state={row.audit} />
-        ) : (
-          <AvailabilityChips row={row} />
-        )}
+        {row.audit && !isNeeded(row) ? <AuditChip state={row.audit} /> : null}
+        {wantsSections(row) ? <AvailabilityChips row={row} /> : null}
       </span>
     </>
   );
@@ -497,23 +511,44 @@ export function PlanningSyncStatus({
   onRefresh: () => void;
 }) {
   const syncing = sync.status === "syncing";
+  const warn = sync.status === "stale" || sync.status === "failed";
   return (
-    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+    <div
+      role={warn ? "status" : undefined}
+      className={cn(
+        "flex items-center justify-between gap-2 text-xs",
+        warn
+          ? "rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900 dark:border-amber-500/35 dark:bg-amber-950/45 dark:text-amber-100"
+          : "text-muted-foreground",
+      )}
+    >
       <span
-        className="min-w-0 truncate"
+        className="flex min-w-0 items-center gap-1.5"
         title={sync.status === "failed" ? sync.message : undefined}
       >
-        {syncing
-          ? "Syncing your degree audit and Pack Planner…"
-          : sync.status === "failed"
-            ? "Couldn't refresh from MyPack."
-            : syncedAt
-              ? `Degree audit synced ${syncedLabel(syncedAt)}`
-              : "Degree audit not synced yet"}
+        {warn ? (
+          <TriangleAlert
+            className="size-3.5 shrink-0 text-amber-600 dark:text-amber-300"
+            aria-hidden
+          />
+        ) : null}
+        <span className="truncate">
+          {syncing
+            ? "Syncing your degree audit and Pack Planner…"
+            : sync.status === "failed"
+              ? "Couldn't sync with MyPack, so progress may be out of date."
+              : sync.status === "stale"
+                ? syncedAt
+                  ? `Degree audit may be out of date (last synced ${syncedLabel(syncedAt)}).`
+                  : "Degree audit needs a sync to reflect recent changes."
+                : syncedAt
+                  ? `Degree audit synced ${syncedLabel(syncedAt)}`
+                  : "Degree audit not synced yet"}
+        </span>
       </span>
       <Button
         type="button"
-        variant="ghost"
+        variant={warn ? "outline" : "ghost"}
         size="sm"
         onClick={onRefresh}
         disabled={syncing}
@@ -523,7 +558,7 @@ export function PlanningSyncStatus({
           className={cn("size-3", syncing && "animate-spin")}
           aria-hidden
         />
-        Refresh
+        {warn ? "Sync now" : "Refresh"}
       </Button>
     </div>
   );
@@ -607,13 +642,13 @@ export function RequirementTree({
             ),
           ),
         ].sort((a, b) => courseRowRank(a) - courseRowRank(b));
-        const needed = courses.filter(isNeeded);
+        const wanted = courses.filter(wantsSections);
         return {
           entry,
           progress,
           courses,
-          offered: needed.filter((row) => row.sectionCount > 0).length,
-          fitting: needed.filter((row) => row.fitCount > 0).length,
+          offered: wanted.filter((row) => row.sectionCount > 0).length,
+          fitting: wanted.filter((row) => row.fitCount > 0).length,
         };
       }),
     [

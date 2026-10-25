@@ -31,6 +31,7 @@ import {
   gradeDistributionPercents,
 } from "../shared/GradeDistributionChart";
 
+import { InstructorPopover } from "./InstructorPopover";
 import {
   emptyGradeData,
   GradeDistributionPercentList,
@@ -52,6 +53,18 @@ import {
 const CARD_GRADE_PIE_SIZE = 80;
 const CARD_GRADE_PIE_SIZE_EMPTY = 64;
 const COMPACT_GRADE_PIE_SIZE = 72;
+
+/** Explains an empty grade block: S/U-only history vs. an instructor with no history at all. */
+function emptyGradeLabel(section: ModifiedSection): string {
+  const g = section.grade_distribution;
+  if (g?.total_students && !g.letter_graded_students) {
+    return "S/U only";
+  }
+  if (section.professor_rating?.instructor?.has_gradient_grades === false) {
+    return "New instructor";
+  }
+  return "No grades";
+}
 
 function SectionGradeDistributionBlock({
   section,
@@ -171,7 +184,7 @@ function SectionGradeDistributionBlock({
             className="text-muted-foreground/35"
           />
           <span className="text-center text-[10px] font-medium text-muted-foreground">
-            No grades
+            {emptyGradeLabel(section)}
           </span>
         </div>
       ) : (
@@ -198,6 +211,15 @@ function SectionGradeDistributionBlock({
                 <span className="font-semibold tabular-nums text-foreground">
                   {averageGradeLetter}
                 </span>
+              </p>
+            ) : null}
+            {g?.total_students ? (
+              <p
+                className="text-[10px] leading-snug text-muted-foreground tabular-nums"
+                title={g.terms?.length ? g.terms.join(", ") : undefined}
+              >
+                {g.total_students.toLocaleString()} students
+                {g.section_count ? ` · ${g.section_count} sections` : ""}
               </p>
             ) : null}
           </div>
@@ -426,9 +448,12 @@ export const SectionCompareCard = memo(function SectionCompareCard({
           compact ? "mt-1 gap-0.5" : "mt-2 gap-1",
         )}
       >
-        <span className="min-w-0 font-medium text-foreground">
+        <InstructorPopover
+          instructor={section.professor_rating?.instructor}
+          className="min-w-0 font-medium text-foreground"
+        >
           {instructor}
-        </span>
+        </InstructorPopover>
         <RmpStarsWithScore
           avgRating={section.professor_rating?.avgRating ?? null}
           rating={section.professor_rating ?? null}
@@ -648,16 +673,21 @@ export const SectionCompareCard = memo(function SectionCompareCard({
       </div>
 
       <div
-        role="group"
         className={cn(
           "flex flex-wrap items-center justify-end gap-2 border-t border-border/60",
           compact ? "mt-2 pt-2" : "mt-4 pt-3",
         )}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
       >
-        {addToCartSlot}
+        {/* Only the cart controls swallow events; the rest of the footer selects the card. */}
+        <div
+          role="group"
+          className="contents"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {addToCartSlot}
+        </div>
       </div>
     </div>
   );

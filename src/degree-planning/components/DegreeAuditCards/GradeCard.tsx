@@ -36,12 +36,20 @@ export function GradeCard({
         <GradeDistributionChart data={data} size={chartSize} />
       </div>
 
-      <h4 className="mpp-grade-card-average">
-        Avg{" "}
-        <strong>
-          {class_avg_min}% - {class_avg_max}%
-        </strong>
-      </h4>
+      {class_avg_max > 0 ? (
+        <h4 className="mpp-grade-card-average">
+          Avg{" "}
+          <strong>
+            {class_avg_min}% - {class_avg_max}%
+          </strong>
+        </h4>
+      ) : null}
+      {data.total_students ? (
+        <p className="mpp-degree-card-muted mpp-degree-card-meta">
+          {data.total_students.toLocaleString()} students
+          {data.section_count ? ` · ${data.section_count} sections` : ""}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { TriangleAlertIcon } from "lucide-react";
 import { useCallback, useMemo, memo, useState, useRef, useEffect } from "react";
 
 import {
@@ -17,6 +18,7 @@ import {
   auditKey,
   findDegreeAudit,
   isOpenGroup,
+  isRequirementGroup,
   requisiteTermLabel,
   type DegreeAudit,
 } from "../../../degree-planning/services/degreeAudit";
@@ -315,14 +317,15 @@ export default function MajorPlanSearch({
     [onPreviewSectionChange, setMajorPlanSearchTabData],
   );
 
-  const runMajorPlanSearch = async () => {
+  const runMajorPlanSearch = async ({ auto = false } = {}) => {
     if (personal) {
       if (!selectedAudit || !majorPlanSearchData.selectedTerm) return;
       const request = ++personalRequest.current;
       setPersonalBusy(true);
       setPersonalError(null);
       setPersonalProgress("Loading approved choices from MyPack…");
-      onPreviewSectionChange(null);
+      // An automatic search keeps the preview restored with the tab.
+      if (!auto) onPreviewSectionChange(null);
       try {
         const choices = await loadRequirementChoices(selectedAudit);
         if (!mounted.current || request !== personalRequest.current) return;
@@ -331,13 +334,25 @@ export default function MajorPlanSearch({
           selectedAudit.groups.filter(isOpenGroup).map((group) => group.id),
         );
         const courses = new Map<string, RequiredCourse>();
+        const add = (course: RequiredCourse) =>
+          courses.set(
+            plannerCourseCode(course.course_abr, course.catalog_num),
+            course,
+          );
         for (const entry of auditRequirementEntries(selectedAudit, choices)) {
-          if (!openIds.has(entry.requirementId)) continue;
-          for (const course of entry.courses) {
-            courses.set(
-              plannerCourseCode(course.course_abr, course.catalog_num),
-              course,
-            );
+          if (openIds.has(entry.requirementId)) entry.courses.forEach(add);
+        }
+        // Planned courses still need registering, so look them up too.
+        for (const group of selectedAudit.groups.filter(isRequirementGroup)) {
+          for (const line of group.lines) {
+            if (line.status === "P" && line.subject && line.catalogNbr) {
+              add({
+                course_id: line.courseId,
+                course_abr: line.subject,
+                catalog_num: line.catalogNbr,
+                course_descrip: line.title,
+              });
+            }
           }
         }
         const data = courses.size
@@ -509,6 +524,25 @@ export default function MajorPlanSearch({
     }
   };
 
+  // Search your own plan without a click once the audit and term are known,
+  // so the tree's counts fill in after a reload. Once per context, so a
+  // failed search waits for the button instead of retrying forever.
+  const runSearchRef = useRef(runMajorPlanSearch);
+  runSearchRef.current = runMajorPlanSearch;
+  const autoSearchedContext = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !personal ||
+      personalSearched ||
+      isSearchDisabled ||
+      autoSearchedContext.current === personalContext
+    ) {
+      return;
+    }
+    autoSearchedContext.current = personalContext;
+    void runSearchRef.current({ auto: true });
+  }, [personal, personalSearched, isSearchDisabled, personalContext]);
+
   const selectedPlans = useMemo(() => {
     const major_data = majorPlanSearchData.selectedMajor
       ? (majorPlans[
@@ -616,9 +650,14 @@ export default function MajorPlanSearch({
               onPreviewSectionChange(null);
             }
           }}
+          className="grid w-full grid-cols-2"
         >
-          <ToggleGroupItem value="personal">My requirements</ToggleGroupItem>
-          <ToggleGroupItem value="explore">Explore majors</ToggleGroupItem>
+          <ToggleGroupItem value="personal" size="sm" className="min-w-0 px-1">
+            <span className="truncate">My requirements</span>
+          </ToggleGroupItem>
+          <ToggleGroupItem value="explore" size="sm" className="min-w-0 px-1">
+            <span className="truncate">Explore majors</span>
+          </ToggleGroupItem>
         </ToggleGroup>
         <Field>
           <FieldLabel htmlFor="term_selector">Term</FieldLabel>
@@ -662,34 +701,27 @@ export default function MajorPlanSearch({
           </Field>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">
-              Unverified bundled requirements. These course lists are for
-              exploration and do not determine your personal progress.
+            <p className="flex items-start gap-1.5 text-xs text-orange-600 dark:text-orange-400">
+              <TriangleAlertIcon className="mt-px size-3.5 shrink-0" />
+              <span>
+                Unofficial requirements. Verify in the{" "}
+                <a
+                  className="underline underline-offset-2"
+                  href={
+                    catalogSources.entries.find(
+                      (entry) =>
+                        entry.major === majorPlanSearchData.selectedMajor,
+                    )?.catalogUrls[0] ??
+                    "https://catalog.ncsu.edu/undergraduate/#majorstext"
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  NC State catalog
+                </a>
+                .
+              </span>
             </p>
-            <a
-              className="text-sm text-primary underline"
-              href="https://catalog.ncsu.edu/undergraduate/#majorstext"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Official NC State catalog · {catalogSources.catalog}
-            </a>
-            {(
-              catalogSources.entries.find(
-                (entry) => entry.major === majorPlanSearchData.selectedMajor,
-              )?.catalogUrls ?? []
-            ).map((url) => (
-              <a
-                key={url}
-                href={url}
-                target="_blank"
-                rel="noreferrer"
-                className="break-words text-xs text-primary underline"
-              >
-                {url.split("/").filter(Boolean).at(-1)?.replaceAll("-", " ")} ·
-                official catalog reference
-              </a>
-            ))}
             <Field>
               <FieldLabel htmlFor="major_selector">Major</FieldLabel>
               <PlannerFilterCombobox
@@ -752,7 +784,7 @@ export default function MajorPlanSearch({
           }
         />
         <SearchSubmitButton
-          onClick={runMajorPlanSearch}
+          onClick={() => runMajorPlanSearch()}
           disabled={isSearchDisabled}
         />
         <HideEmptySectionsField

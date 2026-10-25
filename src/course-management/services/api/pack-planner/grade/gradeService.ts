@@ -41,37 +41,37 @@ export function createGradeCard(
     return wrapper;
   }
 
-  // Extract and parse grade data
-  const a = parseFloat(courseData.a_average ?? "0");
-  const b = parseFloat(courseData.b_average ?? "0");
-  const c = parseFloat(courseData.c_average ?? "0");
-  const d = parseFloat(courseData.d_average ?? "0");
-  const f = parseFloat(courseData.f_average ?? "0");
+  const toNumber = (value: unknown) => {
+    const parsed = parseFloat(String(value ?? "0"));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const gradeData: GradeData = {
+    ...courseData,
+    course_name: courseData.course_name || course.abr,
+    instructor_name: courseData.instructor_name || course.instructor,
+    a_average: toNumber(courseData.a_average),
+    b_average: toNumber(courseData.b_average),
+    c_average: toNumber(courseData.c_average),
+    d_average: toNumber(courseData.d_average),
+    f_average: toNumber(courseData.f_average),
+    class_avg_min: toNumber(courseData.class_avg_min),
+    class_avg_max: toNumber(courseData.class_avg_max),
+  };
 
   // Check if there's any valid grade data
-  const total = a + b + c + d + f;
-  if (!total || isNaN(total)) {
-    wrapper.textContent = "No grade data available.";
+  const total =
+    gradeData.a_average +
+    gradeData.b_average +
+    gradeData.c_average +
+    gradeData.d_average +
+    gradeData.f_average;
+  if (!total) {
+    wrapper.textContent =
+      courseData.total_students && !courseData.letter_graded_students
+        ? "No letter grades (S/U only)."
+        : "No grade data available.";
     return wrapper;
   }
-
-  // Prepare grade data for the component
-  const gradeData: GradeData = {
-    course_name: courseData.course_name ?? course.abr,
-    subject: courseData.subject ?? "",
-    instructor_name: courseData.instructor_name ?? course.instructor,
-    a_average: a,
-    b_average: b,
-    c_average: c,
-    d_average: d,
-    f_average: f,
-    class_avg_min: courseData.class_avg_min
-      ? parseFloat(courseData.class_avg_min)
-      : 0,
-    class_avg_max: courseData.class_avg_max
-      ? parseFloat(courseData.class_avg_max)
-      : 0,
-  };
 
   // Render the grade card component
   const root = createRoot(container);

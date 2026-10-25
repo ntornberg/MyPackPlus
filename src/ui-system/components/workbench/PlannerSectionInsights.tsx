@@ -4,6 +4,12 @@ import { useMemo, useSyncExternalStore } from "react";
 
 import { cn } from "@/lib/utils";
 import { buildRateMyProfessorUrl } from "@/utils/rateMyProfessor";
+import {
+  describeRating,
+  formatPercent,
+  formatRatingCount,
+  type RatingDisplay,
+} from "@/utils/rmpDisplay";
 
 import type { GradeData, MatchedRateMyProf } from "../../../types/api";
 import {
@@ -89,6 +95,81 @@ function ProfessorNameLink({
   );
 }
 
+/** Hover text summarizing every RMP detail we have for an instructor. */
+export function ratingTooltipText(display: RatingDisplay): string {
+  if (display.state !== "rated" || display.avgRating == null) {
+    return display.description;
+  }
+  const parts = [`Rate My Professor: ${display.avgRating.toFixed(1)} / 5`];
+  if (display.numRatings != null) {
+    parts.push(formatRatingCount(display.numRatings));
+  }
+  if (display.avgDifficulty != null) {
+    parts.push(`Difficulty ${display.avgDifficulty.toFixed(1)} / 5`);
+  }
+  if (display.wouldTakeAgainPct != null) {
+    parts.push(
+      `${formatPercent(display.wouldTakeAgainPct)} would take again${
+        display.wouldTakeAgainPrimaryOnly ? " (primary page only)" : ""
+      }`,
+    );
+  }
+  if (display.combinedPages) {
+    parts.push("Combined from multiple RMP pages");
+  }
+  if (display.otherSchool) {
+    parts.push(`Ratings posted at ${display.otherSchool}`);
+  }
+  return parts.join(" · ");
+}
+
+/** Small "Diff 3.2" chip; harder courses read warmer. */
+export function DifficultyChip({
+  value,
+  className,
+}: {
+  value: number;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums",
+        value >= 4
+          ? "bg-red-500/10 text-red-700 dark:text-red-300"
+          : value >= 3
+            ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+            : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+        className,
+      )}
+      title={`Difficulty ${value.toFixed(1)} / 5`}
+    >
+      Diff {value.toFixed(1)}
+    </span>
+  );
+}
+
+/** "Other school" label for ratings posted at a different institution. */
+export function OtherSchoolBadge({
+  school,
+  className,
+}: {
+  school: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center truncate rounded-md border border-border/70 px-1.5 py-0.5 text-[11px] text-muted-foreground",
+        className,
+      )}
+      title={`These ratings were posted at ${school}, not NC State`}
+    >
+      Rated at {school}
+    </span>
+  );
+}
+
 /** Lucide star row + numeric score for section list rows (staging, compact layouts). */
 export function RmpStarsWithScore({
   avgRating,
@@ -101,31 +182,61 @@ export function RmpStarsWithScore({
   starClassName?: string;
   className?: string;
 }) {
-  if (avgRating == null || Number.isNaN(avgRating)) {
-    return (
-      <span className={cn("text-xs text-muted-foreground", className)}>
-        No RMP
-      </span>
-    );
-  }
-
+  const display = describeRating(
+    rating ?? { master_name: "", avgRating: avgRating ?? null },
+  );
   const profileUrl = rating ? buildRateMyProfessorUrl(rating) : null;
 
+  if (display.state !== "rated" || display.avgRating == null) {
+    const label =
+      display.state === "no_reviews" ? "RMP · 0 reviews" : display.label;
+    const text = (
+      <span
+        className={cn("text-xs text-muted-foreground", className)}
+        title={display.description}
+      >
+        {label}
+      </span>
+    );
+    // A page with zero reviews still exists, so keep it clickable.
+    if (display.state === "no_reviews" && profileUrl && rating?.id) {
+      return (
+        <a
+          href={profileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex w-fit self-start rounded-sm underline-offset-2 hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {text}
+        </a>
+      );
+    }
+    return text;
+  }
+
+  const value = display.avgRating;
   const content = (
     <div
       className={cn(
         "inline-flex max-w-full flex-wrap items-center gap-1.5 align-middle",
         className,
       )}
-      title={`Rate My Professor: ${avgRating.toFixed(1)} / 5`}
+      title={ratingTooltipText(display)}
     >
-      <StarRating value={avgRating} starClassName={starClassName} />
+      <StarRating value={value} starClassName={starClassName} />
       <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">
-        {avgRating.toFixed(1)}
+        {value.toFixed(1)}
       </span>
       <span className="whitespace-nowrap text-xs text-muted-foreground">
-        / 5
+        / 5{display.numRatings != null ? ` (${display.numRatings})` : ""}
       </span>
+      {display.avgDifficulty != null ? (
+        <DifficultyChip value={display.avgDifficulty} />
+      ) : null}
+      {display.otherSchool ? (
+        <OtherSchoolBadge school={display.otherSchool} />
+      ) : null}
     </div>
   );
 

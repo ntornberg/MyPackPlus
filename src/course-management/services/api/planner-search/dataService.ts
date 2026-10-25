@@ -1,4 +1,3 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "../../../../config/supabase";
 import type {
   RequiredCourse,
   Requirement,
@@ -12,11 +11,13 @@ import { mergeData } from "../../../../utils/course-search/mergeDataUtil";
 import type { CourseData } from "../../../../utils/course-search/parseRegistrarUtil";
 import { AppLogger } from "../../../../utils/logger";
 import {
+  GRADE_DATA_CACHE_VERSION,
   generateCacheKey,
   getGenericCache,
   setGenericCache,
 } from "../../../cache/courseRetrieval";
 import type { MergedCourseData } from "../../../types/section";
+import { fetchGradesBatchV2, v2ToBatchResponse } from "../gradesV2";
 
 import {
   batchSearchOpenCourses,
@@ -37,29 +38,45 @@ function buildNullCourseCacheKey(courseKey: string, term: string): string {
   return `null-${courseKey} ${term}`;
 }
 
-type GradeProfRequest = { course_title: string; instructor_name: string };
+type GradeProfRequest = {
+  course_title: string;
+  instructor_name: string;
+  unity_id?: string;
+};
 
 async function fetchGradeProfData(
   sections: GradeProfRequest[],
 ): Promise<BatchDataRequestResponse> {
-  const url = `${SUPABASE_URL}/functions/v1/clever-function`;
-  const apiResponse = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
-    body: JSON.stringify(sections),
-  });
+  const data = await fetchGradesBatchV2(
+    sections.map((section) => ({
+      course: section.course_title,
+      instructor_name: section.instructor_name,
+      unity_id: section.unity_id || null,
+    })),
+  );
+  return v2ToBatchResponse(data);
+}
 
-  if (!apiResponse.ok) {
-    throw new Error(
-      `API error: ${apiResponse.status} ${apiResponse.statusText}`,
-    );
-  }
+/** Grade/RMP lookup for a section's primary instructor. */
+function toGradeProfRequest(
+  courseCode: string,
+  section: CourseData["sections"][number],
+): GradeProfRequest {
+  const unityId = section.instructor_unity_ids?.[0];
+  return {
+    course_title: courseCode,
+    instructor_name: section.instructor_name[0],
+    ...(unityId ? { unity_id: unityId } : {}),
+  };
+}
 
-  const jsonResponse = await apiResponse.json();
-  return jsonResponse.data as BatchDataRequestResponse;
+/** Cache key source for one instructor's grade/RMP data in a course. */
+function gradeProfKeySource(
+  courseKey: string,
+  instructorName: string,
+  term: string,
+): string {
+  return `${GRADE_DATA_CACHE_VERSION}-${courseKey}-${instructorName}-${term}`;
 }
 
 /** Same path as mergeData so lecture rows get `linkedMeetings` (labs/rec only get that in mergeData). */
@@ -203,10 +220,7 @@ export async function fetchPlannerCourseSections(
       (section) =>
         section.instructor_name.length > 0 && courseData.code.length > 0,
     )
-    .map((section) => ({
-      course_title: courseData.code,
-      instructor_name: section.instructor_name[0],
-    }));
+    .map((section) => toGradeProfRequest(courseData.code, section));
 
   // If no sections with professors, still run mergeData so `linkedMeetings` is set on lectures
   // (e.g. CH 101 "Staff" rows have empty instructor_name[] but many Rec rows per Lec).
@@ -220,7 +234,7 @@ export async function fetchPlannerCourseSections(
     .map((cs) => cs.instructor_name)
     .sort()
     .join(",");
-  const gradeProfCacheKey = `${courseKey}-${instructorList}-${term}`;
+  const gradeProfCacheKey = gradeProfKeySource(courseKey, instructorList, term);
   const gradeProfHashKey = await generateCacheKey(gradeProfCacheKey);
 
   // Check grade/professor cache
@@ -427,10 +441,7 @@ export async function batchFetchCoursesData(
             section.instructor_name.length > 0 &&
             courseData.code,
         )
-        .map((section) => ({
-          course_title: courseData.code,
-          instructor_name: section.instructor_name[0],
-        }));
+        .map((section) => toGradeProfRequest(courseData.code, section));
       outputMap[courseKey] = courseSectionsWithProfs;
       return outputMap;
     },
@@ -441,7 +452,11 @@ export async function batchFetchCoursesData(
     const fetchProfDataPromises = Object.entries(profList).flatMap(
       ([courseKey, sectionList]) => {
         return sectionList.map(async (section) => {
-          const gradeProfCacheKey = `${courseKey}-${section.instructor_name}-${term}`;
+          const gradeProfCacheKey = gradeProfKeySource(
+            courseKey,
+            section.instructor_name,
+            term,
+          );
           const gradeProfHashKey = await generateCacheKey(gradeProfCacheKey);
           const cachedGradeProf = await getGenericCache(
             CACHE_KEYS.GRADE_PROF,
@@ -526,7 +541,11 @@ export async function batchFetchCoursesData(
       instructor_name: string,
       s_term: string,
     ) => {
-      const course_hash_key = `${course_title}-${instructor_name}-${s_term}`;
+      const course_hash_key = gradeProfKeySource(
+        course_title,
+        instructor_name,
+        s_term,
+      );
       const course_data = mergedData[course_title];
 
       if (!course_data) {

@@ -13,6 +13,7 @@ import {
   type PlannerTerms,
 } from "../../../degree-planning/services/packPlanner";
 import {
+  PLANNING_SYNC_MAX_AGE,
   PLANNING_SYNCED_AT_KEY,
   syncPlanningData,
 } from "../../../degree-planning/services/planningSync";
@@ -25,7 +26,23 @@ import {
 export type PlanningSyncState =
   | { status: "idle" }
   | { status: "syncing" }
+  /** Never synced, past the freshness window, or Pack Planner was edited. */
+  | { status: "stale" }
   | { status: "failed"; message: string };
+
+type RunState =
+  | { status: "idle" }
+  | { status: "syncing" }
+  /** This page can't reach MyPack's scripts, so don't retry automatically. */
+  | { status: "unavailable" }
+  | { status: "failed"; message: string };
+
+/** Lets a burst of Pack Planner edits settle before refetching. */
+const AUTO_SYNC_DELAY = 2000;
+/** Wait between automatic retries after a failed sync. */
+const AUTO_SYNC_RETRY_DELAY = 5 * 60 * 1000;
+/** How often to re-check whether the last sync has aged out. */
+const STALE_CHECK_INTERVAL = 60 * 1000;
 
 export type PlanningData = {
   audits: DegreeAudits;
@@ -46,16 +63,19 @@ const WATCHED_KEYS = [
 ];
 
 /**
- * Degree audits and Pack Planner courses. Syncs on mount when the stored copy
- * is stale; captures from MyPack pages in other frames arrive through
- * chrome.storage change events.
+ * Degree audits and Pack Planner courses. Syncs on mount and again whenever
+ * the stored copy goes stale (a Pack Planner edit clears the sync time, or it
+ * ages past the freshness window); captures from MyPack pages in other frames
+ * arrive through chrome.storage change events.
  */
 export function usePlanningData(): PlanningData {
   const [audits, setAudits] = useState<DegreeAudits>({});
   const [choices, setChoices] = useState<StoredRequirementChoices>({});
   const [plannerTerms, setPlannerTerms] = useState<PlannerTerms>({});
   const [syncedAt, setSyncedAt] = useState<number | null>(null);
-  const [sync, setSync] = useState<PlanningSyncState>({ status: "idle" });
+  const [loaded, setLoaded] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  const [run, setRun] = useState<RunState>({ status: "idle" });
 
   const reload = useCallback(async () => {
     const [loadedAudits, loadedTerms, stored, loadedChoices] =
@@ -77,17 +97,20 @@ export function usePlanningData(): PlanningData {
   }, []);
 
   const runSync = useCallback((force: boolean) => {
-    setSync({ status: "syncing" });
+    setRun({ status: "syncing" });
     syncPlanningData({ force })
       .then((result) => {
-        setSync(
+        setRun(
           result.status === "failed"
             ? { status: "failed", message: result.message }
-            : { status: "idle" },
+            : result.status === "unavailable"
+              ? { status: "unavailable" }
+              : { status: "idle" },
         );
+        setNow(Date.now());
       })
       .catch((error: unknown) => {
-        setSync({ status: "failed", message: String(error) });
+        setRun({ status: "failed", message: String(error) });
       });
   }, []);
 
@@ -101,6 +124,7 @@ export function usePlanningData(): PlanningData {
             setChoices(loaded.choices);
             setPlannerTerms(loaded.terms);
             setSyncedAt(loaded.syncedAt);
+            setLoaded(true);
           }
         })
         .catch(() => undefined);
@@ -129,6 +153,49 @@ export function usePlanningData(): PlanningData {
       onChanged.removeListener(listener);
     };
   }, [reload, runSync]);
+
+  // Re-check the age of the last sync periodically and when the tab returns.
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const interval = setInterval(tick, STALE_CHECK_INTERVAL);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        tick();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  const needsSync =
+    loaded && (syncedAt === null || now - syncedAt >= PLANNING_SYNC_MAX_AGE);
+
+  // Sync again on its own once the data goes stale, backing off after a
+  // failure. A page that can't reach MyPack waits for a manual refresh.
+  useEffect(() => {
+    if (
+      !needsSync ||
+      run.status === "syncing" ||
+      run.status === "unavailable"
+    ) {
+      return;
+    }
+    const timer = setTimeout(
+      () => runSync(false),
+      run.status === "failed" ? AUTO_SYNC_RETRY_DELAY : AUTO_SYNC_DELAY,
+    );
+    return () => clearTimeout(timer);
+  }, [needsSync, run.status, runSync]);
+
+  const sync = useMemo((): PlanningSyncState => {
+    if (run.status === "syncing" || run.status === "failed") {
+      return run;
+    }
+    return needsSync ? { status: "stale" } : { status: "idle" };
+  }, [run, needsSync]);
 
   const planner = useMemo(
     () =>

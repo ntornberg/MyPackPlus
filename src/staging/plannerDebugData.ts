@@ -6,7 +6,7 @@ import {
   CALENDAR_COLOR_PINNED_SECTION,
 } from "../course-management/types/calendar";
 import type { SectionLinkedMeeting } from "../course-management/types/section";
-import type { GradeData, MatchedRateMyProf } from "../types/api";
+import type { GradeData, MatchedRateMyProf, V2Instructor } from "../types/api";
 
 export type StagingTabId = "course_search" | "gep_search" | "major_plan_search";
 
@@ -60,6 +60,7 @@ function mockRmp(
   name: string,
   avg: number | null,
   department: string,
+  extras: Partial<MatchedRateMyProf> = {},
 ): MatchedRateMyProf {
   return {
     master_name: name,
@@ -69,6 +70,30 @@ function mockRmp(
     department,
     school: "North Carolina State University",
     id: null,
+    ...extras,
+  };
+}
+
+/** Minimal v2 instructor profile so the staging popover has something to show. */
+function mockInstructor(
+  unityId: string,
+  name: string,
+  subjects: string[],
+  overrides: Partial<V2Instructor> = {},
+): V2Instructor {
+  return {
+    instructor_id: unityId,
+    unity_id: unityId,
+    instructor_name: name,
+    names: [name],
+    subjects,
+    has_gradient_grades: true,
+    historical_courses: subjects.map((subject) => `${subject} 200`),
+    historical_sections: 24,
+    historical_students: 1310,
+    last_grade_year: 2026,
+    rmp: { rating_state: "unmatched" },
+    ...overrides,
   };
 }
 
@@ -104,7 +129,68 @@ const courseResults: StagingResult[] = [
     notes:
       "Strong fit for the compare-card layout because it has clear lecture details and a stable compare workflow.",
     requisites: "CSC 216 or equivalent programming experience.",
-    professor_rating: mockRmp("Jason Tyler King", 4.6, "Computer Science"),
+    professor_rating: mockRmp("Jason Tyler King", 4.6, "Computer Science", {
+      ratingState: "rated",
+      avgDifficulty: 3.4,
+      numRatings: 160,
+      wouldTakeAgainPct: 81.25,
+      wouldTakeAgainScope: "primary_profile_only",
+      ratingsAggregation: "weighted_unique_profile_averages",
+      rmpProfiles: [
+        {
+          profile_id: 213011,
+          rmp_url: "https://www.ratemyprofessors.com/professor/213011",
+          school: "North Carolina State University",
+          department: "Computer Science",
+          avg_rating: 4.7,
+          num_ratings: 86,
+          is_primary: true,
+        },
+        {
+          profile_id: 2021746,
+          rmp_url: "https://www.ratemyprofessors.com/professor/2021746",
+          school: "North Carolina State University",
+          department: "Computer Science",
+          avg_rating: 4.4,
+          num_ratings: 74,
+          is_primary: false,
+        },
+      ],
+      instructor: mockInstructor("jtking", "King,Jason Tyler", ["CSC"], {
+        rmp: {
+          rating_state: "rated",
+          avg_rating: 4.6,
+          avg_difficulty: 3.4,
+          num_ratings: 160,
+          would_take_again_pct: 81.25,
+          would_take_again_scope: "primary_profile_only",
+          ratings_aggregation: "weighted_unique_profile_averages",
+          rmp_school: "North Carolina State University",
+          is_other_school: false,
+          primary_profile_id: 213011,
+          profiles: [
+            {
+              profile_id: 213011,
+              rmp_url: "https://www.ratemyprofessors.com/professor/213011",
+              school: "North Carolina State University",
+              department: "Computer Science",
+              avg_rating: 4.7,
+              num_ratings: 86,
+              is_primary: true,
+            },
+            {
+              profile_id: 2021746,
+              rmp_url: "https://www.ratemyprofessors.com/professor/2021746",
+              school: "North Carolina State University",
+              department: "Computer Science",
+              avg_rating: 4.4,
+              num_ratings: 74,
+              is_primary: false,
+            },
+          ],
+        },
+      }),
+    }),
     grade_distribution: mockGrade(
       "CSC 316 — Data Structures and Algorithms",
       "CSC",
@@ -142,7 +228,14 @@ const courseResults: StagingResult[] = [
     notes:
       "Lecture with two lab time options: pick a lab before Add to cart in staging; course search uses Add + lab menu.",
     requisites: "MAT 121 or equivalent.",
-    professor_rating: mockRmp("Robert Beichner", 3.8, "Physics"),
+    professor_rating: mockRmp("Robert Beichner", 3.8, "Physics", {
+      ratingState: "rated",
+      avgDifficulty: 2.6,
+      numRatings: 12,
+      wouldTakeAgainPct: 67,
+      school: "The University of North Carolina at Chapel Hill",
+      isOtherSchool: true,
+    }),
     grade_distribution: mockGrade(
       "PY 208 — Physics for Engineers and Scientists I",
       "PY",
@@ -337,7 +430,11 @@ const gepResults: StagingResult[] = [
       "Visual",
       "Diversity",
     ],
-    professor_rating: mockRmp("Taylor Byrne", 3.9, "Sociology"),
+    professor_rating: mockRmp("Taylor Byrne", null, "Sociology", {
+      ratingState: "no_reviews",
+      numRatings: 0,
+      id: "2546998",
+    }),
     grade_distribution: mockGrade(
       "SOC 202 — Principles of Sociology",
       "SOC",
@@ -380,8 +477,9 @@ const planResults: StagingResult[] = [
     tags: ["Major core", "Math-heavy"],
     professor_rating: mockRmp(
       "Matt Grayson",
-      4.1,
+      null,
       "Electrical & Computer Engineering",
+      { ratingState: "withheld" },
     ),
     grade_distribution: mockGrade(
       "ECE 309 — Analytical Foundations of EE",
@@ -423,14 +521,24 @@ const planResults: StagingResult[] = [
       "Priya Davis",
       4.7,
       "Electrical & Computer Engineering",
-    ),
-    grade_distribution: mockGrade(
-      "ECE 302 — Linear Systems",
-      "ECE",
-      "Davis, Priya",
-      [40, 30, 16, 6, 2],
-      2.9,
-      3.55,
+      {
+        ratingState: "rated",
+        avgDifficulty: 4.2,
+        numRatings: 3,
+        instructor: mockInstructor("pdavis", "Davis,Priya", ["ECE"], {
+          has_gradient_grades: false,
+          historical_courses: [],
+          historical_sections: null,
+          historical_students: null,
+          last_grade_year: null,
+          rmp: {
+            rating_state: "rated",
+            avg_rating: 4.7,
+            avg_difficulty: 4.2,
+            num_ratings: 3,
+          },
+        }),
+      },
     ),
     schedule: [
       {

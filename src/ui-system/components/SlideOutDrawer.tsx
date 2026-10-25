@@ -14,6 +14,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import CourseSearch from "../../course-management/components/search-tabs/CourseSearch";
 import GepSearch from "../../course-management/components/search-tabs/GepSearch";
+import InstructorSearch from "../../course-management/components/search-tabs/InstructorSearch";
 import MajorPlanSearch from "../../course-management/components/search-tabs/MajorPlanSearch";
 import {
   CourseSearchDataInitialState,
@@ -488,6 +489,12 @@ export default function SlideOutDrawer() {
                   >
                     Major Plan Search
                   </TabsTrigger>
+                  <TabsTrigger
+                    value="instructor_search"
+                    className="min-w-0 truncate"
+                  >
+                    Instructors
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
@@ -567,6 +574,17 @@ export default function SlideOutDrawer() {
                         : null
                     }
                   />
+                </TabsContent>
+                <TabsContent
+                  value="instructor_search"
+                  forceMount
+                  className={
+                    selectedTab === "instructor_search"
+                      ? "block min-h-0"
+                      : "hidden min-h-0"
+                  }
+                >
+                  <InstructorSearch />
                 </TabsContent>
               </div>
             </Tabs>

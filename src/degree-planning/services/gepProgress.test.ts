@@ -135,6 +135,35 @@ describe("gepProgress", () => {
     });
     expect(progress.MATH.status).toBe("unknown");
   });
+
+  it("ignores an intended major's GEP lines while an active program exists", () => {
+    const intended: DegreeAudit = {
+      ...audit,
+      plan: "20ACCBS",
+      programStatus: "IN",
+      reqTerm: "2271",
+      groups: [
+        {
+          id: "31717",
+          name: "Corequisites",
+          minUnits: 0,
+          status: "U",
+          lines: [
+            line({ requirement: "Humanities Elective", status: "U" }),
+            line({ requirement: "Found. of American Democracy", status: "U" }),
+          ],
+        },
+      ],
+    };
+    const active = { ...audit, programStatus: "AC" };
+
+    const progress = gepProgress([active, intended], null, catalog);
+    expect(progress.HUM.status).toBe("complete");
+    expect(progress.FAD.status).toBe("unknown");
+
+    // With only the intended major known, its audit is all there is.
+    expect(gepProgress([intended], null, catalog).FAD.status).toBe("needed");
+  });
 });
 
 describe("gepCategoriesByCourse", () => {

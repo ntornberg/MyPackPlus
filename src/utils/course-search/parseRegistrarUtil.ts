@@ -17,6 +17,8 @@ export interface CourseSection {
   dayTime: string;
   location: string;
   instructor_name: string[];
+  /** Unity IDs parallel to `instructor_name` ("" when the link has none). */
+  instructor_unity_ids?: string[];
 
   dates: string;
   notes: string | null;
@@ -30,6 +32,18 @@ export interface CourseData {
   description: string;
   prerequisite: string | null;
   sections: CourseSection[];
+}
+
+/**
+ * Extracts the Unity ID from a registrar instructor link
+ * (e.g. "http://directory.ncsu.edu/users/sjsimmo2" -> "sjsimmo2").
+ *
+ * @param {string | undefined} href Anchor href
+ * @returns {string} Lower-case Unity ID, or "" when absent
+ */
+export function parseUnityIdFromHref(href: string | undefined): string {
+  const match = href?.match(/directory\.ncsu\.edu\/users\/([A-Za-z0-9_-]+)/);
+  return match ? match[1].toLowerCase() : "";
 }
 
 /**
@@ -84,10 +98,14 @@ function ParseCourseElement(
         const location = $cells.eq(5).text().trim();
         const $instructorLink = $cells.eq(6).find("a.instructor-link");
         const ins_list = [];
+        const unity_list: string[] = [];
         for (let i = 0; i < $instructorLink.length; i++) {
           const firstChild = $instructorLink[i].children[0];
           if (firstChild?.type === "text") {
             ins_list.push((firstChild as Text).data);
+            unity_list.push(
+              parseUnityIdFromHref($instructorLink.eq(i).attr("href")),
+            );
           }
         }
 
@@ -118,6 +136,7 @@ function ParseCourseElement(
           dayTime,
           location,
           instructor_name: ins_list,
+          instructor_unity_ids: unity_list,
           dates,
           notes: notes_clean,
           requisites: requisites_clean,

@@ -94,13 +94,20 @@ const DialogContent = React.forwardRef<
       }
       // Native scrollbars often skip React's pointer capture on the content node, so Radix
       // treats the press as "outside" even when the scrollbar belongs to this dialog.
+      // Hit-test against the content box: inside the extension's shadow root,
+      // document.elementFromPoint only returns the shadow host.
       const { clientX, clientY } = event.detail.originalEvent;
       const root = contentRef.current;
       if (!root) {
         return;
       }
-      const top = document.elementFromPoint(clientX, clientY);
-      if (top && root.contains(top)) {
+      const rect = root.getBoundingClientRect();
+      if (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      ) {
         event.preventDefault();
       }
     },

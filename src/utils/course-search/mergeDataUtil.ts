@@ -47,19 +47,28 @@ export function mergeData(
     const catalog_nbr = codeParts.length > 1 ? codeParts[1] : "";
     const modifiedSections: Record<string, ModifiedSection> = {};
     for (const section of course.sections) {
-      const batchCourse = batchData.courses?.find((gradeData) => {
-        if (
-          gradeData.instructor_name === section.instructor_name[0] &&
-          gradeData.course_name === course.code
-        ) {
-          return gradeData;
-        }
-        return null;
-      });
+      const instructorName = section.instructor_name[0]?.trim();
+      const unityId = section.instructor_unity_ids?.[0] || null;
+      // v2 rows echo the requested Unity ID; prefer it, then fall back to the exact name.
+      const matchesInstructor = (row: {
+        unity_id?: string | null;
+        name: string;
+      }) =>
+        unityId && row.unity_id
+          ? row.unity_id === unityId
+          : row.name?.trim() === instructorName;
+      const batchCourse = batchData.courses?.find(
+        (gradeData) =>
+          gradeData.course_name === course.code &&
+          matchesInstructor({
+            unity_id: gradeData.unity_id,
+            name: gradeData.instructor_name,
+          }),
+      );
 
-      const profData = batchData.profs?.filter(
-        (prof) => prof.master_name === section.instructor_name[0],
-      )[0];
+      const profData = batchData.profs?.find((prof) =>
+        matchesInstructor({ unity_id: prof.unity_id, name: prof.master_name }),
+      );
       let correctedCourse: GradeData | undefined = undefined;
       if (batchCourse) {
         correctedCourse = {

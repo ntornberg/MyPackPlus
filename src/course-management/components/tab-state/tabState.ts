@@ -18,15 +18,12 @@ const DEFAULT_TERM = termOptions.includes(DEFAULT_TERM_NAME)
 
 /**
  * Term to restore from saved tab state. A remembered term older than the
- * current default (e.g. last fall's choice once spring registration opens) or
- * no longer offered falls back to the default; a newer one is kept.
+ * current default (e.g. last fall's choice once spring registration opens),
+ * no longer offered, or cleared falls back to the default; a newer one is kept.
  */
 export function restoredTerm(stored: string | null | undefined): string | null {
-  if (stored === undefined) {
+  if (!stored) {
     return DEFAULT_TERM;
-  }
-  if (stored === null) {
-    return null;
   }
   const storedId = Number(TermIdByName[stored]);
   const defaultId = Number(TermIdByName[DEFAULT_TERM]);

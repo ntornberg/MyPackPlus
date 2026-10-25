@@ -1,3 +1,5 @@
+import { ratingSortValue } from "../../utils/rmpDisplay";
+
 import type { GroupedSections, ModifiedSection } from "./section";
 
 export type SectionSortMode =
@@ -45,8 +47,9 @@ function availabilityTier(section: ModifiedSection | null | undefined): number {
 export function ratingScore(
   section: ModifiedSection | null | undefined,
 ): number | null {
-  const rating = Number(section?.professor_rating?.avgRating);
-  if (!Number.isFinite(rating) || rating <= 0) {
+  // Missing, withheld and zero-review ratings are unrated; never coerce null to 0.
+  const rating = ratingSortValue(section?.professor_rating);
+  if (rating == null) {
     return null;
   }
   return Math.min(1, Math.max(0, (rating - 1) / 4));

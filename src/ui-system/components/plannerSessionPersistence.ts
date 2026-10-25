@@ -38,7 +38,8 @@ function normalizePlannerWorkbenchTab(
   if (
     value === "course_search" ||
     value === "gep_search" ||
-    value === "major_plan_search"
+    value === "major_plan_search" ||
+    value === "instructor_search"
   ) {
     return value;
   }
