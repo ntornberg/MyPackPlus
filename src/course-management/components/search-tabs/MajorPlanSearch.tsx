@@ -652,11 +652,19 @@ export default function MajorPlanSearch({
           }}
           className="grid w-full grid-cols-2"
         >
-          <ToggleGroupItem value="personal" size="sm" className="min-w-0 px-1">
-            <span className="truncate">My requirements</span>
+          <ToggleGroupItem
+            value="personal"
+            size="sm"
+            className="h-auto min-h-9 min-w-0 whitespace-normal px-2 py-1.5 leading-snug"
+          >
+            My requirements
           </ToggleGroupItem>
-          <ToggleGroupItem value="explore" size="sm" className="min-w-0 px-1">
-            <span className="truncate">Explore majors</span>
+          <ToggleGroupItem
+            value="explore"
+            size="sm"
+            className="h-auto min-h-9 min-w-0 whitespace-normal px-2 py-1.5 leading-snug"
+          >
+            Explore majors
           </ToggleGroupItem>
         </ToggleGroup>
         <Field>

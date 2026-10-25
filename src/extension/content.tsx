@@ -7,7 +7,6 @@ import { scrapeScheduleTable } from "../course-management/services/scraper";
 import { setupListener } from "../degree-planning/services/siteResponseStorage";
 import extensionCssRaw from "../index.css?inline";
 import SlideOutDrawer from "../ui-system/components/SlideOutDrawer";
-import FirstStartDialog from "../user-experience/components/UserGuide/FirstStartDialog";
 import WhatsNewDialog from "../user-experience/components/UserGuide/WhatsNewDialog";
 import {
   attachExtensionShadowTailwindStyleOrderObserver,
@@ -30,13 +29,12 @@ declare global {
 AppLogger.info("MyPack Enhancer script started.");
 
 function RootOverlayDialogs() {
-  const [allowFirstStartAutoOpen, setAllowFirstStartAutoOpen] = useState(false);
+  const [showLauncherHint, setShowLauncherHint] = useState(false);
 
   return (
     <>
-      <WhatsNewDialog onResolved={() => setAllowFirstStartAutoOpen(true)} />
-      <FirstStartDialog suppressAutoOpen={!allowFirstStartAutoOpen} />
-      <SlideOutDrawer />
+      <WhatsNewDialog onResolved={() => setShowLauncherHint(true)} />
+      <SlideOutDrawer showLauncherHint={showLauncherHint} />
     </>
   );
 }

@@ -61,6 +61,8 @@ describe("syncPlanningData", () => {
       },
     });
     fetchMock = vi.fn((url: string) => {
+      if (url.includes("IScript_PackPlanner"))
+        return respond("<html>Pack Planner</html>");
       if (url.includes("IScript_DegreeAudit")) return respond(shell);
       if (url.includes("IScript_getDegreeDetails")) return respond(report);
       if (url.includes("IScript_getTerms")) {
@@ -132,9 +134,37 @@ describe("syncPlanningData", () => {
     const result = await syncPlanningData({ location: portal });
 
     expect(result.status).toBe("failed");
+    expect(result).toMatchObject({
+      summary: "Degree audit synced; Pack Planner couldn't refresh.",
+    });
     expect(storage[DEGREE_AUDITS_STORAGE_KEY]).toBeDefined();
     expect(storage[PACK_PLANNER_STORAGE_KEY]).toBeUndefined();
     expect(storage[PLANNING_SYNCED_AT_KEY]).toBeUndefined();
+  });
+
+  it("initializes Pack Planner before requesting its JSON data", async () => {
+    let initialized = false;
+    const normalFetch = fetchMock.getMockImplementation() as (
+      url: string,
+    ) => ReturnType<typeof respond>;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith("IScript_PackPlanner")) {
+        await Promise.resolve();
+        initialized = true;
+      } else if (url.includes("WEBLIB_PLANNER") && !initialized) {
+        return respond("First operand of . is NULL");
+      }
+      return normalFetch(url);
+    });
+    expect(await syncPlanningData({ location: portal })).toMatchObject({
+      status: "synced",
+      terms: 1,
+    });
+    const plannerCalls = fetchMock.mock.calls
+      .map(([url]) => url)
+      .filter((url) => url.includes("WEBLIB_PLANNER"));
+    expect(plannerCalls[0]).toMatch(/IScript_PackPlanner$/);
+    expect(plannerCalls[1]).toMatch(/IScript_getTerms$/);
   });
 
   it("does nothing off the portal", async () => {
@@ -144,6 +174,30 @@ describe("syncPlanningData", () => {
       }),
     ).toEqual({ status: "unavailable" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reports the successful planner sync when the audit fails", async () => {
+    fetchMock.mockImplementation((url: string) =>
+      url.includes("WEBLIB_DEGAUDIT")
+        ? respond("", false)
+        : respond(JSON.stringify({ terms: [] })),
+    );
+    expect(await syncPlanningData({ location: portal })).toMatchObject({
+      status: "failed",
+      summary: "Pack Planner synced; degree audit couldn't refresh.",
+    });
+    expect(storage[PACK_PLANNER_STORAGE_KEY]).toBeDefined();
+    expect(storage[PLANNING_SYNCED_AT_KEY]).toBeUndefined();
+  });
+
+  it("does not claim success when both requests fail", async () => {
+    fetchMock.mockImplementation(() => respond("", false));
+    expect(await syncPlanningData({ location: portal })).toMatchObject({
+      status: "failed",
+      summary:
+        "Couldn't sync the degree audit or Pack Planner. Saved data may be out of date.",
+    });
+    expect(storage[PLANNING_SYNCED_AT_KEY]).toBeUndefined();
   });
 
   it("refetches a legacy audit even when the old sync timestamp is fresh", async () => {
@@ -179,6 +233,10 @@ describe("syncPlanningData", () => {
       now: () => 3000,
     });
     expect(result.status).toBe("failed");
+    expect(result).toMatchObject({
+      summary:
+        "Degree audit and Pack Planner synced; some course choices couldn't refresh.",
+    });
     expect(storage[DEGREE_AUDITS_STORAGE_KEY]).toBeDefined();
     expect(storage[REQUIREMENT_CHOICES_STORAGE_KEY]).toMatchObject({
       "99TSTBS|NOSUBPLAN|2238": {

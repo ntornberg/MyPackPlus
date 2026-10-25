@@ -33,7 +33,7 @@ export type PlanningSyncResult =
   | { status: "synced"; programs: number; terms: number }
   | { status: "fresh" }
   | { status: "unavailable" }
-  | { status: "failed"; message: string };
+  | { status: "failed"; message: string; summary: string };
 
 async function fetchAudits(base: string): Promise<DegreeAudit[]> {
   const shell = await fetchText(`${base}${AUDIT_SCRIPT}IScript_DegreeAudit`);
@@ -54,6 +54,8 @@ async function fetchAudits(base: string): Promise<DegreeAudit[]> {
 }
 
 async function fetchPlannerTerms(base: string): Promise<PlannerTerm[]> {
+  // Pack Planner's data scripts need the session initialized by its page first.
+  await fetchText(`${base}${PLANNER_SCRIPT}IScript_PackPlanner`);
   const terms = parsePlannerTermList(
     JSON.parse(await fetchText(`${base}${PLANNER_SCRIPT}IScript_getTerms`)),
   );
@@ -152,7 +154,18 @@ export function syncPlanningData({
     }
     if (failures.length > 0) {
       AppLogger.warn("Planning data sync incomplete:", failures);
-      return { status: "failed", message: failures.join("; ") };
+      return {
+        status: "failed",
+        message: failures.join("; "),
+        summary:
+          audits.status === "fulfilled"
+            ? terms.status === "fulfilled"
+              ? "Degree audit and Pack Planner synced; some course choices couldn't refresh."
+              : "Degree audit synced; Pack Planner couldn't refresh."
+            : terms.status === "fulfilled"
+              ? "Pack Planner synced; degree audit couldn't refresh."
+              : "Couldn't sync the degree audit or Pack Planner. Saved data may be out of date.",
+      };
     }
     await chrome.storage.local.set({ [PLANNING_SYNCED_AT_KEY]: now() });
     return {

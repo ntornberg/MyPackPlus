@@ -167,7 +167,7 @@ function SectionGradeDistributionBlock({
       role="group"
       aria-label="Grade distribution"
       className={cn(
-        "flex max-w-[min(100%,15.5rem)] shrink-0 flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/15 p-2 ring-1 ring-foreground/5 shadow-sm sm:max-w-[17.5rem] sm:p-2.5",
+        "flex max-w-[min(100%,15.5rem)] shrink-0 flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/15 p-2 ring-1 ring-foreground/5 shadow-sm sm:max-w-[min(100%,17.5rem)] sm:p-2.5",
         !hasSample && "opacity-70",
       )}
       title={
@@ -403,7 +403,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
         <div
           className={cn(
             "min-w-0 flex-1",
-            compact ? "space-y-0.5" : "space-y-1",
+            compact ? "space-y-0.5" : "basis-56 space-y-1",
           )}
         >
           <div className="flex flex-wrap items-center gap-2">

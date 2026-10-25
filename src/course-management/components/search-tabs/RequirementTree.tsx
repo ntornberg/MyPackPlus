@@ -532,11 +532,12 @@ export function PlanningSyncStatus({
             aria-hidden
           />
         ) : null}
-        <span className="truncate">
+        <span>
           {syncing
             ? "Syncing your degree audit and Pack Planner…"
             : sync.status === "failed"
-              ? "Couldn't sync with MyPack, so progress may be out of date."
+              ? (sync.summary ??
+                "Couldn't sync with MyPack, so progress may be out of date.")
               : sync.status === "stale"
                 ? syncedAt
                   ? `Degree audit may be out of date (last synced ${syncedLabel(syncedAt)}).`

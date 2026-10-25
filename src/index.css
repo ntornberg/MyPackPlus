@@ -37,9 +37,9 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --shadow-2xs: 0 1px 2px 0 rgb(15 23 42 / 0.08);
-  --shadow-xs: 0 8px 20px 0 rgb(3 8 20 / 0.16);
-  --shadow-sm: 0 12px 30px 0 rgb(3 8 20 / 0.22);
-  --shadow-md: 0 18px 48px 0 rgb(3 8 20 / 0.28);
+  --shadow-xs: var(--planner-shadow-xs, 0 1px 2px rgb(15 23 42 / 0.04));
+  --shadow-sm: var(--planner-shadow-sm, 0 2px 4px -2px rgb(15 23 42 / 0.08));
+  --shadow-md: var(--planner-shadow-md, 0 4px 10px -4px rgb(15 23 42 / 0.1));
   --font-heading:
     var(--font-sans);
   --color-sidebar-ring:
@@ -248,6 +248,21 @@
   --sidebar-border: rgb(154 184 228 / 0.32);
   --sidebar-ring: rgb(79 140 255 / 0.45);
   color-scheme: dark;
+}
+
+.dark,
+#extension-overlay-root[data-mpp-theme="dark"] {
+  --planner-shadow-xs: 0 8px 20px 0 rgb(3 8 20 / 0.16);
+  --planner-shadow-sm: 0 12px 30px 0 rgb(3 8 20 / 0.22);
+  --planner-shadow-md: 0 18px 48px 0 rgb(3 8 20 / 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  #extension-overlay-root:not([data-mpp-theme="light"]) {
+    --planner-shadow-xs: 0 8px 20px 0 rgb(3 8 20 / 0.16);
+    --planner-shadow-sm: 0 12px 30px 0 rgb(3 8 20 / 0.22);
+    --planner-shadow-md: 0 18px 48px 0 rgb(3 8 20 / 0.28);
+  }
 }
 
 /* :where() keeps specificity at 0 so Tailwind utilities (e.g. ring-*) can override these. */

@@ -28,14 +28,14 @@ export type PlanningSyncState =
   | { status: "syncing" }
   /** Never synced, past the freshness window, or Pack Planner was edited. */
   | { status: "stale" }
-  | { status: "failed"; message: string };
+  | { status: "failed"; message: string; summary?: string };
 
 type RunState =
   | { status: "idle" }
   | { status: "syncing" }
   /** This page can't reach MyPack's scripts, so don't retry automatically. */
   | { status: "unavailable" }
-  | { status: "failed"; message: string };
+  | { status: "failed"; message: string; summary?: string };
 
 /** Lets a burst of Pack Planner edits settle before refetching. */
 const AUTO_SYNC_DELAY = 2000;
@@ -102,7 +102,7 @@ export function usePlanningData(): PlanningData {
       .then((result) => {
         setRun(
           result.status === "failed"
-            ? { status: "failed", message: result.message }
+            ? result
             : result.status === "unavailable"
               ? { status: "unavailable" }
               : { status: "idle" },
@@ -144,6 +144,11 @@ export function usePlanningData(): PlanningData {
       areaName: string,
     ) => {
       if (areaName === "local" && WATCHED_KEYS.some((key) => key in changes)) {
+        if (typeof changes[PLANNING_SYNCED_AT_KEY]?.newValue === "number") {
+          setRun((current) =>
+            current.status === "failed" ? { status: "idle" } : current,
+          );
+        }
         refreshFromStorage();
       }
     };

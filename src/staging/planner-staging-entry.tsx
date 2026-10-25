@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "../index.css";
+import SlideOutDrawer from "../ui-system/components/SlideOutDrawer";
 
 import {
   installPersonalPlanningFixture,
@@ -25,7 +26,18 @@ if (personalFixture) installPersonalPlanningFixture();
 createRoot(container).render(
   <StrictMode>
     <TooltipProvider delayDuration={150}>
-      {personalFixture ? <PersonalPlanningStaging /> : <PlannerStagingApp />}
+      {new URLSearchParams(window.location.search).has("launcher") ? (
+        <div
+          id="extension-overlay-root"
+          style={{ position: "fixed", right: 24, top: 24 }}
+        >
+          <SlideOutDrawer />
+        </div>
+      ) : personalFixture ? (
+        <PersonalPlanningStaging />
+      ) : (
+        <PlannerStagingApp />
+      )}
     </TooltipProvider>
   </StrictMode>,
 );

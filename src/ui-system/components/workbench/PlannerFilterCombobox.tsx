@@ -54,8 +54,21 @@ export function PlannerFilterCombobox({
         placeholder={placeholder}
         disabled={disabled}
         showClear={!disabled}
-        className="w-full"
-      />
+        className={
+          value
+            ? "h-auto w-full [&>input]:absolute [&>input]:inset-0 [&>input]:h-full [&>input]:pr-10 [&>input]:text-transparent [&>input:focus]:text-foreground [&>[data-slot=input-group-addon]]:relative"
+            : "w-full"
+        }
+      >
+        {value ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none order-first min-w-0 flex-1 break-words py-2 pl-2.5 text-sm leading-snug group-has-[input:focus]/input-group:invisible"
+          >
+            {value}
+          </span>
+        ) : null}
+      </ComboboxInput>
       <ComboboxContent container={portalContainer}>
         <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
         <ComboboxList>

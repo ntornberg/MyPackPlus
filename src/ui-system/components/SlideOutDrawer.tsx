@@ -27,6 +27,7 @@ import {
   type TabUpdater,
 } from "../../course-management/components/tab-state/tabState";
 import { refreshCart } from "../../course-management/services/refreshCart";
+import PlannerLauncherHint from "../../user-experience/components/UserGuide/PlannerLauncherHint";
 import { StatusBanner } from "../../user-experience/status/StatusBanner";
 
 import {
@@ -206,7 +207,11 @@ function mergeGepData(
   return restored;
 }
 
-export default function SlideOutDrawer() {
+export default function SlideOutDrawer({
+  showLauncherHint = true,
+}: {
+  showLauncherHint?: boolean;
+}) {
   const persisted = useMemo(
     () =>
       typeof window !== "undefined" ? loadPersistedPlannerSession() : null,
@@ -361,16 +366,18 @@ export default function SlideOutDrawer() {
   return (
     <div className="mypack-shell flex flex-col items-end gap-2">
       {!drawerOpen ? (
-        <Button
-          type="button"
-          onClick={handleDrawerOpen}
-          size="sm"
-          aria-label="Open Pack Planner"
-          className={plannerFloatingButtonClassName}
-        >
-          <GraduationCapIcon className="size-4" strokeWidth={2.25} />
-          Pack Planner
-        </Button>
+        <PlannerLauncherHint enabled={showLauncherHint}>
+          <Button
+            type="button"
+            onClick={handleDrawerOpen}
+            size="sm"
+            aria-label="Open Pack Planner"
+            className={plannerFloatingButtonClassName}
+          >
+            <GraduationCapIcon className="size-4" strokeWidth={2.25} />
+            Pack Planner
+          </Button>
+        </PlannerLauncherHint>
       ) : null}
 
       <Dialog
