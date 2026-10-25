@@ -152,9 +152,6 @@ function GradeHistory({ instructor }: { instructor: V2Instructor }) {
           instructor.historical_sections != null
             ? `${instructor.historical_sections} sections`
             : null,
-          instructor.historical_students != null
-            ? `${instructor.historical_students.toLocaleString()} students`
-            : null,
           instructor.last_grade_year != null
             ? `last graded ${instructor.last_grade_year}`
             : null,

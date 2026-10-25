@@ -52,9 +52,8 @@ export interface GradeData {
   // v2 fields (absent on legacy responses)
   unity_id?: string | null;
   section_count?: number;
-  total_students?: number;
-  /** 0 when the course was only S/U graded; class averages are then unavailable. */
-  letter_graded_students?: number;
+  /** False when the history contains no letter grades; absent when unknown. */
+  has_letter_grades?: boolean;
   terms?: string[];
 }
 
@@ -112,7 +111,6 @@ export interface V2Instructor {
   has_gradient_grades: boolean;
   historical_courses: string[];
   historical_sections: number | null;
-  historical_students: number | null;
   last_grade_year: number | null;
   rmp: V2RmpSummary;
 }
@@ -131,9 +129,7 @@ export interface V2GradeRow {
   class_avg_min: number | null;
   link_status: string | null;
   section_count: number | null;
-  total_students: number | null;
-  letter_graded_students: number | null;
-  grade_counts: Record<string, number> | null;
+  has_letter_grades: boolean | null;
   terms: string[] | null;
 }
 

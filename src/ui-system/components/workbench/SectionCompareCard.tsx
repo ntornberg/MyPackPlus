@@ -57,7 +57,7 @@ const COMPACT_GRADE_PIE_SIZE = 72;
 /** Explains an empty grade block: S/U-only history vs. an instructor with no history at all. */
 function emptyGradeLabel(section: ModifiedSection): string {
   const g = section.grade_distribution;
-  if (g?.total_students && !g.letter_graded_students) {
+  if (g?.has_letter_grades === false) {
     return "S/U only";
   }
   if (section.professor_rating?.instructor?.has_gradient_grades === false) {
@@ -213,13 +213,12 @@ function SectionGradeDistributionBlock({
                 </span>
               </p>
             ) : null}
-            {g?.total_students ? (
+            {g?.section_count ? (
               <p
                 className="text-[10px] leading-snug text-muted-foreground tabular-nums"
                 title={g.terms?.length ? g.terms.join(", ") : undefined}
               >
-                {g.total_students.toLocaleString()} students
-                {g.section_count ? ` · ${g.section_count} sections` : ""}
+                {g.section_count} sections
               </p>
             ) : null}
           </div>

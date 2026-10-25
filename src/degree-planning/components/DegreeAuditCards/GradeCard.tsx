@@ -44,10 +44,9 @@ export function GradeCard({
           </strong>
         </h4>
       ) : null}
-      {data.total_students ? (
+      {data.section_count ? (
         <p className="mpp-degree-card-muted mpp-degree-card-meta">
-          {data.total_students.toLocaleString()} students
-          {data.section_count ? ` · ${data.section_count} sections` : ""}
+          {data.section_count} sections
         </p>
       ) : null}
     </div>

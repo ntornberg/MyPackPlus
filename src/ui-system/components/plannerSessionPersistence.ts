@@ -1,3 +1,4 @@
+import { GRADE_DATA_CACHE_VERSION } from "../../course-management/cache/courseRetrieval";
 import type {
   CourseSearchData,
   GepSearchData,
@@ -12,6 +13,7 @@ const SELECTED_TAB_KEY = "mypack-pack-planner-selected-tab-v1";
 
 export type PersistedPlannerSession = {
   version: 1;
+  gradeDataCacheVersion?: string;
   selectedTab: PlannerWorkbenchTab;
   courseSearchData: CourseSearchData;
   majorPlanSearchData: MajorPlanSearchData;
@@ -111,6 +113,17 @@ export function loadPersistedPlannerSession(): PersistedPlannerSession | null {
         parsed.planSearchData ??
         ({} as MajorPlanSearchData),
     };
+    if (parsed.gradeDataCacheVersion !== GRADE_DATA_CACHE_VERSION) {
+      normalized.majorPlanSearchData = {
+        ...normalized.majorPlanSearchData,
+        openCourses: {},
+      };
+      normalized.GepSearchData = {
+        ...normalized.GepSearchData,
+        courseData: {},
+      };
+      normalized.gradeDataCacheVersion = GRADE_DATA_CACHE_VERSION;
+    }
     if (source === "session") {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
@@ -131,7 +144,10 @@ export function persistPlannerSession(payload: PersistedPlannerSession): void {
   }
   persistPlannerSelectedTab(payload.selectedTab);
   try {
-    const json = JSON.stringify(payload);
+    const json = JSON.stringify({
+      ...payload,
+      gradeDataCacheVersion: GRADE_DATA_CACHE_VERSION,
+    });
     localStorage.setItem(STORAGE_KEY, json);
   } catch {
     /* quota or private mode — selected tab was still persisted above */

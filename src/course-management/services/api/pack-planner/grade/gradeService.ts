@@ -67,7 +67,7 @@ export function createGradeCard(
     gradeData.f_average;
   if (!total) {
     wrapper.textContent =
-      courseData.total_students && !courseData.letter_graded_students
+      courseData.has_letter_grades === false
         ? "No letter grades (S/U only)."
         : "No grade data available.";
     return wrapper;

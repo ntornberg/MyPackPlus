@@ -205,9 +205,7 @@ describe("dataService v2 grade/RMP requests", () => {
             class_avg_min: 69.8,
             link_status: "linked",
             section_count: 52,
-            total_students: 1882,
-            letter_graded_students: 1668,
-            grade_counts: null,
+            has_letter_grades: true,
             terms: ["Fall '22"],
           },
         },
@@ -222,7 +220,6 @@ describe("dataService v2 grade/RMP requests", () => {
           has_gradient_grades: true,
           historical_courses: ["MA 241"],
           historical_sections: 138,
-          historical_students: 9637,
           last_grade_year: 2023,
           rmp: {
             rating_state: "rated",
@@ -281,7 +278,7 @@ describe("dataService v2 grade/RMP requests", () => {
 
     const lecture = Object.values(result!.sections)[0]!.lecture!;
     expect(lecture.term).toBe("Spring 2027");
-    expect(lecture.grade_distribution?.total_students).toBe(1882);
+    expect(lecture.grade_distribution?.has_letter_grades).toBe(true);
     expect(lecture.professor_rating).toMatchObject({
       avgRating: 4.31,
       avgDifficulty: 2.78,

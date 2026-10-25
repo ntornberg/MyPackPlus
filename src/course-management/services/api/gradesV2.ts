@@ -158,7 +158,7 @@ export function instructorToProf(
 
 /**
  * Maps a v2 grade row to `GradeData`, keyed by the caller's course and instructor name.
- * Class averages stay 0 when the course had no letter grades; check `letter_graded_students`.
+ * Class averages stay 0 when the course had no letter grades; check `has_letter_grades`.
  */
 export function v2GradeToGradeData(
   grade: V2GradeRow,
@@ -177,8 +177,7 @@ export function v2GradeToGradeData(
     class_avg_max: grade.class_avg_max ?? 0,
     unity_id: request.unity_id ?? null,
     section_count: grade.section_count ?? undefined,
-    total_students: grade.total_students ?? undefined,
-    letter_graded_students: grade.letter_graded_students ?? undefined,
+    has_letter_grades: grade.has_letter_grades ?? undefined,
     terms: grade.terms ?? undefined,
   };
 }

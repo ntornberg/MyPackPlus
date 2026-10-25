@@ -24,6 +24,7 @@ import { useOverlayPortalContainer } from "../../../ui-system/components/workben
 import { useScheduleBackgroundEvents } from "../../../ui-system/components/workbench/useScheduleBackgroundEvents";
 import { type PlannerSectionPreview } from "../../../ui-system/components/workbench/workbenchTypes";
 import { AppLogger } from "../../../utils/logger";
+import { GRADE_DATA_CACHE_VERSION } from "../../cache/courseRetrieval";
 import { fetchPlannerCourseSections } from "../../services/api/planner-search/dataService";
 import type { GroupedSections, MergedCourseData } from "../../types/section";
 import type { CourseSearchData, TabUpdater } from "../tab-state/tabState";
@@ -35,7 +36,7 @@ interface DeptCourse {
   course_title: string;
 }
 
-const COURSE_SECTIONS_CACHE_PREFIX = "mypack-course-sections-v1:";
+const COURSE_SECTIONS_CACHE_PREFIX = `mypack-course-sections-v1:${GRADE_DATA_CACHE_VERSION}:`;
 
 function courseSectionsCacheKey(
   term: string | null,

@@ -90,7 +90,6 @@ function mockInstructor(
     has_gradient_grades: true,
     historical_courses: subjects.map((subject) => `${subject} 200`),
     historical_sections: 24,
-    historical_students: 1310,
     last_grade_year: 2026,
     rmp: { rating_state: "unmatched" },
     ...overrides,
@@ -529,7 +528,6 @@ const planResults: StagingResult[] = [
           has_gradient_grades: false,
           historical_courses: [],
           historical_sections: null,
-          historical_students: null,
           last_grade_year: null,
           rmp: {
             rating_state: "rated",

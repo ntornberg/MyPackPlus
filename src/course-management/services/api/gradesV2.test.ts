@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { V2CoursesData, V2Instructor } from "../../../types/api";
+import type {
+  V2CoursesData,
+  V2GradeRow,
+  V2Instructor,
+} from "../../../types/api";
 
 import {
   instructorToProf,
   splitInstructorName,
+  v2GradeToGradeData,
   v2ToBatchResponse,
 } from "./gradesV2";
 
@@ -25,7 +30,6 @@ const instructor: V2Instructor = {
   has_gradient_grades: true,
   historical_courses: ["ARE 201"],
   historical_sections: 3,
-  historical_students: 90,
   last_grade_year: 2025,
   rmp: {
     rating_state: "no_reviews",
@@ -37,6 +41,42 @@ const instructor: V2Instructor = {
 };
 
 describe("v2ToBatchResponse", () => {
+  it.each([true, false, null])(
+    "preserves letter-grade availability %s without student counts",
+    (hasLetterGrades) => {
+      const grade = {
+        a_average: 50,
+        b_average: 50,
+        c_average: 0,
+        d_average: 0,
+        f_average: 0,
+        class_avg_min: 80,
+        class_avg_max: 90,
+        has_letter_grades: hasLetterGrades,
+        total_students: 100,
+        letter_graded_students: 100,
+        grade_counts: { A: 50, B: 50 },
+      } as unknown as V2GradeRow;
+      const result = v2GradeToGradeData(grade, {
+        course: "CSC 116",
+        instructor_name: "Example",
+      });
+      expect(result).toMatchObject({
+        a_average: 50,
+        b_average: 50,
+        class_avg_min: 80,
+        class_avg_max: 90,
+      });
+      expect(result.has_letter_grades).toBe(hasLetterGrades ?? undefined);
+      for (const field of [
+        "total_students",
+        "letter_graded_students",
+        "grade_counts",
+      ]) {
+        expect(result).not.toHaveProperty(field);
+      }
+    },
+  );
   it("keys rows by the caller's request, not the server's names", () => {
     const data: V2CoursesData = {
       results: [
@@ -62,9 +102,7 @@ describe("v2ToBatchResponse", () => {
             class_avg_min: null,
             link_status: "linked",
             section_count: 3,
-            total_students: 90,
-            letter_graded_students: 0,
-            grade_counts: null,
+            has_letter_grades: false,
             terms: ["Fall '25"],
           },
         },
@@ -89,7 +127,7 @@ describe("v2ToBatchResponse", () => {
       course_name: "ARE 201",
       instructor_name: "Varron, Madi",
       class_avg_max: 0,
-      letter_graded_students: 0,
+      has_letter_grades: false,
     });
     // Ambiguous names produce no professor rather than guessing a person.
     expect(batch.profs).toHaveLength(1);

@@ -222,6 +222,8 @@ describe("noteGradeDatasetVersion", () => {
       gradeDatasetVersion: "v-1",
       gradeProfData: { a: { combinedData: "{}", timestamp: 1 } },
       courseList: { b: { combinedData: "{}", timestamp: 1 } },
+      instructorSearch: { d: { combinedData: "{}", timestamp: 1 } },
+      instructorUpcoming: { e: { combinedData: "{}", timestamp: 1 } },
       openCourses: { c: { combinedData: "{}", timestamp: 1 } },
     };
     installChromeStorageMock(storageState);
@@ -230,6 +232,8 @@ describe("noteGradeDatasetVersion", () => {
     expect(storageState.gradeDatasetVersion).toBe("v-2");
     expect(storageState.gradeProfData).toBeUndefined();
     expect(storageState.courseList).toBeUndefined();
+    expect(storageState.instructorSearch).toBeUndefined();
+    expect(storageState.instructorUpcoming).toBeUndefined();
     expect(storageState.openCourses).toBeDefined();
     expect(typeof storageState.cacheEpoch).toBe("number");
 
