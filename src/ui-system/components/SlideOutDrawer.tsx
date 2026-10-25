@@ -12,7 +12,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import CourseSearch from "../../course-management/components/search-tabs/CourseSearch";
 import GepSearch from "../../course-management/components/search-tabs/GepSearch";
 import InstructorSearch from "../../course-management/components/search-tabs/InstructorSearch";
 import MajorPlanSearch from "../../course-management/components/search-tabs/MajorPlanSearch";
@@ -48,6 +47,10 @@ import {
   type PlannerWorkbenchTab,
 } from "./workbench/workbenchTypes";
 
+const CourseSearch = React.lazy(
+  () => import("../../course-management/components/search-tabs/CourseSearch"),
+);
+
 const MemoizedCourseSearchTab = React.memo(
   ({
     setCourseSearchTabData,
@@ -62,13 +65,21 @@ const MemoizedCourseSearchTab = React.memo(
     previewContent: React.ReactNode;
     selectedPreviewId: string | null;
   }) => (
-    <CourseSearch
-      setCourseSearchTabData={setCourseSearchTabData}
-      courseSearchData={courseSearchData}
-      onPreviewSectionChange={onPreviewSectionChange}
-      previewContent={previewContent}
-      selectedPreviewId={selectedPreviewId}
-    />
+    <React.Suspense
+      fallback={
+        <p role="status" className="p-4 text-sm">
+          Loading course search…
+        </p>
+      }
+    >
+      <CourseSearch
+        setCourseSearchTabData={setCourseSearchTabData}
+        courseSearchData={courseSearchData}
+        onPreviewSectionChange={onPreviewSectionChange}
+        previewContent={previewContent}
+        selectedPreviewId={selectedPreviewId}
+      />
+    </React.Suspense>
   ),
 );
 
@@ -79,14 +90,17 @@ const MemoizedGepSearchTab = React.memo(
     onPreviewSectionChange,
     previewContent,
     selectedPreviewId,
+    isActive,
   }: {
     setGepSearchTabData: TabUpdater<GepSearchData>;
     GepSearchData: GepSearchData;
     onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
     previewContent: React.ReactNode;
     selectedPreviewId: string | null;
+    isActive: boolean;
   }) => (
     <GepSearch
+      isActive={isActive}
       setGepSearchTabData={setGepSearchTabData}
       GepSearchData={GepSearchData}
       onPreviewSectionChange={onPreviewSectionChange}
@@ -557,6 +571,7 @@ export default function SlideOutDrawer({
                     selectedPreviewId={
                       selectedTab === "gep_search" ? selectedPreviewId : null
                     }
+                    isActive={selectedTab === "gep_search"}
                   />
                 </TabsContent>
                 <TabsContent

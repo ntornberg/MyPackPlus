@@ -118,14 +118,9 @@ describe("dataService null-course cache keys", () => {
       new Error("Received null response from background fetch"),
     );
 
-    const result = await fetchPlannerCourseSections(
-      "CSC",
-      "316",
-      "id-1",
-      "Fall 2024",
-    );
-
-    expect(result).toBeNull();
+    await expect(
+      fetchPlannerCourseSections("CSC", "316", "id-1", "Fall 2024"),
+    ).rejects.toThrow("Received null response");
     expect(mocks.setGenericCache).not.toHaveBeenCalled();
   });
 

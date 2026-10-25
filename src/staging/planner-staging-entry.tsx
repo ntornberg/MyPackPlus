@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import "../index.css";
 import SlideOutDrawer from "../ui-system/components/SlideOutDrawer";
 
+import { CourseSearchStaging } from "./CourseSearchStaging";
 import {
   installPersonalPlanningFixture,
   PersonalPlanningStaging,
@@ -21,7 +22,10 @@ if (!container) {
 const personalFixture = new URLSearchParams(window.location.search).has(
   "personal",
 );
-if (personalFixture) installPersonalPlanningFixture();
+const courseFixture = new URLSearchParams(window.location.search).has(
+  "course-search",
+);
+if (personalFixture || courseFixture) installPersonalPlanningFixture();
 
 createRoot(container).render(
   <StrictMode>
@@ -33,6 +37,8 @@ createRoot(container).render(
         >
           <SlideOutDrawer />
         </div>
+      ) : courseFixture ? (
+        <CourseSearchStaging />
       ) : personalFixture ? (
         <PersonalPlanningStaging />
       ) : (

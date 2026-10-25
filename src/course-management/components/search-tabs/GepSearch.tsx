@@ -1,5 +1,11 @@
 import { ChevronRight } from "lucide-react";
-import React, { useMemo, useCallback, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -382,7 +388,10 @@ export default function GepSearch({
   onPreviewSectionChange,
   previewContent,
   selectedPreviewId,
+  isActive = true,
 }: {
+  /** False while another planner tab is showing; auto-search waits for it. */
+  isActive?: boolean;
   setGepSearchTabData: TabUpdater<GepSearchData>;
   GepSearchData: GepSearchData;
   onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
@@ -437,6 +446,9 @@ export default function GepSearch({
   // Bumped on every search and on term/category changes so a slower, older
   // search can't overwrite what is on screen when it finishes.
   const searchIdRef = useRef(0);
+  // "term|category" of the last search started while mounted, so the
+  // auto-search below runs at most once per pair and can't loop.
+  const searchedKeyRef = useRef<string | null>(null);
 
   const courseSearch = useCallback(
     async (
@@ -445,6 +457,7 @@ export default function GepSearch({
     ) => {
       const searchId = ++searchIdRef.current;
       const isCurrent = () => searchId === searchIdRef.current;
+      searchedKeyRef.current = `${term}|${subjectCode}`;
       const subjectLabel = subjectCode
         ? (GEP_LABEL_BY_CODE.get(subjectCode) ?? subjectCode)
         : selectedSubjectLabel;
@@ -528,6 +541,26 @@ export default function GepSearch({
       setGepSearchTabData,
     ],
   );
+
+  // Force a search whenever the tab is showing a term + category without
+  // loaded results (restored session, interrupted search, cleared cache).
+  const hasResults =
+    courses.length > 0 && Object.keys(courseData ?? {}).length > 0;
+  useEffect(() => {
+    if (!isActive || !isLoaded || hasResults) return;
+    if (!selectedTerm || !selectedSubjectCode) return;
+    if (searchedKeyRef.current === `${selectedTerm}|${selectedSubjectCode}`) {
+      return;
+    }
+    void courseSearch(selectedSubjectCode, selectedTerm);
+  }, [
+    isActive,
+    isLoaded,
+    hasResults,
+    selectedTerm,
+    selectedSubjectCode,
+    courseSearch,
+  ]);
 
   const filteredCourses = useMemo(() => {
     if (!isLoaded || !courses || courses.length === 0) return [];
@@ -743,7 +776,7 @@ export default function GepSearch({
       ? "No courses with open sections. Try unchecking 'Hide courses with no open sections'."
       : "No GEP courses found matching your criteria.";
   } else if (selectedSubjectCode) {
-    emptyMessage = "Press Search to load courses for this category.";
+    emptyMessage = "Loading courses for this category...";
   }
 
   const resultsBody = showResults ? (

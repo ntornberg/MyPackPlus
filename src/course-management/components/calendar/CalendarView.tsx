@@ -313,7 +313,10 @@ function buildEventsFromTableEntries(
       if (timeParts.length < 2) {
         continue;
       }
-      const [startTime, endTime] = timeParts;
+      // MyPack's table pads hours ("09:35 AM") while the calendar feed does
+      // not; normalize so both sources describe the same meeting identically.
+      const startTime = normalizeTime(timeParts[0]) ?? timeParts[0];
+      const endTime = normalizeTime(timeParts[1]) ?? timeParts[1];
       if (!startTime || !endTime) {
         continue;
       }
@@ -591,7 +594,7 @@ function tagTableEventsWithSemester(
 }
 
 function normalizedCourseToken(subject: string): string | null {
-  const match = subject.toUpperCase().match(/\b[A-Z]{2,5}\s*\d{3}[A-Z]?\b/);
+  const match = subject.toUpperCase().match(/\b[A-Z]{1,5}\s*\d{3}[A-Z]?\b/);
   return match ? match[0].replace(/\s+/g, " ") : null;
 }
 
@@ -614,7 +617,11 @@ function eventCoversCandidate(
   if (Boolean(existing.allDay) !== Boolean(candidate.allDay)) {
     return false;
   }
-  if (existing.start !== candidate.start || existing.end !== candidate.end) {
+  if (
+    !existing.allDay &&
+    (toMinutes(existing.start) !== toMinutes(candidate.start) ||
+      toMinutes(existing.end) !== toMinutes(candidate.end))
+  ) {
     return false;
   }
 
@@ -862,20 +869,21 @@ export const CalendarView = (params: CalendarViewProps) => {
       {untimedEvents.length > 0 ? (
         <section
           aria-label="Online / no fixed meeting time"
-          className="mb-2 rounded-xl border border-border bg-muted/20 p-3"
+          className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-muted/20 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
         >
-          <p className="mb-2 text-xs font-medium text-muted-foreground">
-            Online / no fixed meeting time
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Online / no fixed time
           </p>
-          <ul className="flex flex-wrap gap-2">
+          <ul className="flex flex-wrap gap-1.5">
             {untimedEvents.map((event) => (
               <li
                 key={event.id}
-                className="rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                className="rounded-md py-1 pr-2 pl-2.5 text-[11px] leading-4 font-semibold"
                 style={calendarBlockShellStyle(event.color)}
               >
                 <button
                   type="button"
+                  className="text-left"
                   data-calendar-event={event.id}
                   aria-label={`${event.subj} class information`}
                 >

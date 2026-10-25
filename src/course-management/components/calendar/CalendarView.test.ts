@@ -65,6 +65,35 @@ it("preserves class metadata across table/calendar merging and conflicts", async
   });
 });
 
+it("merges table and calendar copies of a class when the table pads hours", async () => {
+  categories.scheduleTableData = cached([
+    {
+      classs: "E 101",
+      _mypackTerm: "2027 Spring Term",
+      section_details: [
+        {
+          section: "007",
+          meet_days: "Fri",
+          time: "09:35 AM - 11:25 AM",
+          type: "Laboratory",
+        },
+      ],
+    },
+  ]);
+  categories.scheduleCalEventsData = cached([
+    {
+      title: "E 101 (007)",
+      start: "2027-01-15T09:35:00",
+      end: "2027-01-15T11:25:00",
+      _mypackTerm: "2027 Spring Term",
+    },
+  ]);
+  const events = markOverlaps(await loadScheduleEvents());
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ start: "9:35 AM", end: "11:25 AM" });
+  expect(events[0].days.some((d) => d.isOverlapping)).toBe(false);
+});
+
 describe.each([
   {
     name: "cart",

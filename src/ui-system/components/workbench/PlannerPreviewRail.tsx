@@ -167,8 +167,8 @@ function ScheduleCalendarLegend({ className }: { className?: string }) {
             className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground"
           >
             <span
-              className="size-2.5 shrink-0 rounded-sm shadow-sm"
-              style={shell}
+              className="h-2.5 w-3.5 shrink-0 rounded-[3px]"
+              style={{ ...shell, boxShadow: "none" }}
               aria-hidden
             />
             {item.label}

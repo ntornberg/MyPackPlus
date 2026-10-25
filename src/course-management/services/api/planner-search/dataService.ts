@@ -180,7 +180,7 @@ export async function fetchPlannerCourseSections(
       // as "unavailable", so the next search retries.
       AppLogger.error("Open courses search failed for", courseKey, error);
       onProgress?.(100, `Could not load ${courseKey}; try again`);
-      return null;
+      throw error;
     }
 
     if (!courseData) {

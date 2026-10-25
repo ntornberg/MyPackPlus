@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import {
   Combobox,
@@ -23,6 +23,8 @@ function useStableStringItems(items: string[]): string[] {
 }
 
 type PlannerFilterComboboxProps = {
+  id?: string;
+  acceptOnTab?: boolean;
   items: string[];
   value: string | null;
   onValueChange: (value: string | null) => void;
@@ -33,6 +35,8 @@ type PlannerFilterComboboxProps = {
 };
 
 export function PlannerFilterCombobox({
+  id,
+  acceptOnTab = false,
   items,
   value,
   onValueChange,
@@ -42,15 +46,47 @@ export function PlannerFilterCombobox({
   portalContainer,
 }: PlannerFilterComboboxProps) {
   const stableItems = useStableStringItems(items);
+  const [open, setOpen] = useState(false);
+  const typed = useRef(false);
+  const highlighted = useRef<string | undefined>(undefined);
 
   return (
     <Combobox
       items={stableItems}
       value={value}
-      onValueChange={(nextValue) => onValueChange(nextValue ?? null)}
+      onValueChange={(nextValue) => {
+        typed.current = false;
+        onValueChange(nextValue ?? null);
+      }}
+      open={open}
+      onOpenChange={setOpen}
+      onInputValueChange={(text, details) => {
+        if (details.reason === "input-change")
+          typed.current = Boolean(text.trim());
+      }}
+      onItemHighlighted={(item) => {
+        highlighted.current = item;
+      }}
       autoHighlight
     >
       <ComboboxInput
+        id={id}
+        onKeyDownCapture={(event) => {
+          if (
+            acceptOnTab &&
+            event.key === "Tab" &&
+            !event.shiftKey &&
+            !event.nativeEvent.isComposing &&
+            open &&
+            typed.current &&
+            highlighted.current &&
+            stableItems.includes(highlighted.current)
+          ) {
+            typed.current = false;
+            onValueChange(highlighted.current);
+            setOpen(false);
+          }
+        }}
         placeholder={placeholder}
         disabled={disabled}
         showClear={!disabled}
