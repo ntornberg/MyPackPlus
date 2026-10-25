@@ -112,6 +112,8 @@ export function mergeData(
           component: lab.component,
           classNumber: lab.classNumber,
           section: lab.section,
+          instructor_name: lab.instructor_name,
+          instructor_unity_ids: lab.instructor_unity_ids,
         }));
       }
     }

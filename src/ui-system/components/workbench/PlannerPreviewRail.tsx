@@ -79,6 +79,7 @@ export function PlannerPreviewRail({
           <div className="min-w-0 rounded-xl border border-border bg-background/55 p-3 sm:p-4">
             <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
               <CalendarView
+                selectedSection={selectedSection}
                 plannerPreview
                 dayTime={selectedSection?.dayTime}
                 courseData={selectedSection?.courseData}
@@ -118,6 +119,7 @@ export function PlannerPreviewRail({
             </div>
             <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
               <CalendarView
+                selectedSection={selectedSection}
                 plannerPreview
                 dayTime={selectedSection?.dayTime}
                 courseData={selectedSection?.courseData}

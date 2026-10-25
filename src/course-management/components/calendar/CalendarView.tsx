@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getCacheCategory } from "../../cache/courseRetrieval";
 import {
@@ -15,10 +15,18 @@ import {
   CALENDAR_COLOR_ENROLLED_CLASS,
   calendarBlockShellStyle,
 } from "../../types/calendar";
-import type { SectionLinkedMeeting } from "../../types/section";
+import type {
+  ModifiedSection,
+  SectionLinkedMeeting,
+} from "../../types/section";
 import { datePart, semesterOfItem } from "../../utils/semester";
 
+import {
+  courseDetailsFromSection,
+  courseDetailsFromLabel,
+} from "./calendarCourseDetails";
 import CalendarGrid, { toMinutes } from "./CalendarGrid";
+import { CalendarHoverLayer } from "./CalendarHoverLayer";
 
 type ScheduleTableEntry = {
   DT_RowId: string | null;
@@ -65,6 +73,7 @@ type CachedEntry = {
 type CalendarEventEntry = Record<string, unknown>;
 
 type CalendarViewProps = {
+  selectedSection?: ModifiedSection;
   dayTime?: string;
   courseData?: { code?: string };
   /** Lab / recitation / studio rows paired with this section (same enrollment). */
@@ -96,6 +105,7 @@ const mergePinnedDayTimeWithEvents = (
   courseCode: string | undefined,
   cachedEvents: ScheduleEvent[],
   linkedMeetings?: SectionLinkedMeeting[],
+  selectedSection?: ModifiedSection,
 ): ScheduleEvent[] => {
   const maxBackgroundId =
     cachedEvents.length === 0 ? 0 : Math.max(...cachedEvents.map((e) => e.id));
@@ -107,6 +117,9 @@ const mergePinnedDayTimeWithEvents = (
     nextId++,
   );
   if (primary) {
+    primary.course = selectedSection
+      ? courseDetailsFromSection(selectedSection)
+      : courseDetailsFromLabel(courseCode ?? "");
     pins.push(primary);
   }
   for (const m of linkedMeetings ?? []) {
@@ -116,6 +129,21 @@ const mergePinnedDayTimeWithEvents = (
       nextId++,
     );
     if (ev) {
+      ev.course = selectedSection
+        ? {
+            ...courseDetailsFromSection(selectedSection),
+            section: m.section,
+            classNumber: m.classNumber,
+            component: m.component,
+            location: m.location,
+            instructors: (m.instructor_name ?? []).map((name, i) => ({
+              name,
+              unityId: m.instructor_unity_ids?.[i] || undefined,
+            })),
+            grade: undefined,
+            professor: undefined,
+          }
+        : courseDetailsFromLabel(courseCode ?? "");
       pins.push(ev);
     }
   }
@@ -235,6 +263,19 @@ function buildEventsFromTableEntries(
     }
 
     for (const section of scheduleEntry.section_details) {
+      const course = {
+        code: scheduleEntry.classs?.trim() ?? "",
+        term: semesterOfItem(scheduleEntry, null) ?? undefined,
+        title:
+          scheduleEntry.crse_title ?? scheduleEntry.description ?? undefined,
+        section: section.section ?? undefined,
+        classNumber:
+          section.class_nbr ?? scheduleEntry.enroll_class_nbr ?? undefined,
+        eventId: scheduleEntry.eventid ?? undefined,
+        component: section.type ?? undefined,
+        location: section.location ?? section.facility ?? undefined,
+        instructors: (section.instructors ?? []).map((name) => ({ name })),
+      };
       if (
         isUntimedDayTime(section.meet_days) &&
         isUntimedDayTime(section.time)
@@ -242,6 +283,7 @@ function buildEventsFromTableEntries(
         const code = scheduleEntry.classs?.trim() || "Class";
         events.push({
           id: eventId++,
+          course,
           subj: section.section ? `${code} (${section.section})` : code,
           start: "",
           end: "",
@@ -282,6 +324,7 @@ function buildEventsFromTableEntries(
       events.push({
         id: eventId++,
         subj: subject,
+        course,
         start: startTime,
         end: endTime,
         days: recurrRule.map((day) => ({ day, isOverlapping: false })),
@@ -505,6 +548,12 @@ function buildEventsFromCalendarEntries(
     events.push({
       id: eventId++,
       subj,
+      course: courseDetailsFromLabel(subj)
+        ? {
+            ...courseDetailsFromLabel(subj)!,
+            term: semesterOfItem(entry, null) ?? undefined,
+          }
+        : undefined,
       start: allDay ? "" : start!,
       end: allDay ? "" : end!,
       days: allDay ? [] : days,
@@ -550,6 +599,18 @@ function eventCoversCandidate(
   existing: ScheduleEvent,
   candidate: ScheduleEvent,
 ): boolean {
+  if (
+    existing.course?.term &&
+    candidate.course?.term &&
+    existing.course.term !== candidate.course.term
+  )
+    return false;
+  if (
+    existing.course?.section &&
+    candidate.course?.section &&
+    existing.course.section !== candidate.course.section
+  )
+    return false;
   if (Boolean(existing.allDay) !== Boolean(candidate.allDay)) {
     return false;
   }
@@ -691,12 +752,14 @@ export const loadCartScheduleEvents = async (): Promise<ScheduleEvent[]> => {
 export const CalendarView = (params: CalendarViewProps) => {
   const {
     dayTime,
+    selectedSection,
     courseData,
     linkedMeetings,
     staticBackgroundEvents,
     plannerPreview = false,
   } = params;
 
+  const calendarRef = useRef<HTMLDivElement>(null);
   const [eventData, setEventData] = useState<ScheduleEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const scheduleCacheVersion = useScheduleCacheVersion();
@@ -708,6 +771,7 @@ export const CalendarView = (params: CalendarViewProps) => {
         courseData?.code,
         staticBackgroundEvents,
         linkedMeetings,
+        selectedSection,
       );
       setEventData(markOverlaps(merged));
       setIsLoading(false);
@@ -726,6 +790,7 @@ export const CalendarView = (params: CalendarViewProps) => {
         courseData?.code,
         [],
         linkedMeetings,
+        selectedSection,
       );
       setEventData(markOverlaps(merged));
       setIsLoading(false);
@@ -743,6 +808,7 @@ export const CalendarView = (params: CalendarViewProps) => {
           courseData?.code,
           background,
           linkedMeetings,
+          selectedSection,
         );
         if (mounted) {
           setEventData(markOverlaps(merged));
@@ -770,6 +836,7 @@ export const CalendarView = (params: CalendarViewProps) => {
     staticBackgroundEvents,
     linkedMeetings,
     scheduleCacheVersion,
+    selectedSection,
   ]);
 
   if (isLoading) {
@@ -785,6 +852,7 @@ export const CalendarView = (params: CalendarViewProps) => {
   const untimedEvents = eventData.filter((event) => event.allDay);
   return (
     <div
+      ref={calendarRef}
       className={
         plannerPreview
           ? "h-full w-full min-w-[460px] max-w-[1400px] shrink-0"
@@ -806,13 +874,20 @@ export const CalendarView = (params: CalendarViewProps) => {
                 className="rounded-lg px-2.5 py-1.5 text-xs font-semibold"
                 style={calendarBlockShellStyle(event.color)}
               >
-                {event.subj}
+                <button
+                  type="button"
+                  data-calendar-event={event.id}
+                  aria-label={`${event.subj} class information`}
+                >
+                  {event.subj}
+                </button>
               </li>
             ))}
           </ul>
         </section>
       ) : null}
       <CalendarGrid eventData={eventData} />
+      <CalendarHoverLayer targetRef={calendarRef} events={eventData} />
     </div>
   );
 };

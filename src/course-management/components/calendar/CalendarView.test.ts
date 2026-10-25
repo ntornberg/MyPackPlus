@@ -26,6 +26,45 @@ beforeEach(() => {
   invalidateScheduleCache();
 });
 
+it("preserves class metadata across table/calendar merging and conflicts", async () => {
+  categories.scheduleTableData = cached([
+    {
+      classs: "CSC 316",
+      crse_title: "Data Structures",
+      _mypackTerm: "2027 Spring Term",
+      section_details: [
+        {
+          section: "001",
+          class_nbr: "123",
+          meet_days: "Mon",
+          time: "9:00 AM - 10:00 AM",
+          instructors: ["Teacher"],
+          location: "Engineering",
+          type: "Lecture",
+        },
+      ],
+    },
+  ]);
+  categories.scheduleCalEventsData = cached([
+    {
+      title: "CSC 316 (001)",
+      start: "2027-01-11T09:00:00",
+      end: "2027-01-11T10:00:00",
+      _mypackTerm: "2027 Spring Term",
+    },
+  ]);
+  const events = await loadScheduleEvents();
+  expect(events).toHaveLength(1);
+  expect(markOverlaps(events)[0].course).toMatchObject({
+    code: "CSC 316",
+    section: "001",
+    classNumber: "123",
+    title: "Data Structures",
+    location: "Engineering",
+    instructors: [{ name: "Teacher" }],
+  });
+});
+
 describe.each([
   {
     name: "cart",

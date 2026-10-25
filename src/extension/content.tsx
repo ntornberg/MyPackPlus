@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { watchScheduleCacheChanges } from "../course-management/cache/scheduleCacheSignal";
+import { watchNativeCalendar } from "../course-management/components/calendar/nativeCalendar";
 import { watchPlannerFrame } from "../course-management/services/plannerWatcher";
 import { scrapeScheduleTable } from "../course-management/services/scraper";
 import { setupListener } from "../degree-planning/services/siteResponseStorage";
@@ -40,6 +41,11 @@ function RootOverlayDialogs() {
 }
 
 const storageReady = setupListener(initializePageStorage());
+void storageReady
+  .then(() => watchNativeCalendar(extensionCssRaw))
+  .catch((error) => {
+    AppLogger.error("Could not initialize calendar hover cards", error);
+  });
 void storageReady.catch((error) => {
   AppLogger.error("Failed to initialize extension storage", error);
   const showError = () => {

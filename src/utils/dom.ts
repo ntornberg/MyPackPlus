@@ -188,12 +188,8 @@ export function extensionCssForShadowRoot(compiledCss: string): string {
   let css = compiledCss;
   // Longer selectors first � naive `#id` ? `:host` would produce invalid `:host[data-�]`.
   css = css.replace(
-    /#extension-overlay-root\[data-mpp-theme="light"\]/g,
-    ':host([data-mpp-theme="light"])',
-  );
-  css = css.replace(
-    /#extension-overlay-root\[data-mpp-theme="dark"\]/g,
-    ':host([data-mpp-theme="dark"])',
+    /#extension-overlay-root\[data-mpp-theme=(["']?)(light|dark)\1\]/g,
+    ':host([data-mpp-theme="$2"])',
   );
   css = css.replace(/#extension-overlay-root/g, ":host");
   return css;

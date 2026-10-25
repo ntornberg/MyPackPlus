@@ -1,0 +1,384 @@
+import { Popover as Primitive } from "radix-ui";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
+
+import { Popover, PopoverContent } from "@/components/ui/popover";
+import {
+  GradeDistributionChart,
+  gradeDistributionPercents,
+} from "@/ui-system/components/shared/GradeDistributionChart";
+import { describeRating, formatRatingCount } from "@/utils/rmpDisplay";
+
+import type { ScheduleEvent } from "../../types/calendar";
+
+import { courseDetailsFromLabel } from "./calendarCourseDetails";
+import { loadCalendarInsights, type CalendarInsight } from "./calendarInsights";
+
+export function CalendarHoverLayer({
+  targetRef,
+  events,
+  container,
+  resolveEvent,
+}: {
+  targetRef: RefObject<HTMLElement | null>;
+  events: ScheduleEvent[];
+  container?: HTMLElement;
+  resolveEvent?: (element: HTMLElement) => ScheduleEvent | undefined;
+}) {
+  const [active, setActive] = useState<{
+    anchor: HTMLElement;
+    event: ScheduleEvent;
+    keyboard: boolean;
+  } | null>(null);
+  const [nativePopup, setNativePopup] = useState<{
+    element: HTMLElement;
+    rect: DOMRect;
+    side: "right" | "left" | "bottom";
+  } | null>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const id = useId();
+  const cancelClose = useCallback(() => clearTimeout(closeTimer.current), []);
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setActive(null), 180);
+  }, [cancelClose]);
+
+  useEffect(() => {
+    const target = targetRef.current;
+    if (!target) return;
+    const doc = target.ownerDocument;
+    let opening: ReturnType<typeof setTimeout> | undefined;
+    let hovered: HTMLElement | null = null;
+    const selector = resolveEvent
+      ? "#enroll-wizard-calendar .fc-event"
+      : "[data-calendar-event]";
+    const find = (node: EventTarget | null) =>
+      node instanceof Element ? node.closest<HTMLElement>(selector) : null;
+    const show = (element: HTMLElement, keyboard: boolean) => {
+      const event = resolveEvent
+        ? resolveEvent(element)
+        : events.find((e) => String(e.id) === element.dataset.calendarEvent);
+      if (!event) return;
+      const course = event.course ?? courseDetailsFromLabel(event.subj);
+      if (!course?.code) return;
+      doc.dispatchEvent(
+        new CustomEvent("mypack-calendar-card", { detail: id }),
+      );
+      setNativePopup(null);
+      setActive({ anchor: element, event: { ...event, course }, keyboard });
+    };
+    const enter = (event: Event) => {
+      const element = find(event.target);
+      if (!element) return;
+      cancelClose();
+      clearTimeout(opening);
+      hovered = element;
+      if (event.type === "focusin") show(element, true);
+      else opening = setTimeout(() => show(element, false), 250);
+    };
+    const leave = (event: Event) => {
+      const element = find(event.target);
+      if (!element) return;
+      const related = (event as MouseEvent).relatedTarget as Node | null;
+      if (
+        related &&
+        (element.contains(related) || content.current?.contains(related))
+      )
+        return;
+      hovered = null;
+      clearTimeout(opening);
+      scheduleClose();
+    };
+    const dismiss = () => {
+      clearTimeout(opening);
+      cancelClose();
+      setActive(null);
+    };
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismiss();
+    };
+    const anotherCard = (event: Event) => {
+      if ((event as CustomEvent).detail !== id) dismiss();
+    };
+    const observer = new MutationObserver(() => {
+      if (hovered && !hovered.isConnected) dismiss();
+    });
+    observer.observe(target, { childList: true, subtree: true });
+    target.addEventListener("pointerover", enter);
+    target.addEventListener("pointerout", leave);
+    target.addEventListener("focusin", enter);
+    target.addEventListener("focusout", leave);
+    doc.addEventListener("keydown", keydown);
+    doc.addEventListener("mypack-calendar-card", anotherCard);
+    return () => {
+      dismiss();
+      observer.disconnect();
+      target.removeEventListener("pointerover", enter);
+      target.removeEventListener("pointerout", leave);
+      target.removeEventListener("focusin", enter);
+      target.removeEventListener("focusout", leave);
+      doc.removeEventListener("keydown", keydown);
+      doc.removeEventListener("mypack-calendar-card", anotherCard);
+    };
+  }, [events, targetRef, resolveEvent, id, cancelClose, scheduleClose]);
+
+  useEffect(() => {
+    if (!active) return;
+    const anchor = active.anchor;
+    const previous = anchor.getAttribute("aria-details");
+    anchor.setAttribute("aria-details", id);
+    return () => {
+      if (previous === null) anchor.removeAttribute("aria-details");
+      else anchor.setAttribute("aria-details", previous);
+    };
+  }, [active, id]);
+
+  useEffect(() => {
+    if (!active || !resolveEvent) return;
+    const doc = active.anchor.ownerDocument;
+    let popup: HTMLElement | undefined;
+    const release = () => {
+      popup?.removeEventListener("pointerenter", cancelClose);
+      popup?.removeEventListener("pointerleave", scheduleClose);
+      popup?.removeEventListener("focusin", cancelClose);
+      popup?.removeEventListener("focusout", scheduleClose);
+    };
+    const sync = () => {
+      if (!active.anchor.isConnected) {
+        setActive(null);
+        return;
+      }
+      const course = active.event.course!;
+      const found = Array.from(
+        doc.querySelectorAll<HTMLElement>(".tooltipster-base"),
+      ).find((element) => {
+        const text = (element.textContent ?? "").replace(/\s+/g, " ");
+        const rect = element.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          getComputedStyle(element).visibility !== "hidden" &&
+          text.includes(course.code) &&
+          (!course.section || text.includes(course.section))
+        );
+      });
+      if (!found || found === popup) return;
+      release();
+      popup = found;
+      const rect = found.getBoundingClientRect();
+      const width =
+        doc.defaultView?.innerWidth ?? doc.documentElement.clientWidth;
+      setNativePopup({
+        element: found,
+        rect,
+        side:
+          width - rect.right >= 364
+            ? "right"
+            : rect.left >= 364
+              ? "left"
+              : "bottom",
+      });
+      found.addEventListener("pointerenter", cancelClose);
+      found.addEventListener("pointerleave", scheduleClose);
+      found.addEventListener("focusin", cancelClose);
+      found.addEventListener("focusout", scheduleClose);
+    };
+    const dismiss = () => setActive(null);
+    const observer = new MutationObserver(sync);
+    observer.observe(doc.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
+    doc.addEventListener("change", dismiss);
+    sync();
+    return () => {
+      observer.disconnect();
+      release();
+      doc.removeEventListener("change", dismiss);
+    };
+  }, [active, resolveEvent, cancelClose, scheduleClose]);
+
+  const visible = Boolean(
+    active && (!resolveEvent || nativePopup || active.keyboard),
+  );
+
+  return (
+    <Popover
+      open={visible}
+      onOpenChange={(open) => {
+        if (!open) setActive(null);
+      }}
+    >
+      {active && (
+        <Primitive.Anchor
+          virtualRef={{
+            current: nativePopup
+              ? {
+                  getBoundingClientRect: () =>
+                    nativePopup.element.isConnected
+                      ? nativePopup.element.getBoundingClientRect()
+                      : nativePopup.rect,
+                }
+              : active.anchor,
+          }}
+        />
+      )}
+      {active && visible && (
+        <PopoverContent
+          ref={content}
+          id={id}
+          container={container}
+          side={nativePopup?.side ?? "bottom"}
+          updatePositionStrategy="always"
+          collisionPadding={12}
+          className="w-[340px] max-h-[min(460px,80vh)] overflow-y-auto text-sm"
+          aria-label={`${active.event.course?.code} class information`}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            const next =
+              e.target instanceof Element
+                ? e.target.closest<HTMLElement>(
+                    resolveEvent
+                      ? "#enroll-wizard-calendar .fc-event"
+                      : "[data-calendar-event]",
+                  )
+                : null;
+            if (
+              nativePopup?.element.contains(e.target as Node) ||
+              active.anchor.contains(e.target as Node) ||
+              (next && (!resolveEvent || resolveEvent(next)))
+            )
+              e.preventDefault();
+          }}
+          onPointerEnter={cancelClose}
+          onPointerLeave={scheduleClose}
+          onFocusCapture={cancelClose}
+          onBlurCapture={(e) => {
+            if (
+              !e.currentTarget.contains(e.relatedTarget) &&
+              !active.anchor.contains(e.relatedTarget)
+            )
+              scheduleClose();
+          }}
+        >
+          <CourseCard
+            key={JSON.stringify(active.event.course)}
+            event={active.event}
+          />
+        </PopoverContent>
+      )}
+    </Popover>
+  );
+}
+
+function CourseCard({ event }: { event: ScheduleEvent }) {
+  const course = event.course!;
+  const [insights, setInsights] = useState<CalendarInsight[] | null>(null);
+  useEffect(() => {
+    let current = true;
+    void loadCalendarInsights(course).then((result) => {
+      if (current) setInsights(result);
+    });
+    return () => {
+      current = false;
+    };
+  }, [course]);
+  const conflicts = [
+    ...new Set(event.days.flatMap((d) => d.conflictsWith ?? [])),
+  ];
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <h3 className="font-semibold">
+          {course.code}
+          {course.section ? ` (${course.section})` : ""}
+        </h3>
+        {course.title && <p>{course.title}</p>}
+        <p className="text-xs text-muted-foreground">
+          {[
+            course.component,
+            event.allDay
+              ? "Online / no fixed meeting time"
+              : `${event.days.map((d) => d.day).join(", ")} ${event.start}–${event.end}`,
+            course.location,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      </div>
+      {conflicts.length > 0 && (
+        <p className="text-xs text-orange-600">
+          Conflicts with {conflicts.join(", ")}
+        </p>
+      )}
+      {!insights && (
+        <>
+          <p>
+            {course.instructors.map((i) => i.name).join("; ") ||
+              "Instructor not assigned"}
+          </p>
+          <p role="status">Loading grades and ratings…</p>
+        </>
+      )}
+      {insights?.map((insight, index) => {
+        const rating = describeRating(insight.professor);
+        return (
+          <section
+            key={index}
+            className="flex flex-col gap-2 border-t border-border pt-2"
+          >
+            <h4 className="font-medium">{insight.name}</h4>
+            {insight.error ? (
+              <p role="status">
+                Could not load grades and ratings. Hover again to retry.
+              </p>
+            ) : (
+              <>
+                <p className="text-xs" title={rating.description}>
+                  {insight.ambiguous
+                    ? "Instructor match is ambiguous; rating unavailable."
+                    : rating.avgRating != null
+                      ? `RMP ${rating.avgRating.toFixed(1)}/5${rating.numRatings != null ? ` · ${formatRatingCount(rating.numRatings)}` : ""}${rating.otherSchool ? ` · ${rating.otherSchool}` : ""}`
+                      : rating.label}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {insight.courseWide
+                    ? "Course-wide grade history"
+                    : "Instructor’s grade history for this course"}
+                </p>
+                {insight.grade ? (
+                  <div className="flex items-center gap-3">
+                    <GradeDistributionChart data={insight.grade} size={72} />
+                    <div className="text-xs">
+                      {gradeDistributionPercents(insight.grade).map((row) => (
+                        <div key={row.label}>
+                          {row.label}: {row.pct.toFixed(0)}%
+                        </div>
+                      ))}
+                      {gradeDistributionPercents(insight.grade).length === 0 &&
+                        "No letter-grade history available."}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs">No grade history available.</p>
+                )}
+              </>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}

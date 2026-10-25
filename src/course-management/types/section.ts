@@ -6,6 +6,8 @@ import type {
 
 /** Additional meeting rows for the same enrollment (e.g. lab with lecture). */
 export type SectionLinkedMeeting = {
+  instructor_name?: string[];
+  instructor_unity_ids?: string[];
   dayTime: string;
   location: string;
   component: string;

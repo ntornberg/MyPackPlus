@@ -216,8 +216,12 @@ export default function CalendarGrid({
                       ? `Conflicts with ${conflictNames.join(", ")}`
                       : "Conflicts with another class";
                   return (
-                    <div
+                    <button
+                      type="button"
+                      aria-label={`${ev.subj} class information`}
                       key={`${ev.id}-${day}`}
+                      data-calendar-event={ev.id}
+                      tabIndex={0}
                       className={cn(
                         "group/event absolute flex min-h-[18px] items-center overflow-hidden rounded-lg px-1.5 py-0.5 text-[9px] leading-snug font-bold text-white transition-opacity sm:min-h-5 sm:px-2 sm:py-1 sm:text-[10px] md:text-xs",
                         isOverlap && "hover:opacity-[0.85]",
@@ -246,7 +250,7 @@ export default function CalendarGrid({
                           {compactEventLabel(conflictLabel, narrow)}
                         </span>
                       ) : null}
-                    </div>
+                    </button>
                   );
                 })}
           </div>

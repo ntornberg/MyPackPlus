@@ -1,4 +1,21 @@
+import type { GradeData, MatchedRateMyProf } from "../../types/api";
+
+export interface CalendarCourseDetails {
+  code: string;
+  term?: string;
+  section?: string;
+  classNumber?: string;
+  eventId?: string;
+  title?: string;
+  component?: string;
+  location?: string;
+  instructors: { name: string; unityId?: string }[];
+  grade?: GradeData;
+  professor?: MatchedRateMyProf;
+}
+
 export interface ScheduleEvent {
+  course?: CalendarCourseDetails;
   id: number;
   subj: string;
   start: string;
