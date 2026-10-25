@@ -10,6 +10,7 @@ import {
   findDegreeAudit,
   groupStatus,
   loadDegreeAudits,
+  requisiteTermLabel,
   parseDegreeDetailsResponse,
   storeDegreeDetailsResponse,
   type DegreeAudit,
@@ -71,7 +72,7 @@ const html = `<div class="head-list-container"></div>
 });</script>`;
 
 const url =
-  "/psc/X/s/WEBLIB_DEGAUDIT.ISCRIPT1.FieldFormula.IScript_getDegreeDetails?includePlanner=Y&acad_plan=99TSTBS&acad_sub_plan=NOSUBPLAN&acad_plan_type=MAJ";
+  "/psc/X/s/WEBLIB_DEGAUDIT.ISCRIPT1.FieldFormula.IScript_getDegreeDetails?includePlanner=Y&isSaved=Y&acad_plan=99TSTBS&acad_sub_plan=NOSUBPLAN&acad_plan_type=MAJ&req_term=2238";
 
 describe("extractDetailsJson", () => {
   it("reads the details object even with brackets inside strings", () => {
@@ -92,6 +93,7 @@ describe("parseDegreeDetailsResponse", () => {
       plan: "99TSTBS",
       subplan: "NOSUBPLAN",
       planType: "MAJ",
+      reqTerm: "2238",
       capturedAt: 42,
     });
     expect(audit?.groups[0]).toMatchObject({
@@ -101,14 +103,20 @@ describe("parseDegreeDetailsResponse", () => {
     });
     expect(audit?.groups[0].lines[0]).toEqual({
       status: "C",
-      courseId: "123",
+      courseId: "000123",
+      offeringNumber: "1",
       subject: "TST",
       catalogNbr: "101",
       title: "Intro Testing",
       term: "Fall '23",
+      termCode: "2238",
       grade: "A",
       units: 3,
       requirement: "",
+      requirementId: "",
+      isExceptionRequirement: "",
+      multipleUse: "N",
+      note: "",
     });
     expect(audit?.version).toBe(DEGREE_AUDIT_VERSION);
     expect(audit?.groups[1]).toMatchObject({ id: "26080", minUnits: 120 });
@@ -121,6 +129,11 @@ describe("parseDegreeDetailsResponse", () => {
 });
 
 describe("groupStatus", () => {
+  it("labels the curriculum term independently of the registration semester", () => {
+    expect(requisiteTermLabel("2238")).toBe("Fall 2023");
+    expect(requisiteTermLabel("2271")).toBe("Spring 2027");
+    expect(requisiteTermLabel("")).toBe("Unknown");
+  });
   const withStatuses = (...statuses: DegreeAuditLine["status"][]) =>
     statuses.map((status) => ({ status }) as DegreeAuditLine);
 
@@ -139,17 +152,24 @@ describe("findDegreeAudit", () => {
       version: DEGREE_AUDIT_VERSION,
       plan: "P1",
       subplan,
+      reqTerm: "2238",
       capturedAt,
       groups: [],
     }) as unknown as DegreeAudit;
 
-  it("prefers the exact subplan, then the newest audit of the plan", () => {
+  it("requires an unambiguous concentration and requisite term", () => {
     const audits = {
-      [degreeAuditKey("P1", "A")]: audit("A", 1),
-      [degreeAuditKey("P1", "B")]: audit("B", 5),
+      [degreeAuditKey("P1", "A", "2238")]: audit("A", 1),
+      [degreeAuditKey("P1", "B", "2238")]: audit("B", 5),
+      [degreeAuditKey("P1", "A", "2268")]: {
+        ...audit("A", 6),
+        reqTerm: "2268",
+      },
     };
-    expect(findDegreeAudit(audits, "P1", "A")?.subplan).toBe("A");
-    expect(findDegreeAudit(audits, "P1", "C")?.subplan).toBe("B");
+    expect(findDegreeAudit(audits, "P1", "A", "2238")?.capturedAt).toBe(1);
+    expect(findDegreeAudit(audits, "P1", "A")).toBeNull();
+    expect(findDegreeAudit(audits, "P1", "C")).toBeNull();
+    expect(findDegreeAudit(audits, "P1", "B", "9999")).toBeNull();
     expect(findDegreeAudit(audits, "P2")).toBeNull();
   });
 });
@@ -177,7 +197,10 @@ describe("storeDegreeDetailsResponse", () => {
 
   it("stores audits by plan and keeps other plans", async () => {
     storage[DEGREE_AUDITS_STORAGE_KEY] = {
-      "OTHER|NOSUBPLAN": { version: DEGREE_AUDIT_VERSION, plan: "OTHER" },
+      "OTHER|NOSUBPLAN|2238": {
+        ...parseDegreeDetailsResponse(html, url),
+        plan: "OTHER",
+      },
       // Stored by an older version; dropped so it gets refetched.
       "OLD|NOSUBPLAN": { plan: "OLD" },
     };
@@ -186,9 +209,18 @@ describe("storeDegreeDetailsResponse", () => {
 
     const audits = await loadDegreeAudits();
     expect(Object.keys(audits).sort()).toEqual([
-      "99TSTBS|NOSUBPLAN",
-      "OTHER|NOSUBPLAN",
+      "99TSTBS|NOSUBPLAN|2238",
+      "OTHER|NOSUBPLAN|2238",
     ]);
+  });
+
+  it("ignores What-If reports, which aren't one of the student's programs", async () => {
+    await storeDegreeDetailsResponse(
+      html,
+      url.replace("isSaved=Y", "isSaved=N"),
+    );
+    await storeDegreeDetailsResponse(html, url.replace("&isSaved=Y", ""));
+    expect(storage[DEGREE_AUDITS_STORAGE_KEY]).toBeUndefined();
   });
 
   it("ignores non-string or unparseable payloads", async () => {

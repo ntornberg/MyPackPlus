@@ -152,7 +152,9 @@ export function courseStateLookup(
         if (!line.subject) continue;
         const state = auditLineState(line);
         keep(byCode, plannerCourseCode(line.subject, line.catalogNbr), state);
-        if (line.courseId) keep(byId, line.courseId, state);
+        if (line.courseId) {
+          keep(byId, stripLeadingZeros(line.courseId), state);
+        }
       }
     }
   }

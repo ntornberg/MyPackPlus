@@ -1,6 +1,7 @@
 import type { RequiredCourse } from "../types/Plans";
 
 import {
+  isRequirementGroup,
   stripLeadingZeros,
   type AuditLineStatus,
   type DegreeAudit,
@@ -16,6 +17,8 @@ export type CourseAuditState = {
   grade: string;
   /** Planned in Pack Planner but not (yet) on the audit. */
   fromPlanner?: boolean;
+  /** The audit counts this course toward a different requirement. */
+  elsewhere?: boolean;
 };
 
 /** Requirement status shown in the tree; "unknown" when no audit covers it. */
@@ -85,11 +88,25 @@ export function auditGroupsById(
   return groups;
 }
 
+function sameCode(course: RequiredCourse, line: DegreeAuditLine): boolean {
+  return (
+    line.subject.toUpperCase() === course.course_abr.toUpperCase() &&
+    normalizedCatalog(line.catalogNbr) === normalizedCatalog(course.catalog_num)
+  );
+}
+
+function sameId(course: RequiredCourse, line: DegreeAuditLine): boolean {
+  const courseId = stripLeadingZeros(course.course_id);
+  return courseId !== "" && stripLeadingZeros(line.courseId) === courseId;
+}
+
 /**
- * Matches a requirement's catalog courses to the audit's applied courses, by
- * course id or, failing that, subject and catalog number. Courses the audit
- * doesn't cover but Pack Planner has are marked planned, so a plan edit shows
- * up before the audit is rerun.
+ * Matches a requirement's courses to the audit's applied courses. A line goes
+ * to the course with its exact subject and number; only when that course
+ * isn't listed does a shared course id (a cross-listing or a renumbering)
+ * claim it, so CSC 406 being planned doesn't mark ECE 406 and CSC 506 too.
+ * Courses the audit doesn't cover but Pack Planner has are marked planned,
+ * so a plan edit shows up before the audit is rerun.
  */
 export function requirementProgress(
   requirementId: string,
@@ -102,38 +119,60 @@ export function requirementProgress(
   const appliedLines = (group?.lines ?? []).filter(
     (line) => line.courseId || line.subject,
   );
-  const matchedLines = new Set<DegreeAuditLine>();
+  const lineFor = new Map<RequiredCourse, DegreeAuditLine>();
+  for (const line of appliedLines) {
+    const target =
+      catalogCourses.find((course) => sameCode(course, line)) ??
+      catalogCourses.find((course) => sameId(course, line));
+    // A repeated course keeps its first attempt; later ones are listed apart.
+    if (target && !lineFor.has(target)) {
+      lineFor.set(target, line);
+    }
+  }
+  const matchedLines = new Set(lineFor.values());
+  const counted = (l: DegreeAuditLine) =>
+    l.status === "C" || l.status === "E" || l.status === "P";
   // Every course the audit counts anywhere; Pack Planner rows for those
   // (e.g. this term's enrolled classes) aren't "planned" here.
   const auditedLines = [...groups.values()].flatMap((g) =>
-    g.lines.filter(
-      (l) => l.status === "C" || l.status === "E" || l.status === "P",
-    ),
+    g.lines.filter(counted),
   );
+  // Counted toward another requirement (not just the units total).
+  const elsewhereLines = [...groups.values()]
+    .filter((g) => g !== group && isRequirementGroup(g))
+    .flatMap((g) => g.lines.filter(counted));
   let plannerOnly = 0;
   for (const course of catalogCourses) {
-    const courseId = stripLeadingZeros(course.course_id);
-    const matches = (l: DegreeAuditLine) =>
-      (courseId !== "" && l.courseId === courseId) ||
-      (l.subject.toUpperCase() === course.course_abr.toUpperCase() &&
-        normalizedCatalog(l.catalogNbr) ===
-          normalizedCatalog(course.catalog_num));
-    const line =
-      appliedLines.find((l) => courseId && l.courseId === courseId) ??
-      appliedLines.find(matches);
-    if (line) {
-      matchedLines.add(line);
-    }
+    const line = lineFor.get(course);
     const state = line ? auditLineState(line) : null;
     if (state && state.status !== "other") {
       courses.set(courseKeyOf(course), state);
       continue;
     }
+    const elsewhere = elsewhereLines.find((l) => sameCode(course, l));
+    if (elsewhere) {
+      courses.set(courseKeyOf(course), {
+        ...auditLineState(elsewhere),
+        elsewhere: true,
+      });
+      continue;
+    }
+    // Ids are shared by cross-listings, so only trust one no other listed
+    // course shares.
+    const idIsUnique =
+      catalogCourses.filter(
+        (other) =>
+          stripLeadingZeros(other.course_id) ===
+          stripLeadingZeros(course.course_id),
+      ).length === 1;
     const plannedTerm =
-      planner && !auditedLines.some(matches)
+      planner &&
+      !auditedLines.some(
+        (l) => sameCode(course, l) || (idIsUnique && sameId(course, l)),
+      )
         ? plannedTermFor(
             planner,
-            course.course_id,
+            idIsUnique ? course.course_id : "",
             course.course_abr,
             course.catalog_num,
           )

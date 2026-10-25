@@ -1,4 +1,4 @@
-import { useCallback, useMemo, memo } from "react";
+import { useCallback, useMemo, memo, useState, useRef, useEffect } from "react";
 
 import {
   Field,
@@ -6,8 +6,22 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import { findDegreeAudit } from "../../../degree-planning/services/degreeAudit";
+import catalogSources from "../../../../docs/research/ncsu-major-requirement-sources.json";
+import {
+  auditRequirementEntries,
+  choiceErrors,
+} from "../../../degree-planning/services/auditRequirements";
+import {
+  auditKey,
+  findDegreeAudit,
+  isOpenGroup,
+  requisiteTermLabel,
+  type DegreeAudit,
+} from "../../../degree-planning/services/degreeAudit";
+import { plannerCourseCode } from "../../../degree-planning/services/packPlanner";
+import { loadRequirementChoices } from "../../../degree-planning/services/requirementChoices";
 import {
   auditGroupsById,
   degreeUnitsProgress,
@@ -49,6 +63,8 @@ import {
 
 import { CourseSectionsCardList } from "./CourseSectionsCardList";
 import { RequirementTree, type RequirementTreeEntry } from "./RequirementTree";
+
+const EMPTY_COURSES: Record<string, MergedCourseData> = {};
 
 const CourseDisplay = memo(
   ({
@@ -129,16 +145,96 @@ export default function MajorPlanSearch({
   const major_options = useMemo(() => Object.keys(majorPlans), []);
   const minor_options = useMemo(() => Object.keys(minorPlans), []);
   const portalContainer = useOverlayPortalContainer();
+  const planningData = usePlanningData();
+  const personal =
+    (majorPlanSearchData.planSource ?? "personal") === "personal";
+  const auditOptions = useMemo(
+    () =>
+      Object.values(planningData.audits).map((audit) => ({
+        audit,
+        key: auditKey(audit),
+        label: `${audit.name || audit.plan} · ${audit.subplan} · ${requisiteTermLabel(audit.reqTerm)}`,
+      })),
+    [planningData.audits],
+  );
+  const selectedAuditKey =
+    majorPlanSearchData.selectedAudit || auditOptions[0]?.key;
+  const selectedAudit = auditOptions.find(
+    (option) => option.key === selectedAuditKey,
+  )?.audit;
+  const personalContext = `${selectedAuditKey}|${selectedAudit?.capturedAt}|${majorPlanSearchData.selectedTerm}`;
+  const [personalResult, setPersonalResult] = useState<{
+    context: string;
+    courses: Record<string, MergedCourseData>;
+  } | null>(null);
+  const [personalBusy, setPersonalBusy] = useState(false);
+  const [personalProgress, setPersonalProgress] = useState("");
+  const [personalError, setPersonalError] = useState<string | null>(null);
+  const personalRequest = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    personalRequest.current++;
+    setPersonalBusy(false);
+    setPersonalError(null);
+  }, [personalContext, personal]);
+  const personalSearched = personalResult?.context === personalContext;
+  const activeOpenCourses = personal
+    ? personalSearched
+      ? personalResult.courses
+      : EMPTY_COURSES
+    : majorPlanSearchData.openCourses;
+  const storedChoices = selectedAuditKey
+    ? planningData.choices[selectedAuditKey]
+    : undefined;
+  const personalChoices =
+    selectedAudit && storedChoices?.auditCapturedAt === selectedAudit.capturedAt
+      ? storedChoices
+      : undefined;
+
+  // Load approved choices for the program's open groups as soon as it's
+  // shown. Keyed by audit identity, not object: storage reloads hand back new
+  // objects, and the load itself writes storage.
+  const selectedAuditRef = useRef<DegreeAudit | undefined>(selectedAudit);
+  selectedAuditRef.current = selectedAudit;
+  const choicesLoadKey =
+    personal && selectedAudit
+      ? `${auditKey(selectedAudit)}|${selectedAudit.capturedAt}`
+      : null;
+  useEffect(() => {
+    const audit = selectedAuditRef.current;
+    if (choicesLoadKey && audit) {
+      loadRequirementChoices(audit).catch(() => undefined);
+    }
+  }, [choicesLoadKey]);
+
+  const personalEntries = useMemo(
+    () =>
+      selectedAudit
+        ? auditRequirementEntries(selectedAudit, personalChoices)
+        : [],
+    [selectedAudit, personalChoices],
+  );
+  const personalGroups = useMemo(
+    () => auditGroupsById(selectedAudit ? [selectedAudit] : []),
+    [selectedAudit],
+  );
+  const personalChoiceErrors = useMemo(
+    () => (selectedAudit ? choiceErrors(selectedAudit, personalChoices) : []),
+    [selectedAudit, personalChoices],
+  );
   const scheduleBackground = useScheduleBackgroundEvents(
     majorPlanSearchData.selectedTerm,
   );
 
   const planInstructorOptions = useMemo(() => {
     const names = new Set<string>();
-    const courses = majorPlanSearchData.openCourses as Record<
-      string,
-      MergedCourseData
-    >;
+    const courses = activeOpenCourses as Record<string, MergedCourseData>;
     for (const c of Object.values(courses)) {
       if (!c?.sections) {
         continue;
@@ -155,19 +251,24 @@ export default function MajorPlanSearch({
       }
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [majorPlanSearchData.openCourses]);
+  }, [activeOpenCourses]);
   const subplanOptions = majorPlanSearchData.selectedMajor
     ? Object.keys(
         majorPlans[majorPlanSearchData.selectedMajor as keyof typeof majorPlans]
           ?.subplans || {},
       )
     : [];
-  const isSearchDisabled =
-    !majorPlanSearchData.selectedTerm ||
-    !(
-      majorPlanSearchData.selectedMinor ||
-      (majorPlanSearchData.selectedMajor && majorPlanSearchData.selectedSubplan)
-    );
+  const isSearchDisabled = personal
+    ? !selectedAudit ||
+      !majorPlanSearchData.selectedTerm ||
+      personalBusy ||
+      planningData.sync.status === "syncing"
+    : !majorPlanSearchData.selectedTerm ||
+      !(
+        majorPlanSearchData.selectedMinor ||
+        (majorPlanSearchData.selectedMajor &&
+          majorPlanSearchData.selectedSubplan)
+      );
 
   const handleTermChange = useCallback(
     (value: string | null) => {
@@ -215,6 +316,67 @@ export default function MajorPlanSearch({
   );
 
   const runMajorPlanSearch = async () => {
+    if (personal) {
+      if (!selectedAudit || !majorPlanSearchData.selectedTerm) return;
+      const request = ++personalRequest.current;
+      setPersonalBusy(true);
+      setPersonalError(null);
+      setPersonalProgress("Loading approved choices from MyPack…");
+      onPreviewSectionChange(null);
+      try {
+        const choices = await loadRequirementChoices(selectedAudit);
+        if (!mounted.current || request !== personalRequest.current) return;
+        // Only groups that still need something; finished ones need no sections.
+        const openIds = new Set(
+          selectedAudit.groups.filter(isOpenGroup).map((group) => group.id),
+        );
+        const courses = new Map<string, RequiredCourse>();
+        for (const entry of auditRequirementEntries(selectedAudit, choices)) {
+          if (!openIds.has(entry.requirementId)) continue;
+          for (const course of entry.courses) {
+            courses.set(
+              plannerCourseCode(course.course_abr, course.catalog_num),
+              course,
+            );
+          }
+        }
+        const data = courses.size
+          ? await fetchCourseSearchData(
+              [
+                {
+                  id: "personal",
+                  min_units: 0,
+                  courses: [...courses.values()],
+                },
+              ],
+              majorPlanSearchData.selectedTerm,
+              (_progress, message) => {
+                if (
+                  mounted.current &&
+                  request === personalRequest.current &&
+                  message
+                )
+                  setPersonalProgress(message);
+              },
+              (message) => {
+                if (mounted.current && request === personalRequest.current)
+                  setPersonalError(message);
+              },
+            )
+          : null;
+        if (mounted.current && request === personalRequest.current)
+          setPersonalResult({ context: personalContext, courses: data ?? {} });
+      } catch (error) {
+        if (mounted.current && request === personalRequest.current)
+          setPersonalError(`Couldn't load sections: ${String(error)}`);
+      } finally {
+        if (mounted.current && request === personalRequest.current) {
+          setPersonalBusy(false);
+          setPersonalProgress("");
+        }
+      }
+      return;
+    }
     onPreviewSectionChange(null);
     setMajorPlanSearchTabData({
       progress: 10,
@@ -381,21 +543,20 @@ export default function MajorPlanSearch({
     } as Record<string, Requirement>;
   }, [selectedPlans, majorPlanSearchData.selectedTerm]);
 
-  const planningData = usePlanningData();
-  const degreeAudits = planningData.audits;
-  const { majorAudit, auditGroups } = useMemo(() => {
+  const exploreAudit = useMemo(() => {
     const { major_data, subplan_data, minor_data } = selectedPlans;
+    const audits = planningData.audits;
     const majorAudit = subplan_data
-      ? findDegreeAudit(degreeAudits, major_data?.id, subplan_data.id)
+      ? findDegreeAudit(audits, major_data?.id, subplan_data.id)
       : null;
     const minorAudit = minor_data
-      ? findDegreeAudit(degreeAudits, minor_data.id)
+      ? findDegreeAudit(audits, minor_data.id)
       : null;
     return {
       majorAudit,
-      auditGroups: auditGroupsById([majorAudit, minorAudit]),
+      groups: auditGroupsById([majorAudit, minorAudit]),
     };
-  }, [degreeAudits, selectedPlans]);
+  }, [planningData.audits, selectedPlans]);
 
   const treeEntries = useMemo(
     (): RequirementTreeEntry[] =>
@@ -415,7 +576,7 @@ export default function MajorPlanSearch({
     (course: RequiredCourse) => (
       <CourseDisplay
         course={course}
-        openCourses={majorPlanSearchData.openCourses}
+        openCourses={activeOpenCourses}
         onPreviewSectionChange={onPreviewSectionChange}
         selectedPreviewId={selectedPreviewId}
         scheduleBackground={scheduleBackground}
@@ -425,7 +586,7 @@ export default function MajorPlanSearch({
       />
     ),
     [
-      majorPlanSearchData.openCourses,
+      activeOpenCourses,
       majorPlanSearchData.instructorFilter,
       majorPlanSearchData.sortMode,
       majorPlanSearchData.compactSections,
@@ -442,6 +603,23 @@ export default function MajorPlanSearch({
       description="Open requirement groups, compare live sections, and keep schedule context visible while you browse."
     >
       <FieldGroup>
+        <ToggleGroup
+          type="single"
+          aria-label="Requirement source"
+          value={personal ? "personal" : "explore"}
+          onValueChange={(source) => {
+            if (source === "personal" || source === "explore") {
+              setMajorPlanSearchTabData({
+                planSource: source,
+                instructorFilter: null,
+              });
+              onPreviewSectionChange(null);
+            }
+          }}
+        >
+          <ToggleGroupItem value="personal">My requirements</ToggleGroupItem>
+          <ToggleGroupItem value="explore">Explore majors</ToggleGroupItem>
+        </ToggleGroup>
         <Field>
           <FieldLabel htmlFor="term_selector">Term</FieldLabel>
           <PlannerFilterCombobox
@@ -453,40 +631,101 @@ export default function MajorPlanSearch({
             portalContainer={portalContainer}
           />
         </Field>
-        <Field>
-          <FieldLabel htmlFor="major_selector">Major</FieldLabel>
-          <PlannerFilterCombobox
-            items={major_options}
-            value={majorPlanSearchData.selectedMajor}
-            onValueChange={handleMajorChange}
-            placeholder="Select major"
-            emptyLabel="No majors found."
-            portalContainer={portalContainer}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="minor_selector">Minor</FieldLabel>
-          <PlannerFilterCombobox
-            items={minor_options}
-            value={majorPlanSearchData.selectedMinor}
-            onValueChange={handleMinorChange}
-            placeholder="Select minor"
-            emptyLabel="No minors found."
-            portalContainer={portalContainer}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="subplan_selector">Subplan</FieldLabel>
-          <PlannerFilterCombobox
-            items={subplanOptions}
-            value={majorPlanSearchData.selectedSubplan}
-            onValueChange={handleSubplanChange}
-            placeholder="Select subplan"
-            emptyLabel="No subplans found."
-            disabled={!majorPlanSearchData.selectedMajor}
-            portalContainer={portalContainer}
-          />
-        </Field>
+        {personal ? (
+          <Field>
+            <FieldLabel>My program</FieldLabel>
+            <PlannerFilterCombobox
+              items={auditOptions.map((option) => option.label)}
+              value={
+                auditOptions.find((option) => option.key === selectedAuditKey)
+                  ?.label ?? null
+              }
+              onValueChange={(value) => {
+                setMajorPlanSearchTabData({
+                  selectedAudit:
+                    auditOptions.find((option) => option.label === value)
+                      ?.key ?? null,
+                  instructorFilter: null,
+                });
+                onPreviewSectionChange(null);
+              }}
+              placeholder="Select your program"
+              emptyLabel="Refresh your degree audit in MyPack."
+              portalContainer={portalContainer}
+            />
+            {!selectedAudit ? (
+              <FieldDescription>
+                Open MyPack, sign in, then refresh to load your major and minor
+                audits.
+              </FieldDescription>
+            ) : null}
+          </Field>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Unverified bundled requirements. These course lists are for
+              exploration and do not determine your personal progress.
+            </p>
+            <a
+              className="text-sm text-primary underline"
+              href="https://catalog.ncsu.edu/undergraduate/#majorstext"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Official NC State catalog · {catalogSources.catalog}
+            </a>
+            {(
+              catalogSources.entries.find(
+                (entry) => entry.major === majorPlanSearchData.selectedMajor,
+              )?.catalogUrls ?? []
+            ).map((url) => (
+              <a
+                key={url}
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="break-words text-xs text-primary underline"
+              >
+                {url.split("/").filter(Boolean).at(-1)?.replaceAll("-", " ")} ·
+                official catalog reference
+              </a>
+            ))}
+            <Field>
+              <FieldLabel htmlFor="major_selector">Major</FieldLabel>
+              <PlannerFilterCombobox
+                items={major_options}
+                value={majorPlanSearchData.selectedMajor}
+                onValueChange={handleMajorChange}
+                placeholder="Select major"
+                emptyLabel="No majors found."
+                portalContainer={portalContainer}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="minor_selector">Minor</FieldLabel>
+              <PlannerFilterCombobox
+                items={minor_options}
+                value={majorPlanSearchData.selectedMinor}
+                onValueChange={handleMinorChange}
+                placeholder="Select minor"
+                emptyLabel="No minors found."
+                portalContainer={portalContainer}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="subplan_selector">Subplan</FieldLabel>
+              <PlannerFilterCombobox
+                items={subplanOptions}
+                value={majorPlanSearchData.selectedSubplan}
+                onValueChange={handleSubplanChange}
+                placeholder="Select subplan"
+                emptyLabel="No subplans found."
+                disabled={!majorPlanSearchData.selectedMajor}
+                portalContainer={portalContainer}
+              />
+            </Field>
+          </>
+        )}
         <Field>
           <FieldLabel htmlFor="plan_instructor_filter">Instructor</FieldLabel>
           <PlannerFilterCombobox
@@ -524,7 +763,17 @@ export default function MajorPlanSearch({
           }
         />
       </FieldGroup>
-      {!majorPlanSearchData.isLoaded ? (
+      {personal && personalProgress ? (
+        <p role="status" className="mt-3 text-sm text-muted-foreground">
+          {personalProgress}
+        </p>
+      ) : null}
+      {personalError ? (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          {personalError}
+        </p>
+      ) : null}
+      {!personal && !majorPlanSearchData.isLoaded ? (
         <div className="mt-4 flex w-full justify-center">
           <CircularProgressWithLabel
             value={majorPlanSearchData.progress}
@@ -548,16 +797,59 @@ export default function MajorPlanSearch({
         />
       }
     >
-      {hasMajorPlanSearchRun && treeEntries.length > 0 ? (
+      {personal ? (
+        selectedAudit ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground">
+              {selectedAudit.name || selectedAudit.plan} ·{" "}
+              {requisiteTermLabel(selectedAudit.reqTerm)} catalog · from your
+              MyPack degree audit
+            </p>
+            {personalChoiceErrors.length > 0 ? (
+              <p role="status" className="text-sm text-destructive">
+                Some approved-course lists couldn&apos;t load from MyPack.
+                Refresh to retry.
+              </p>
+            ) : null}
+            <RequirementTree
+              key={auditKey(selectedAudit)}
+              entries={personalEntries}
+              auditGroups={personalGroups}
+              hasAudit
+              planner={planningData.planner}
+              sync={planningData.sync}
+              syncedAt={planningData.syncedAt}
+              onRefresh={planningData.refresh}
+              units={degreeUnitsProgress(selectedAudit)}
+              openCourses={activeOpenCourses}
+              scheduleBackground={scheduleBackground}
+              hideNoSections={
+                personalSearched &&
+                (majorPlanSearchData.hideNoSections ?? false)
+              }
+              sectionsSearched={personalSearched}
+              filter={majorPlanSearchData.requirementFilter ?? "needed"}
+              onFilterChange={(value) =>
+                setMajorPlanSearchTabData("requirementFilter", value)
+              }
+              renderSections={renderSections}
+            />
+          </div>
+        ) : (
+          <p className="p-3 text-sm text-muted-foreground">
+            Your live degree audit will appear here after syncing from MyPack.
+          </p>
+        )
+      ) : hasMajorPlanSearchRun && treeEntries.length > 0 ? (
         <RequirementTree
           entries={treeEntries}
-          auditGroups={auditGroups}
-          hasAudit={auditGroups.size > 0}
+          auditGroups={exploreAudit.groups}
+          hasAudit={exploreAudit.groups.size > 0}
           planner={planningData.planner}
           sync={planningData.sync}
           syncedAt={planningData.syncedAt}
           onRefresh={planningData.refresh}
-          units={degreeUnitsProgress(majorAudit)}
+          units={degreeUnitsProgress(exploreAudit.majorAudit)}
           openCourses={
             majorPlanSearchData.openCourses as Record<string, MergedCourseData>
           }

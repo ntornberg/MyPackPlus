@@ -16,6 +16,11 @@ import {
   PLANNING_SYNCED_AT_KEY,
   syncPlanningData,
 } from "../../../degree-planning/services/planningSync";
+import {
+  loadStoredRequirementChoices,
+  REQUIREMENT_CHOICES_STORAGE_KEY,
+  type StoredRequirementChoices,
+} from "../../../degree-planning/services/requirementChoices";
 
 export type PlanningSyncState =
   | { status: "idle" }
@@ -24,6 +29,7 @@ export type PlanningSyncState =
 
 export type PlanningData = {
   audits: DegreeAudits;
+  choices: StoredRequirementChoices;
   plannerTerms: PlannerTerms;
   planner: PlannerIndex | null;
   syncedAt: number | null;
@@ -36,6 +42,7 @@ const WATCHED_KEYS = [
   DEGREE_AUDITS_STORAGE_KEY,
   PACK_PLANNER_STORAGE_KEY,
   PLANNING_SYNCED_AT_KEY,
+  REQUIREMENT_CHOICES_STORAGE_KEY,
 ];
 
 /**
@@ -45,21 +52,25 @@ const WATCHED_KEYS = [
  */
 export function usePlanningData(): PlanningData {
   const [audits, setAudits] = useState<DegreeAudits>({});
+  const [choices, setChoices] = useState<StoredRequirementChoices>({});
   const [plannerTerms, setPlannerTerms] = useState<PlannerTerms>({});
   const [syncedAt, setSyncedAt] = useState<number | null>(null);
   const [sync, setSync] = useState<PlanningSyncState>({ status: "idle" });
 
   const reload = useCallback(async () => {
-    const [loadedAudits, loadedTerms, stored] = await Promise.all([
-      loadDegreeAudits(),
-      loadPlannerTerms(),
-      typeof chrome !== "undefined" && chrome.storage?.local
-        ? chrome.storage.local.get(PLANNING_SYNCED_AT_KEY)
-        : Promise.resolve({} as Record<string, unknown>),
-    ]);
+    const [loadedAudits, loadedTerms, stored, loadedChoices] =
+      await Promise.all([
+        loadDegreeAudits(),
+        loadPlannerTerms(),
+        typeof chrome !== "undefined" && chrome.storage?.local
+          ? chrome.storage.local.get(PLANNING_SYNCED_AT_KEY)
+          : Promise.resolve({} as Record<string, unknown>),
+        loadStoredRequirementChoices(),
+      ]);
     const at = stored[PLANNING_SYNCED_AT_KEY];
     return {
       audits: loadedAudits,
+      choices: loadedChoices,
       terms: loadedTerms,
       syncedAt: typeof at === "number" ? at : null,
     };
@@ -87,6 +98,7 @@ export function usePlanningData(): PlanningData {
         .then((loaded) => {
           if (!cancelled) {
             setAudits(loaded.audits);
+            setChoices(loaded.choices);
             setPlannerTerms(loaded.terms);
             setSyncedAt(loaded.syncedAt);
           }
@@ -125,5 +137,5 @@ export function usePlanningData(): PlanningData {
   );
   const refresh = useCallback(() => runSync(true), [runSync]);
 
-  return { audits, plannerTerms, planner, syncedAt, sync, refresh };
+  return { audits, choices, plannerTerms, planner, syncedAt, sync, refresh };
 }

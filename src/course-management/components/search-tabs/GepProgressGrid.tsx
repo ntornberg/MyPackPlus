@@ -8,12 +8,11 @@ import { STATUS_META } from "./RequirementTree";
 function categoryDetail(progress: GepCategoryProgress): string {
   switch (progress.status) {
     case "complete":
+    case "enrolled":
       return progress.lines
         .filter((line) => line.subject)
         .map((line) => `${line.subject} ${line.catalogNbr}`)
         .join(", ");
-    case "enrolled":
-      return "In progress";
     case "planned":
       return progress.plannedTerm
         ? `In Pack Planner · ${progress.plannedTerm}`

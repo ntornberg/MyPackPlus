@@ -2,24 +2,30 @@ import { AppLogger } from "../../utils/logger";
 
 import {
   degreeDetailsQuery,
+  loadDegreeAudits,
   parseDegreeDetailsResponse,
   parseDegreePrograms,
   storeDegreeAudits,
   type DegreeAudit,
 } from "./degreeAudit";
 import {
+  PLANNING_SYNC_MAX_AGE,
+  peopleSoftScriptBase,
+  fetchMyPackText as fetchText,
+} from "./myPackClient";
+import {
   parsePlannerTermDetails,
   parsePlannerTermList,
   storePlannerTerms,
   type PlannerTerm,
 } from "./packPlanner";
+import { loadRequirementChoices } from "./requirementChoices";
 
 /** chrome.storage key: when audits and Pack Planner were last fetched in full. */
 export const PLANNING_SYNCED_AT_KEY = "planningDataSyncedAt";
 
 /** How long a full sync stays fresh before opening the planner fetches again. */
-export const PLANNING_SYNC_MAX_AGE = 60 * 60 * 1000;
-
+export { PLANNING_SYNC_MAX_AGE, peopleSoftScriptBase } from "./myPackClient";
 const AUDIT_SCRIPT = "WEBLIB_DEGAUDIT.ISCRIPT1.FieldFormula.";
 const PLANNER_SCRIPT = "WEBLIB_PLANNER.ISCRIPT1.FieldFormula.";
 
@@ -28,32 +34,6 @@ export type PlanningSyncResult =
   | { status: "fresh" }
   | { status: "unavailable" }
   | { status: "failed"; message: string };
-
-/**
- * The PeopleSoft script path for this page, e.g. "/psc/CS92PRD/EMPLOYEE/NCSIS/s/".
- * Only MyPack's portal serves the audit and planner scripts with the
- * student's session; elsewhere this is null.
- */
-export function peopleSoftScriptBase(
-  location: Pick<Location, "hostname" | "pathname">,
-): string | null {
-  if (location.hostname !== "portalsp.acs.ncsu.edu") {
-    return null;
-  }
-  // Same parsing the audit page uses: site names may carry a "_28" node suffix.
-  const match = location.pathname.match(
-    /^\/ps[pc]\/([^/]+?)(?:_\d+)?\/([^/]+)\/([^/]+)\/[chs]\//,
-  );
-  return match ? `/psc/${match[1]}/${match[2]}/${match[3]}/s/` : null;
-}
-
-async function fetchText(url: string): Promise<string> {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) {
-    throw new Error(`${response.status} from ${url.split("?")[0]}`);
-  }
-  return response.text();
-}
 
 async function fetchAudits(base: string): Promise<DegreeAudit[]> {
   const shell = await fetchText(`${base}${AUDIT_SCRIPT}IScript_DegreeAudit`);
@@ -68,7 +48,7 @@ async function fetchAudits(base: string): Promise<DegreeAudit[]> {
       if (!audit) {
         throw new Error(`No report for ${program.acad_plan}`);
       }
-      return audit;
+      return { ...audit, name: program.descr || program.acad_plan };
     }),
   );
 }
@@ -137,6 +117,7 @@ export function syncPlanningData({
     if (
       !force &&
       syncedAt !== null &&
+      Object.keys(await loadDegreeAudits()).length > 0 &&
       now() - syncedAt < PLANNING_SYNC_MAX_AGE
     ) {
       return { status: "fresh" };
@@ -155,6 +136,20 @@ export function syncPlanningData({
     const failures = [audits, terms].flatMap((result) =>
       result.status === "rejected" ? [String(result.reason)] : [],
     );
+    if (force && audits.status === "fulfilled") {
+      for (const audit of audits.value) {
+        const choices = await loadRequirementChoices(audit, {
+          force: true,
+          location,
+          now,
+        });
+        failures.push(
+          ...Object.values(choices.results).flatMap((result) =>
+            result.error ? [result.error] : [],
+          ),
+        );
+      }
+    }
     if (failures.length > 0) {
       AppLogger.warn("Planning data sync incomplete:", failures);
       return { status: "failed", message: failures.join("; ") };

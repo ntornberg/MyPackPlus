@@ -7,7 +7,13 @@ import {
   Info,
   RefreshCw,
 } from "lucide-react";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +59,8 @@ type CourseRowModel = {
   fitCount: number;
   /** null when the schedule is unknown, so fit can't be judged. */
   scheduleKnown: boolean;
+  /** False until sections were searched; availability is unknown before. */
+  searched: boolean;
 };
 
 type RequirementModel = {
@@ -64,6 +72,9 @@ type RequirementModel = {
   /** Still-needed courses with a section that fits the schedule. */
   fitting: number;
 };
+
+/** Still-needed options shown before "Show more". */
+const OPTION_LIMIT = 12;
 
 const isNeeded = (row: CourseRowModel) =>
   !row.audit || row.audit.status === "other";
@@ -91,6 +102,7 @@ function buildCourseRow(
   audit: CourseAuditState | null,
   openCourses: Record<string, MergedCourseData>,
   scheduleBackground: ScheduleEvent[] | null,
+  searched: boolean,
 ): CourseRowModel {
   const key = courseKeyOf(course);
   const sections = Object.values(openCourses[key]?.sections ?? {});
@@ -113,6 +125,7 @@ function buildCourseRow(
     openCount,
     fitCount,
     scheduleKnown: scheduleBackground !== null,
+    searched,
   };
 }
 
@@ -174,7 +187,12 @@ const AUDIT_CHIP: Record<
 export function AuditChip({ state }: { state: CourseAuditState }) {
   const chip = state.fromPlanner
     ? { ...AUDIT_CHIP.planned, label: "In Pack Planner" }
-    : AUDIT_CHIP[state.status];
+    : state.elsewhere
+      ? {
+          className: "bg-muted text-muted-foreground",
+          label: `${AUDIT_CHIP[state.status].label} elsewhere`,
+        }
+      : AUDIT_CHIP[state.status];
   const detail = [state.grade, state.term].filter(Boolean).join(" · ");
   return (
     <Badge className={chip.className}>
@@ -185,6 +203,9 @@ export function AuditChip({ state }: { state: CourseAuditState }) {
 }
 
 function AvailabilityChips({ row }: { row: CourseRowModel }) {
+  if (!row.searched) {
+    return null;
+  }
   if (row.sectionCount === 0) {
     return (
       <span className="text-xs text-muted-foreground">
@@ -321,6 +342,19 @@ function RequirementRow({
   const { entry, progress, courses } = model;
   const meta = STATUS_META[progress.status];
   const StatusIcon = meta.icon;
+  // Approved lists can run to hundreds of options; show the best first.
+  const [showAllOptions, setShowAllOptions] = useState(false);
+  const options = courses.filter(isNeeded);
+  const hiddenOptions = showAllOptions
+    ? 0
+    : Math.max(0, options.length - OPTION_LIMIT);
+  const visibleCourses =
+    hiddenOptions > 0
+      ? [
+          ...options.slice(0, OPTION_LIMIT),
+          ...courses.filter((row) => !isNeeded(row)),
+        ]
+      : courses;
 
   return (
     <details className="plan-req-disclosure overflow-hidden rounded-lg border border-border bg-card/50 shadow-sm">
@@ -367,16 +401,29 @@ function RequirementRow({
         </span>
       </summary>
       <div className="border-t border-border">
-        {courses.map((row) => {
+        {visibleCourses.map((row, index) => {
+          const showMore =
+            hiddenOptions > 0 && index === OPTION_LIMIT - 1 ? (
+              <button
+                type="button"
+                onClick={() => setShowAllOptions(true)}
+                className="w-full border-t border-border px-4 py-2 text-left text-xs text-primary hover:bg-muted/50"
+              >
+                Show {hiddenOptions} more{" "}
+                {hiddenOptions === 1 ? "option" : "options"}
+              </button>
+            ) : null;
           const id = `${entry.requirementKey}|${row.id}`;
           return (
-            <CourseRow
-              key={id}
-              row={row}
-              expanded={expandedCourses.has(id)}
-              onToggle={() => onToggleCourse(id)}
-              renderSections={renderSections}
-            />
+            <Fragment key={id}>
+              <CourseRow
+                row={row}
+                expanded={expandedCourses.has(id)}
+                onToggle={() => onToggleCourse(id)}
+                renderSections={renderSections}
+              />
+              {showMore}
+            </Fragment>
           );
         })}
       </div>
@@ -494,6 +541,7 @@ export function RequirementTree({
   openCourses,
   scheduleBackground,
   hideNoSections,
+  sectionsSearched = true,
   filter,
   onFilterChange,
   renderSections,
@@ -509,6 +557,8 @@ export function RequirementTree({
   openCourses: Record<string, MergedCourseData>;
   scheduleBackground: ScheduleEvent[] | null;
   hideNoSections: boolean;
+  /** Whether sections were searched for this term; defaults to true. */
+  sectionsSearched?: boolean;
   filter: RequirementFilter;
   onFilterChange: (filter: RequirementFilter) => void;
   renderSections: (course: RequiredCourse) => ReactNode;
@@ -543,6 +593,7 @@ export function RequirementTree({
               progress.courses.get(courseKeyOf(course)) ?? null,
               openCourses,
               scheduleBackground,
+              sectionsSearched,
             ),
           ),
           ...progress.extraCourses.map((line, index) =>
@@ -552,6 +603,7 @@ export function RequirementTree({
               auditLineState(line),
               openCourses,
               scheduleBackground,
+              sectionsSearched,
             ),
           ),
         ].sort((a, b) => courseRowRank(a) - courseRowRank(b));
@@ -564,7 +616,14 @@ export function RequirementTree({
           fitting: needed.filter((row) => row.fitCount > 0).length,
         };
       }),
-    [entries, auditGroups, planner, openCourses, scheduleBackground],
+    [
+      entries,
+      auditGroups,
+      planner,
+      openCourses,
+      scheduleBackground,
+      sectionsSearched,
+    ],
   );
 
   const visible = useMemo(
@@ -621,11 +680,15 @@ export function RequirementTree({
             />
             <SummaryStat
               label="Offered this term"
-              value={String(offeredNeeds.length)}
+              value={sectionsSearched ? String(offeredNeeds.length) : "—"}
             />
             <SummaryStat
               label="Fit your schedule"
-              value={scheduleBackground ? String(fittingNeeds.length) : "—"}
+              value={
+                sectionsSearched && scheduleBackground
+                  ? String(fittingNeeds.length)
+                  : "—"
+              }
             />
           </div>
         </div>

@@ -97,7 +97,11 @@ describe("dataService null-course cache keys", () => {
     mocks.getGenericCache.mockResolvedValue(null);
     mocks.batchSearchOpenCourses.mockRejectedValueOnce(new Error("HTTP 503"));
 
-    await batchFetchCoursesData([course], "Spring 2025");
+    const onError = vi.fn();
+    await batchFetchCoursesData([course], "Spring 2025", undefined, onError);
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining("Sections unavailable for CSC"),
+    );
 
     expect(mocks.setGenericCache).not.toHaveBeenCalledWith(
       "nullCourses",

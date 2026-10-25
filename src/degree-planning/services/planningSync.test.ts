@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEGREE_AUDITS_STORAGE_KEY } from "./degreeAudit";
+import {
+  personalAuditHtml,
+  requirementFixture,
+} from "./fixtures/personalPlanning";
 import { PACK_PLANNER_STORAGE_KEY } from "./packPlanner";
 import {
   markPlanningDataStale,
@@ -9,6 +13,7 @@ import {
   peopleSoftScriptBase,
   syncPlanningData,
 } from "./planningSync";
+import { REQUIREMENT_CHOICES_STORAGE_KEY } from "./requirementChoices";
 
 const portal = {
   hostname: "portalsp.acs.ncsu.edu",
@@ -93,7 +98,7 @@ describe("syncPlanningData", () => {
       { credentials: "include" },
     );
     expect(Object.keys(storage[DEGREE_AUDITS_STORAGE_KEY] as object)).toEqual([
-      "99TSTBS|NOSUBPLAN",
+      "99TSTBS|NOSUBPLAN|2238",
     ]);
     expect(storage[PACK_PLANNER_STORAGE_KEY]).toMatchObject({
       "2271": { term: "2027 Spring Term" },
@@ -139,5 +144,54 @@ describe("syncPlanningData", () => {
       }),
     ).toEqual({ status: "unavailable" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refetches a legacy audit even when the old sync timestamp is fresh", async () => {
+    storage[PLANNING_SYNCED_AT_KEY] = 1000;
+    storage[DEGREE_AUDITS_STORAGE_KEY] = { old: { version: 2 } };
+    expect(
+      (await syncPlanningData({ location: portal, now: () => 1001 })).status,
+    ).toBe("synced");
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("forced refresh reloads approved choices and retains the audit on partial failure", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("IScript_DegreeAudit")) return respond(shell);
+      if (url.includes("IScript_getDegreeDetails"))
+        return respond(personalAuditHtml);
+      if (url.includes("IScript_getRequirementList")) {
+        const requirement = new URL(
+          url,
+          "https://portalsp.acs.ncsu.edu",
+        ).searchParams.get("requirement")!;
+        return respond(
+          requirement === "000002"
+            ? "<html>Session expired</html>"
+            : JSON.stringify(requirementFixture()),
+        );
+      }
+      return respond(JSON.stringify({ terms: [] }));
+    });
+    const result = await syncPlanningData({
+      location: portal,
+      force: true,
+      now: () => 3000,
+    });
+    expect(result.status).toBe("failed");
+    expect(storage[DEGREE_AUDITS_STORAGE_KEY]).toBeDefined();
+    expect(storage[REQUIREMENT_CHOICES_STORAGE_KEY]).toMatchObject({
+      "99TSTBS|NOSUBPLAN|2238": {
+        results: {
+          "000001|": { list: { minUnits: 6 } },
+          "000002|": { error: expect.stringContaining("Choices unavailable") },
+        },
+      },
+    });
+    expect(
+      fetchMock.mock.calls.filter(([url]) =>
+        url.includes("IScript_getRequirementList"),
+      ),
+    ).toHaveLength(2);
   });
 });

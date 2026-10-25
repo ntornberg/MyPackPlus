@@ -291,6 +291,7 @@ export async function batchFetchCoursesData(
   courses: RequiredCourse[],
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
+  onError?: (message: string) => void,
 ): Promise<Record<string, MergedCourseData>> {
   const result: Record<string, MergedCourseData> = {};
 
@@ -393,6 +394,7 @@ export async function batchFetchCoursesData(
         return { success: true, subject };
       } catch (error) {
         AppLogger.error(`Error fetching course data for ${subject}:`, error);
+        onError?.(`Sections unavailable for ${subject}: ${String(error)}`);
         return { success: false, subject, error };
       }
     });
@@ -601,6 +603,7 @@ export async function fetchCourseSearchData(
   requirements: Requirement[],
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
+  onError?: (message: string) => void,
 ): Promise<Record<string, MergedCourseData> | null> {
   const result: Record<string, MergedCourseData> = {};
 
@@ -626,12 +629,14 @@ export async function fetchCourseSearchData(
           const scaledProgress = 15 + Math.round(progress * 0.8);
           onProgress?.(scaledProgress, statusMessage);
         },
+        onError,
       );
 
       // Copy results to our result object
       Object.assign(result, batchResults);
     } catch (error) {
       AppLogger.error("Error in batch processing:", error);
+      onError?.(`Sections unavailable: ${String(error)}`);
       onProgress?.(95, `Error: ${error}`);
     }
   }

@@ -63,6 +63,8 @@ export const CourseSearchDataInitialState: CourseSearchData = {
 export type RequirementFilter = "needed" | "fits" | "all";
 
 export type MajorPlanSearchData = {
+  planSource?: "personal" | "explore";
+  selectedAudit?: string | null;
   selectedMajor: string | null;
   selectedTerm: string | null;
   selectedMinor: string | null;
@@ -81,6 +83,8 @@ export type MajorPlanSearchData = {
   requirementFilter: RequirementFilter;
 };
 export const MajorPlanSearchDataInitialState: MajorPlanSearchData = {
+  planSource: "personal",
+  selectedAudit: null,
   selectedMajor: null,
   selectedTerm: DEFAULT_TERM,
   selectedMinor: null,

@@ -7,7 +7,7 @@ export const DEGREE_DETAILS_RESPONSE = "IScript_getDegreeDetails";
 export const DEGREE_AUDITS_STORAGE_KEY = "degreeAudits";
 
 /** Bumped when the stored shape changes; older audits are dropped and refetched. */
-export const DEGREE_AUDIT_VERSION = 2;
+export const DEGREE_AUDIT_VERSION = 4;
 
 /**
  * Line status codes used by MyPack's audit page: Complete, Enrolled, Planned
@@ -20,14 +20,20 @@ const KNOWN_STATUSES: readonly AuditLineStatus[] = ["C", "E", "P", "I", "U"];
 export type DegreeAuditLine = {
   status: AuditLineStatus;
   courseId: string;
+  offeringNumber: string;
   subject: string;
   catalogNbr: string;
   title: string;
   term: string;
+  termCode: string;
   grade: string;
   units: number;
   /** The rule the course satisfies, e.g. "Humanities Elective". */
   requirement: string;
+  requirementId: string;
+  isExceptionRequirement: string;
+  multipleUse: string;
+  note: string;
 };
 
 export type DegreeAuditGroup = {
@@ -44,14 +50,53 @@ export type DegreeAudit = {
   plan: string;
   subplan: string;
   planType: string;
+  reqTerm: string;
+  name: string;
   capturedAt: number;
   groups: DegreeAuditGroup[];
 };
 
 export type DegreeAudits = Record<string, DegreeAudit>;
 
-export function degreeAuditKey(plan: string, subplan: string): string {
-  return `${plan}|${subplan}`;
+export function degreeAuditKey(
+  plan: string,
+  subplan: string,
+  reqTerm = "",
+): string {
+  return `${plan}|${subplan}|${reqTerm}`;
+}
+
+export function auditKey(audit: DegreeAudit): string {
+  return degreeAuditKey(audit.plan, audit.subplan, audit.reqTerm);
+}
+
+export function requisiteTermLabel(term: string): string {
+  if (!/^2\d{2}[168]$/.test(term)) return term || "Unknown";
+  const season = { "1": "Spring", "6": "Summer", "8": "Fall" }[term[3]];
+  return `${season} 20${term.slice(1, 3)}`;
+}
+
+/**
+ * Groups that summarize the whole record rather than a requirement: total
+ * units (shown as the units bar) and courses that don't count.
+ */
+const SUMMARY_GROUPS = /^(degree units required|non-degree courses)$/i;
+
+export function isRequirementGroup(group: DegreeAuditGroup): boolean {
+  return !SUMMARY_GROUPS.test(group.name.trim());
+}
+
+/**
+ * Lines MyPack marks as still needing work: unmet or incomplete/late. Planned
+ * and enrolled lines already fill their requirement, as on the audit page.
+ */
+export function isUnmetLine(line: DegreeAuditLine): boolean {
+  return line.status === "U" || line.status === "I";
+}
+
+/** Groups with an unmet requirement, the only ones worth listing alternatives for. */
+export function isOpenGroup(group: DegreeAuditGroup): boolean {
+  return isRequirementGroup(group) && group.lines.some(isUnmetLine);
 }
 
 /** "029111" → "29111"; "" stays "". */
@@ -128,14 +173,20 @@ function parseLine(raw: Record<string, unknown>): DegreeAuditLine {
   const units = Number.parseFloat(text(raw.units));
   return {
     status: KNOWN_STATUSES.includes(status) ? status : "",
-    courseId: stripLeadingZeros(text(raw.crse_id)),
+    courseId: text(raw.crse_id),
+    offeringNumber: text(raw.crse_offer_nbr),
     subject: text(raw.subject),
     catalogNbr: text(raw.catalog_nbr),
     title: text(raw.descr),
     term: text(raw.term_descr),
+    termCode: text(raw.term),
     grade: text(raw.grade),
     units: Number.isFinite(units) ? units : 0,
     requirement: text(raw.req_descr),
+    requirementId: text(raw.requirement),
+    isExceptionRequirement: text(raw.is_exc_req),
+    multipleUse: text(raw.MultipleUse),
+    note: text(raw.note),
   };
 }
 
@@ -187,6 +238,8 @@ export function parseDegreeDetailsResponse(
     plan,
     subplan: params.get("acad_sub_plan")?.trim() || "NOSUBPLAN",
     planType: params.get("acad_plan_type")?.trim() ?? "",
+    reqTerm: params.get("req_term")?.trim() ?? "",
+    name: "",
     capturedAt,
     groups,
   };
@@ -208,7 +261,11 @@ export async function loadDegreeAudits(): Promise<DegreeAudits> {
   }
   return Object.fromEntries(
     Object.entries(stored as DegreeAudits).filter(
-      ([, audit]) => audit?.version === DEGREE_AUDIT_VERSION,
+      ([key, audit]) =>
+        audit?.version === DEGREE_AUDIT_VERSION &&
+        typeof audit.reqTerm === "string" &&
+        Array.isArray(audit.groups) &&
+        key === auditKey(audit),
     ),
   );
 }
@@ -223,7 +280,11 @@ export async function storeDegreeAudits(
   }
   const stored = replace ? {} : await loadDegreeAudits();
   for (const audit of audits) {
-    stored[degreeAuditKey(audit.plan, audit.subplan)] = audit;
+    const key = auditKey(audit);
+    stored[key] = {
+      ...audit,
+      name: audit.name || stored[key]?.name || audit.plan,
+    };
   }
   await chrome.storage.local.set({ [DEGREE_AUDITS_STORAGE_KEY]: stored });
 }
@@ -236,6 +297,11 @@ export async function storeDegreeDetailsResponse(
   if (typeof data !== "string" || typeof url !== "string") {
     return;
   }
+  // What-If reports use the same script with isSaved=N; they describe a
+  // program the student isn't in and must not be stored as one.
+  if (!isSavedReportUrl(url)) {
+    return;
+  }
   const audit = parseDegreeDetailsResponse(data, url);
   if (!audit) {
     AppLogger.warn("Ignoring degree audit response without report data");
@@ -244,8 +310,22 @@ export async function storeDegreeDetailsResponse(
   await storeDegreeAudits([audit]);
 }
 
+/** Whether a report request is for one of the student's programs (not What-If). */
+export function isSavedReportUrl(url: string): boolean {
+  try {
+    return (
+      new URL(url, "https://portalsp.acs.ncsu.edu").searchParams.get(
+        "isSaved",
+      ) === "Y"
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** A program as the audit page lists it; its fields are the report's query parameters. */
 export type DegreeProgram = {
+  descr?: string;
   acad_career: string;
   acad_prog: string;
   acad_plan: string;
@@ -288,7 +368,7 @@ export function parseDegreePrograms(html: string): DegreeProgram[] {
     const program = Object.fromEntries(
       PROGRAM_FIELDS.map((field) => [field, text(degree[field])]),
     ) as DegreeProgram;
-    return program.acad_plan ? [program] : [];
+    return program.acad_plan ? [{ ...program, descr: text(degree.descr) }] : [];
   });
 }
 
@@ -296,30 +376,28 @@ export function parseDegreePrograms(html: string): DegreeProgram[] {
 export function degreeDetailsQuery(program: DegreeProgram): string {
   const params = new URLSearchParams({ includePlanner: "Y", isSaved: "Y" });
   for (const field of PROGRAM_FIELDS) {
-    params.set(field, program[field]);
+    params.set(field, program[field] ?? "");
   }
   return params.toString();
 }
 
 /**
- * The audit for a plan: the exact subplan when captured, otherwise the most
- * recent audit of the same plan (a minor's report may name no subplan).
+ * Never borrow another concentration or arbitrarily select a curriculum year.
  */
 export function findDegreeAudit(
   audits: DegreeAudits,
   plan: string | null | undefined,
   subplan?: string | null,
+  reqTerm?: string | null,
 ): DegreeAudit | null {
   if (!plan) {
     return null;
   }
-  const exact = subplan ? audits[degreeAuditKey(plan, subplan)] : undefined;
-  if (exact) {
-    return exact;
-  }
-  return (
-    Object.values(audits)
-      .filter((audit) => audit.plan === plan)
-      .sort((a, b) => b.capturedAt - a.capturedAt)[0] ?? null
+  const matches = Object.values(audits).filter(
+    (audit) =>
+      audit.plan === plan &&
+      (!subplan || audit.subplan === subplan) &&
+      (!reqTerm || audit.reqTerm === reqTerm),
   );
+  return matches.length === 1 ? matches[0] : null;
 }

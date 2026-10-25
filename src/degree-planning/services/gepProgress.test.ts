@@ -25,6 +25,12 @@ const line = (overrides: Partial<DegreeAuditLine>): DegreeAuditLine => ({
   grade: "A",
   units: 3,
   requirement: "",
+  requirementId: "",
+  offeringNumber: "1",
+  termCode: "2238",
+  isExceptionRequirement: "",
+  multipleUse: "N",
+  note: "",
   ...overrides,
 });
 
@@ -33,6 +39,8 @@ const audit: DegreeAudit = {
   plan: "99TSTBS",
   subplan: "NOSUBPLAN",
   planType: "MAJ",
+  reqTerm: "2238",
+  name: "Testing",
   capturedAt: 1,
   groups: [
     {
@@ -45,7 +53,7 @@ const audit: DegreeAudit = {
           requirement: "Humanities Elective",
           subject: "HI",
           catalogNbr: "233",
-          courseId: "5",
+          courseId: "000005",
         }),
         line({
           requirement: "GEP Global Knowledge",
@@ -153,6 +161,8 @@ describe("courseStateLookup", () => {
     const lookup = courseStateLookup([audit], planner);
 
     expect(lookup("5", "HI", "233")?.status).toBe("completed");
+    // Audit ids keep MyPack's zero padding; lookups may not.
+    expect(lookup("5", "XX", "999")?.status).toBe("completed");
     expect(lookup("", "EC", "202")?.status).toBe("enrolled");
     expect(lookup("", "ENG", "265")).toMatchObject({
       status: "planned",

@@ -11,6 +11,13 @@ npm run test:smoke
 They run against desktop and mobile Chrome. Use
 `npm run test:smoke:headed` when debugging locally.
 
+For manual personal-planning checks, open `planner-staging.html?personal` on
+the local development server. This mounts the production search view with
+sanitized audit, approved-choice, and registrar fixtures. Add `&unavailable`
+to verify that a failed choice list leaves the audit rows visible. The fixture
+includes separate elective groups, repeated topics, approved exceptions,
+overlapping eligibility, and courses without sections; it cannot add to cart.
+
 ## Authenticated extension smoke test
 
 The authenticated test builds the unpacked extension and opens a dedicated,

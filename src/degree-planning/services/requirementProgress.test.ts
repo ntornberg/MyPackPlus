@@ -35,6 +35,12 @@ const line = (overrides: Partial<DegreeAuditLine>): DegreeAuditLine => ({
   grade: "A",
   units: 3,
   requirement: "",
+  requirementId: "",
+  offeringNumber: "1",
+  termCode: "2238",
+  isExceptionRequirement: "",
+  multipleUse: "N",
+  note: "",
   ...overrides,
 });
 
@@ -43,6 +49,8 @@ const audit: DegreeAudit = {
   plan: "99TSTBS",
   subplan: "NOSUBPLAN",
   planType: "MAJ",
+  reqTerm: "2238",
+  name: "Testing",
   capturedAt: 1,
   groups: [
     {
@@ -149,7 +157,11 @@ describe("requirementProgress", () => {
       groups,
       planner,
     );
-    expect(progress.courses.has("TST 202")).toBe(false);
+    // Shown as counted elsewhere, not as planned for this requirement.
+    expect(progress.courses.get("TST 202")).toMatchObject({
+      status: "enrolled",
+      elsewhere: true,
+    });
     expect(progress.planned).toBe(0);
   });
 
@@ -174,11 +186,27 @@ describe("requirementProgress", () => {
   it("is unknown when no audit covers the requirement", () => {
     const progress = requirementProgress(
       "555",
-      [course("1", "TST", "101")],
+      [course("1", "TST", "909")],
       groups,
     );
     expect(progress.status).toBe("unknown");
     expect(progress.courses.size).toBe(0);
+  });
+
+  it("gives a line to its exact course, not every cross-listing", () => {
+    // TST 202 (id 99) is enrolled; OTH 202 and TST 502 share its id.
+    const progress = requirementProgress(
+      "100",
+      [
+        course("99", "OTH", "202"),
+        course("99", "TST", "202"),
+        course("99", "TST", "502"),
+      ],
+      groups,
+    );
+    expect(progress.courses.get("TST 202")?.status).toBe("enrolled");
+    expect(progress.courses.has("OTH 202")).toBe(false);
+    expect(progress.courses.has("TST 502")).toBe(false);
   });
 });
 
