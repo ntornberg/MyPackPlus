@@ -1,4 +1,9 @@
-import { CalendarClock, ExternalLink, History } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronDown,
+  ExternalLink,
+  History,
+} from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import {
@@ -6,6 +11,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getExtensionOverlayPortalContainer } from "@/utils/dom";
 import {
@@ -309,20 +319,32 @@ export function InstructorPopover({
         if (open) setContainer(getExtensionOverlayPortalContainer() ?? null);
       }}
     >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "w-fit cursor-pointer text-left underline decoration-dotted decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground",
-            className,
-          )}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          title="View instructor details"
-        >
-          {children}
-        </button>
-      </PopoverTrigger>
+      <Tooltip delayDuration={600}>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex w-fit max-w-full cursor-pointer items-center gap-1 rounded-sm text-left hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                className,
+              )}
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <span className="min-w-0 underline decoration-dotted decoration-muted-foreground/50 underline-offset-4">
+                {children}
+              </span>
+              <ChevronDown
+                className="size-3 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6}>
+          View ratings, grade history &amp; upcoming classes
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent
         container={container}
         className="w-[22rem]"

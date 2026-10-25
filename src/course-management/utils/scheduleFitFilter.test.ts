@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { ScheduleEvent } from "../types/calendar";
 
-import { courseCodeOf, findScheduleConflicts } from "./scheduleFitFilter";
+import {
+  courseCodeOf,
+  findScheduleConflicts,
+  sectionFitsSchedule,
+} from "./scheduleFitFilter";
 
 function event(subj: string, days: string[], start: string, end: string) {
   return {
@@ -37,5 +41,16 @@ describe("findScheduleConflicts", () => {
   it("normalizes course codes", () => {
     expect(courseCodeOf("csc316 (001)")).toBe("CSC 316");
     expect(courseCodeOf("Club meeting")).toBeNull();
+  });
+
+  it("excludes untimed classes from conflicts even if their source includes placeholder hours", () => {
+    const untimed = {
+      ...event("PY 205", ["Mon"], "12:00 AM", "11:59 PM"),
+      allDay: true,
+    };
+    expect(findScheduleConflicts(section, [untimed])).toEqual([]);
+    expect(findScheduleConflicts([untimed], section)).toEqual([]);
+    expect(sectionFitsSchedule(section, [untimed])).toBe(true);
+    expect(sectionFitsSchedule([untimed], section)).toBe(true);
   });
 });

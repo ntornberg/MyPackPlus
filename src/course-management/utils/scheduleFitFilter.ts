@@ -41,6 +41,7 @@ function daySetsOverlap(a: Set<string>, b: Set<string>): boolean {
 }
 
 export function eventsTimeOverlap(a: ScheduleEvent, b: ScheduleEvent): boolean {
+  if (a.allDay || b.allDay) return false;
   if (!hasSharedDayArrays(a.days, b.days)) {
     return false;
   }
@@ -91,13 +92,16 @@ export function sectionFitsSchedule(
     return true;
   }
 
-  const bgCache: BusySlot[] = background.map((e) => ({
-    start: toMinutes(e.start),
-    end: toMinutes(e.end),
-    days: getDaySet(e.days),
-  }));
+  const bgCache: BusySlot[] = background
+    .filter((e) => !e.allDay)
+    .map((e) => ({
+      start: toMinutes(e.start),
+      end: toMinutes(e.end),
+      days: getDaySet(e.days),
+    }));
 
   for (const block of section) {
+    if (block.allDay) continue;
     const blockStart = toMinutes(block.start);
     const blockEnd = toMinutes(block.end);
     const blockDays = getDaySet(block.days);

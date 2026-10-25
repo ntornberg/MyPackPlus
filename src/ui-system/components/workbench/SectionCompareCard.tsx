@@ -379,6 +379,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
       tabIndex={0}
       onPointerDown={handleSelectPointerDown}
       onKeyDown={(e: KeyboardEvent) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect();

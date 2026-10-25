@@ -26,6 +26,7 @@ import {
   type MajorPlanSearchData,
   type TabUpdater,
 } from "../../course-management/components/tab-state/tabState";
+import { refreshCart } from "../../course-management/services/refreshCart";
 import { StatusBanner } from "../../user-experience/status/StatusBanner";
 
 import {
@@ -282,6 +283,7 @@ export default function SlideOutDrawer() {
       return;
     }
     setDrawerOpen(true);
+    refreshCart();
   }, [drawerOpen]);
 
   const handleDrawerClose = useCallback(() => {

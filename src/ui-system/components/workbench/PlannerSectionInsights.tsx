@@ -1,7 +1,12 @@
 import chroma from "chroma-js";
-import { InfoIcon } from "lucide-react";
+import { ExternalLinkIcon } from "lucide-react";
 import { useMemo, useSyncExternalStore } from "react";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { buildRateMyProfessorUrl } from "@/utils/rateMyProfessor";
 import {
@@ -55,7 +60,7 @@ export function seatTallyHeatBackground(
   return ENROLLMENT_HEAT_SCALE(openSeatRatio).hex();
 }
 
-const RMP_LINK_TOOLTIP = "Click for link to Rate My Professor";
+const RMP_LINK_TOOLTIP = "Open Rate My Professor in a new tab";
 
 function ProfessorNameLink({
   name,
@@ -76,7 +81,7 @@ function ProfessorNameLink({
         className,
       )}
       title={RMP_LINK_TOOLTIP}
-      aria-label={RMP_LINK_TOOLTIP}
+      aria-label={`${name}: ${RMP_LINK_TOOLTIP}`}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -84,13 +89,10 @@ function ProfessorNameLink({
       }}
     >
       <span className="truncate">{name}</span>
-      <span
+      <ExternalLinkIcon
         aria-hidden
-        title={RMP_LINK_TOOLTIP}
-        className="inline-flex size-3 shrink-0 items-center justify-center rounded-full border border-muted-foreground/40 text-muted-foreground/85"
-      >
-        <InfoIcon className="size-2" />
-      </span>
+        className="size-3 shrink-0 text-muted-foreground"
+      />
     </a>
   );
 }
@@ -205,10 +207,16 @@ export function RmpStarsWithScore({
           href={profileUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex w-fit self-start rounded-sm underline-offset-2 hover:underline"
+          className="inline-flex w-fit items-center gap-1 self-start rounded-sm underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          title={RMP_LINK_TOOLTIP}
+          aria-label={`${rating.master_name}: 0 reviews. ${RMP_LINK_TOOLTIP}`}
           onClick={(e) => e.stopPropagation()}
         >
           {text}
+          <ExternalLinkIcon
+            aria-hidden
+            className="size-3 shrink-0 text-muted-foreground"
+          />
         </a>
       );
     }
@@ -222,7 +230,7 @@ export function RmpStarsWithScore({
         "inline-flex max-w-full flex-wrap items-center gap-1.5 align-middle",
         className,
       )}
-      title={ratingTooltipText(display)}
+      title={!profileUrl ? ratingTooltipText(display) : undefined}
     >
       <StarRating value={value} starClassName={starClassName} />
       <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">
@@ -245,17 +253,33 @@ export function RmpStarsWithScore({
   }
 
   return (
-    <a
-      href={profileUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex w-fit self-start rounded-sm underline-offset-2 hover:underline"
-      title={RMP_LINK_TOOLTIP}
-      aria-label={RMP_LINK_TOOLTIP}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {content}
-    </a>
+    <Tooltip delayDuration={600}>
+      <TooltipTrigger asChild>
+        <a
+          href={profileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex max-w-full w-fit flex-wrap items-center gap-1.5 self-start rounded-sm underline-offset-2 hover:bg-muted/50 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          aria-label={`${rating?.master_name || "Instructor"}: ${value.toFixed(1)} out of 5. ${RMP_LINK_TOOLTIP}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {content}
+          <span
+            aria-hidden
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"
+          >
+            RMP <ExternalLinkIcon className="size-3 shrink-0" />
+          </span>
+        </a>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6}>
+        <span>
+          {RMP_LINK_TOOLTIP}
+          <br />
+          {ratingTooltipText(display)}
+        </span>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

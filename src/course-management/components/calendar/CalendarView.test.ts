@@ -1,0 +1,127 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { invalidateScheduleCache } from "../../cache/scheduleCacheSignal";
+
+import {
+  loadCartScheduleEvents,
+  loadScheduleEvents,
+  markOverlaps,
+} from "./CalendarView";
+
+const { categories } = vi.hoisted(() => ({
+  categories: {} as Record<string, unknown>,
+}));
+vi.mock("../../cache/courseRetrieval", () => ({
+  getCacheCategory: async (category: string) => categories[category] ?? null,
+}));
+
+function cached(items: Record<string, unknown>[]) {
+  return Object.fromEntries(
+    items.map((combinedData, id) => [id, { combinedData }]),
+  );
+}
+
+beforeEach(() => {
+  for (const key of Object.keys(categories)) delete categories[key];
+  invalidateScheduleCache();
+});
+
+describe.each([
+  {
+    name: "cart",
+    load: loadCartScheduleEvents,
+    table: "shopCartTableData",
+    calendar: "shopCartCalEventsData",
+  },
+  {
+    name: "enrolled",
+    load: loadScheduleEvents,
+    table: "scheduleTableData",
+    calendar: "scheduleCalEventsData",
+  },
+])("$name untimed courses", ({ load, table, calendar }) => {
+  it("keeps date-only, all-day and midnight placeholders separately from real timed meetings", async () => {
+    categories[calendar] = cached([
+      {
+        title: "CSC 316 (601)",
+        start: "2026-10-26",
+        end: "2026-10-27",
+        _mypackTerm: "2027 Spring Term",
+      },
+      {
+        title: "CSC 316 (602)",
+        allDay: true,
+        start: "2026-10-26T00:00:00",
+        end: "2026-10-26T23:59:00",
+      },
+      {
+        title: "CSC 316 (603)",
+        start: "2026-10-26T00:00:00",
+        end: "2026-10-27T00:00:00",
+      },
+      {
+        title: "CSC 316 (001)",
+        start: "2026-10-26T11:45:00",
+        end: "2026-10-26T13:00:00",
+      },
+    ]);
+    const events = await load();
+    expect(events).toHaveLength(4);
+    expect(events.filter((event) => event.allDay)).toHaveLength(3);
+    for (const event of events.filter((event) => event.allDay)) {
+      expect(event).toMatchObject({ start: "", end: "", days: [] });
+    }
+    expect(events[0].semester).toBe("2027-spring");
+    expect(events[3]).toMatchObject({ start: "11:45 AM", end: "1:00 PM" });
+    expect(events[3].allDay).toBeUndefined();
+  });
+
+  it("deduplicates repeated feed entries and the table without merging different online sections", async () => {
+    categories[table] = cached([
+      {
+        classs: "CSC 316",
+        section_details: [
+          { section: "601", meet_days: "TBA", time: "TBD", type: "Lecture" },
+          { section: "602", meet_days: null, time: null, type: "Lecture" },
+        ],
+      },
+    ]);
+    categories[calendar] = cached([
+      { title: "CSC 316 (601)", start: "2026-10-26", allDay: true },
+      { title: "CSC 316 (601)", start: "2026-10-27", allDay: true },
+      { title: "CSC 316 (602)", start: "2026-10-26", allDay: true },
+    ]);
+    const events = await load();
+    expect(events.map(({ subj }) => subj)).toEqual([
+      "CSC 316 (601)",
+      "CSC 316 (602)",
+    ]);
+    expect(events.every((event) => event.allDay)).toBe(true);
+  });
+});
+
+it("does not mark all-day placeholder hours as a conflict", () => {
+  const days = [{ day: "Mon", isOverlapping: false }];
+  const events = markOverlaps([
+    {
+      id: 1,
+      subj: "Online course",
+      color: "blue",
+      allDay: true,
+      start: "12:00 AM",
+      end: "11:59 PM",
+      days,
+    },
+    {
+      id: 2,
+      subj: "Timed course",
+      color: "blue",
+      start: "11:45 AM",
+      end: "1:00 PM",
+      days,
+    },
+  ]);
+  expect(
+    events.every((event) => event.days.every((day) => !day.isOverlapping)),
+  ).toBe(true);
+});

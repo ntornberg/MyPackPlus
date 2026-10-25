@@ -13,6 +13,9 @@ const DAY_TOKEN_MAP = {
 
 type DayToken = keyof typeof DAY_TOKEN_MAP;
 
+export const isUntimedDayTime = (value: string | null | undefined): boolean =>
+  /^(?:TBA|TBD|Arranged)?$/i.test(value?.trim() ?? "");
+
 /** Registrar-style compact prefixes before the first time (MW, TuTh, MWF, …). */
 function expandDayPrefixLetters(prefixRaw: string): ScheduleEvent["days"] {
   const p = prefixRaw.toUpperCase().replace(/\s+/g, "");
@@ -99,8 +102,20 @@ export const parseDayTimeEvent = (
   subjectCode: string | undefined,
   eventId = 1,
 ): ScheduleEvent | null => {
-  if (!dayTime) {
+  if (dayTime === undefined) {
     return null;
+  }
+
+  if (isUntimedDayTime(dayTime)) {
+    return {
+      id: eventId,
+      subj: subjectCode || "",
+      start: "",
+      end: "",
+      days: [],
+      color: CALENDAR_COLOR_PINNED_SECTION,
+      allDay: true,
+    };
   }
 
   const days = daysFromDayTime(dayTime);

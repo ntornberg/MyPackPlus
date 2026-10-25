@@ -280,6 +280,7 @@ describe("dataService v2 grade/RMP requests", () => {
     );
 
     const lecture = Object.values(result!.sections)[0]!.lecture!;
+    expect(lecture.term).toBe("Spring 2027");
     expect(lecture.grade_distribution?.total_students).toBe(1882);
     expect(lecture.professor_rating).toMatchObject({
       avgRating: 4.31,

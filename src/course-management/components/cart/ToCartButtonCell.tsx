@@ -93,7 +93,7 @@ export const ToCartButtonCell = (
   };
 
   return (
-    <div className="relative inline-block w-full text-right">
+    <div className="relative inline-block text-right">
       <Button
         type="button"
         variant="default"

@@ -159,7 +159,70 @@ describe("siteResponseStorage listener", () => {
       "shopCartTableData",
       {},
     );
+    expect(mocks.replaceGenericCache).toHaveBeenCalledWith(
+      "shopCartCalEventsData",
+      {},
+    );
+    expect(mocks.notifyScheduleDataChanged).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves calendar meetings when nonempty cart rows omit meeting details", async () => {
+    await setupListener();
+    await dispatch({
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: {
+        responseType: "_getShopCartTableData",
+        data: [{ crse_id: "100", class_nbr: "1", section_details: [] }],
+      },
+    });
+
+    expect(mocks.replaceGenericCache.mock.calls).toEqual([
+      [
+        "shopCartTableData",
+        {
+          "hash:100|1": {
+            crse_id: "100",
+            class_nbr: "1",
+            section_details: [],
+          },
+        },
+      ],
+    ]);
+    expect(mocks.notifyScheduleDataChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { data: [] },
+    {
+      data: [
+        {
+          title: "CSC 316 (001)",
+          start: "2026-10-26T11:45:00",
+          end: "2026-10-26T13:00:00",
+        },
+      ],
+    },
+  ])(
+    "replaces stale cart calendar data with the freshly requested snapshot: %j",
+    async ({ data }) => {
+      await setupListener();
+      await dispatch({
+        source: "realFetchHook",
+        type: "CLASS_DATA",
+        payload: {
+          responseType: "_getShopCartCalEvents",
+          data,
+          fullSnapshot: true,
+        },
+      });
+      expect(mocks.replaceGenericCache).toHaveBeenCalledTimes(1);
+      const [category, entries] = mocks.replaceGenericCache.mock.calls[0];
+      expect(category).toBe("shopCartCalEventsData");
+      expect(Object.values(entries)).toEqual(data);
+      expect(mocks.notifyScheduleDataChanged).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("keys table rows by course and class number so sections don't collide", async () => {
     await setupListener();

@@ -181,7 +181,11 @@ async function storeCalendarRange(
   await setGenericCache(category, entries);
 }
 
-async function storeResponse(responseType: string, data: unknown) {
+async function storeResponse(
+  responseType: string,
+  data: unknown,
+  fullSnapshot: boolean,
+) {
   const rule = RESPONSE_STORAGE_RULES[responseType];
   if (!rule) {
     return;
@@ -194,7 +198,9 @@ async function storeResponse(responseType: string, data: unknown) {
   }
 
   const items = itemsFromPayloadData(data);
-  if (rule.rangeScoped && items.length === 0) {
+  const replacesCartCalendar =
+    fullSnapshot && responseType === "_getShopCartCalEvents";
+  if (rule.rangeScoped && items.length === 0 && !replacesCartCalendar) {
     // A week with no meetings has nothing to replace.
     return;
   }
@@ -211,12 +217,18 @@ async function storeResponse(responseType: string, data: unknown) {
       : item;
   }
 
-  if (rule.rangeScoped) {
+  if (replacesCartCalendar) {
+    await replaceGenericCache(rule.category, entries);
+  } else if (rule.rangeScoped) {
     await storeCalendarRange(rule.category, items, entries, term);
   } else {
     // Each table response is the full current list, so replace rather than
     // merge: classes dropped from the cart/schedule must disappear.
     await replaceGenericCache(rule.category, entries);
+    if (responseType === "_getShopCartTableData" && items.length === 0) {
+      // An empty cart is authoritative; nonempty rows may omit meeting details.
+      await replaceGenericCache("shopCartCalEventsData", {});
+    }
   }
 
   if (rule.affectsSchedule) {
@@ -228,6 +240,7 @@ async function storeSiteResponse(payload: {
   responseType: string;
   data: unknown;
   url?: unknown;
+  fullSnapshot?: unknown;
 }): Promise<void> {
   switch (payload.responseType) {
     case DEGREE_DETAILS_RESPONSE:
@@ -240,7 +253,11 @@ async function storeSiteResponse(payload: {
       }
       return;
     default:
-      await storeResponse(payload.responseType, payload.data);
+      await storeResponse(
+        payload.responseType,
+        payload.data,
+        payload.fullSnapshot === true,
+      );
   }
 }
 

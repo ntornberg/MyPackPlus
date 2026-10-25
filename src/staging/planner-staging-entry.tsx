@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import "../index.css";
 
 import {
@@ -22,6 +24,8 @@ if (personalFixture) installPersonalPlanningFixture();
 
 createRoot(container).render(
   <StrictMode>
-    {personalFixture ? <PersonalPlanningStaging /> : <PlannerStagingApp />}
+    <TooltipProvider delayDuration={150}>
+      {personalFixture ? <PersonalPlanningStaging /> : <PlannerStagingApp />}
+    </TooltipProvider>
   </StrictMode>,
 );

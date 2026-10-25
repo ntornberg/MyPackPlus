@@ -88,23 +88,26 @@ export default function CalendarGrid({
 }: {
   eventData: ScheduleEvent[];
 }) {
+  const events = useMemo(
+    () => eventData.filter((event) => !event.allDay),
+    [eventData],
+  );
   // Always run to 10 PM so evening sections fit without the grid resizing.
   const windowEnd = 22;
   const windowStart = useMemo(() => {
-    if (eventData.length === 0) {
+    if (events.length === 0) {
       return 8;
     }
 
-    const eventStarts = eventData.map((event) => toMinutes(event.start));
+    const eventStarts = events.map((event) => toMinutes(event.start));
     const earliestHour = Math.floor(Math.min(...eventStarts) / 60);
     return Math.max(8, earliestHour - 1);
-  }, [eventData]);
+  }, [events]);
   const hours = Array.from(
     { length: windowEnd - windowStart + 1 },
     (_, i) => windowStart + i,
   );
   const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const events = eventData;
   const [bodyRef, body] = useSize<HTMLDivElement>();
   // Size by the grid itself, not the window: in the drawer the window is wide
   // while the preview calendar can be narrow.

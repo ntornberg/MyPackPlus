@@ -84,11 +84,15 @@ function mergeCourseDataWithoutGradeBatch(
   courseKey: string,
   courseData: CourseData,
   course: RequiredCourse,
+  term: string,
 ): MergedCourseData {
   const emptyBatch: BatchDataRequestResponse = { courses: [], profs: [] };
-  const merged = mergeData({ [courseKey]: courseData }, emptyBatch, {
-    [courseKey]: course,
-  });
+  const merged = mergeData(
+    { [courseKey]: courseData },
+    emptyBatch,
+    { [courseKey]: course },
+    term,
+  );
   const result = merged[courseKey];
   if (!result) {
     throw new Error(`mergeData missing course key: ${courseKey}`);
@@ -226,7 +230,12 @@ export async function fetchPlannerCourseSections(
   // (e.g. CH 101 "Staff" rows have empty instructor_name[] but many Rec rows per Lec).
   if (courseSectionsWithProfs.length === 0) {
     onProgress?.(100, `Completed processing ${courseKey} (no instructor data)`);
-    return mergeCourseDataWithoutGradeBatch(courseKey, courseData, course);
+    return mergeCourseDataWithoutGradeBatch(
+      courseKey,
+      courseData,
+      course,
+      term,
+    );
   }
 
   // Generate hash for grade/professor cache lookup
@@ -268,7 +277,12 @@ export async function fetchPlannerCourseSections(
     } catch (error) {
       AppLogger.error("Error fetching grade/professor data:", error);
       onProgress?.(85, `Error fetching grade/professor data: ${error}`);
-      return mergeCourseDataWithoutGradeBatch(courseKey, courseData, course);
+      return mergeCourseDataWithoutGradeBatch(
+        courseKey,
+        courseData,
+        course,
+        term,
+      );
     }
   }
 
@@ -285,6 +299,7 @@ export async function fetchPlannerCourseSections(
     courseDataMap,
     gradeProfData || {},
     courseInfoMap,
+    term,
   );
   const result = mergedData[courseKey];
 
@@ -529,6 +544,7 @@ export async function batchFetchCoursesData(
     openCoursesCache,
     gradeProfData,
     courseKeyMapping,
+    term,
   );
 
   // Don't cache empty grade data when the fetch failed.

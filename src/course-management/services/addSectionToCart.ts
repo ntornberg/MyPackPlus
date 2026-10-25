@@ -1,5 +1,10 @@
+import { AppLogger } from "../../utils/logger";
+import { generateCacheKey, setGenericCache } from "../cache/courseRetrieval";
+import { notifyScheduleDataChanged } from "../cache/scheduleCacheSignal";
+import { parseDayTimeEvent } from "../schedule/parseScheduleDayTime";
 import type { FullToCartPayload, ToCartPayload } from "../types/cart";
 import type { ModifiedSection } from "../types/section";
+import { TERM_TAG_FIELD } from "../utils/semester";
 
 import { generateMyPackScriptContentUrl } from "./mypackScriptUrl";
 
@@ -82,6 +87,45 @@ export async function addSectionToCart(
   }
 
   if (data.status === "success") {
+    try {
+      const lecture = parent ?? selectedSection;
+      const sections = parent ? [parent, selectedSection] : [selectedSection];
+      const key = await generateCacheKey(`${course_id}|${lecture.classNumber}`);
+      await setGenericCache("shopCartTableData", {
+        [key]: {
+          crse_id: course_id,
+          class_nbr: lecture.classNumber,
+          classs: courseData.code,
+          [TERM_TAG_FIELD]: selectedSection.term,
+          // Only the submitted lab belongs in the cart, not every linked option.
+          section_details: sections.flatMap((section) => {
+            const event = parseDayTimeEvent(section.dayTime, courseData.code);
+            return event
+              ? [
+                  {
+                    class_nbr: section.classNumber,
+                    section: section.section,
+                    meet_days: event.days.map(({ day }) => day).join("/"),
+                    time: event.allDay ? "" : `${event.start} - ${event.end}`,
+                    type: section.component,
+                  },
+                ]
+              : [];
+          }),
+        },
+      });
+      await notifyScheduleDataChanged();
+    } catch (error) {
+      AppLogger.error(
+        "Added to cart, but couldn't update the calendar:",
+        error,
+      );
+      return {
+        ok: true,
+        message:
+          "Added to cart, but couldn't update the calendar. Refresh the page.",
+      };
+    }
     return { ok: true, message: data.message || "Added to cart." };
   }
   if (data.title && data.message) {

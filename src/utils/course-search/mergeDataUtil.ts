@@ -22,6 +22,7 @@ export function mergeData(
   courses: Record<string, CourseData>,
   batchData: BatchDataRequestResponse,
   courseInfoMap?: Record<string, RequiredCourse>, // Map of course keys to RequiredCourse containing course_id
+  term?: string,
 ) {
   AppLogger.info("Merging data");
   AppLogger.info("Batch data: ", batchData);
@@ -96,6 +97,7 @@ export function mergeData(
         rqmnt_designtn: "", // Default requirement designation
         wait_list_okay: "N", // Default waitlist setting
         courseData: course, // Reference to parent course
+        term,
       };
       modifiedSections[section.id] = modifiedSection;
     }

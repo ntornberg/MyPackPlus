@@ -5,6 +5,8 @@ export interface ScheduleEvent {
   end: string;
   days: { day: string; isOverlapping: boolean; conflictsWith?: string[] }[];
   color: string;
+  /** All-day / asynchronous course, displayed outside the hourly grid. */
+  allDay?: boolean;
   /** Semester key (e.g. "2027-spring") for cached cart/enrolled events, when known. */
   semester?: string;
 }

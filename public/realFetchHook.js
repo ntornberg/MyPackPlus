@@ -5,6 +5,26 @@
     window.__myPackHookLoaded = true;
 
     const OriginalXHR = window.XMLHttpRequest;
+    const cartRequests = new Map();
+    window.addEventListener("message", (event) => {
+        if (
+            (event.source !== window && event.source !== window.parent) ||
+            event.origin !== window.location.origin ||
+            event.data?.source !== "content-script" ||
+            event.data.type !== "MYPACK_REFRESH_CART"
+        ) return;
+
+        for (const request of cartRequests.values()) {
+            const xhr = new window.XMLHttpRequest();
+            xhr.open(request.method, request.url);
+            xhr._mypackCartRefresh = true;
+            for (const [name, value] of request.headers) {
+                xhr.setRequestHeader(name, value);
+            }
+            xhr.setRequestHeader("Cache-Control", "no-cache");
+            xhr.send(request.body);
+        }
+    });
     const keywords = [
         "_getClassSearchResults",
         "_getShopCartTableData",
@@ -48,16 +68,34 @@
 
     class InterceptedXHR extends OriginalXHR {
         open(method, url, ...rest) {
-            this._url = url;
+            this._url = String(url);
+            this._method = method;
+            this._headers = [];
             return super.open(method, url, ...rest);
         }
 
+        setRequestHeader(name, value) {
+            this._headers.push([name, value]);
+            return super.setRequestHeader(name, value);
+        }
+
         send(...args) {
+            const cartType = ["_getShopCartTableData", "_getShopCartCalEvents"]
+                .find((keyword) => this._url.includes(keyword));
+            if (cartType && !this._mypackCartRefresh) {
+                cartRequests.set(cartType, {
+                    method: this._method,
+                    url: this._url,
+                    headers: this._headers,
+                    body: args[0],
+                });
+            }
             this.addEventListener("load", async function () {
                 try {
                     const matchedKeyword = keywords.find((keyword) =>
                         this._url.includes(keyword)
                     );
+                    if (this.status < 200 || this.status >= 300) return;
                     if (matchedKeyword && rawTextKeywords.includes(matchedKeyword)) {
                         await receiverPromise;
                         window.postMessage(
@@ -98,7 +136,11 @@
                             {
                                 source: "realFetchHook",
                                 type: "CLASS_DATA",
-                                payload: { data: data, responseType: matchedKeyword },
+                                payload: {
+                                    data: data,
+                                    responseType: matchedKeyword,
+                                    ...(this._mypackCartRefresh ? { fullSnapshot: true } : {}),
+                                },
                             },
                             // "null" origins (sandboxed/about:blank) can't be targeted.
                             window.location.origin !== "null"

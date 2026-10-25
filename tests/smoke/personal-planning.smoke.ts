@@ -76,3 +76,34 @@ test("an unavailable approved list never hides applied audit courses", async ({
   await expect(page.getByText("Security Topics")).toBeVisible();
   await expect(page.getByText(/Enrolled\s*· Fall '26/)).toBeVisible();
 });
+
+test("blank space below the section divider selects the card while its cart button does not", async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/planner-staging.html?personal");
+  await electives(page).click();
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Search", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: /Approved Course 440/ }).click();
+
+  const card = page
+    .getByRole("option")
+    .filter({ hasText: "Section 001" })
+    .first();
+  await expect(card).toHaveAttribute("aria-selected", "false");
+  await card.getByRole("button", { name: "Add to cart" }).click();
+  await expect(card).toHaveAttribute("aria-selected", "false");
+
+  const footer = card.locator("div.border-t");
+  const bounds = await footer.boundingBox();
+  expect(bounds).not.toBeNull();
+  await footer.click({ position: { x: 8, y: bounds!.height - 8 } });
+  await expect(card).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("Section preview selected")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("footer-selection.png") });
+  expect(errors).toEqual([]);
+});

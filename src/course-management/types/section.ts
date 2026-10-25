@@ -25,6 +25,7 @@ export type ModifiedSection = CourseSection & {
   rqmnt_designtn?: string;
   wait_list_okay?: string;
   courseData?: CourseData; // Reference to parent course for easy access
+  term?: string;
   /** Parsed from grouped sections: lab/recitation meetings paired with this row. */
   linkedMeetings?: SectionLinkedMeeting[];
 };

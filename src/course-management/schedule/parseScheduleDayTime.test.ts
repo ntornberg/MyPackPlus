@@ -5,6 +5,18 @@ import { CALENDAR_COLOR_PINNED_SECTION } from "../types/calendar";
 import { parseDayTimeEvent } from "./parseScheduleDayTime";
 
 describe("parseDayTimeEvent", () => {
+  it.each(["TBA", "TBD", "Arranged", ""])(
+    "keeps an untimed section (%s) without assigning meeting hours",
+    (dayTime) => {
+      expect(parseDayTimeEvent(dayTime, "CSC 316 (601)")).toMatchObject({
+        subj: "CSC 316 (601)",
+        allDay: true,
+        start: "",
+        end: "",
+        days: [],
+      });
+    },
+  );
   it("parses upper-case AM/PM times and mapped weekdays", () => {
     const parsed = parseDayTimeEvent("M T 1:00 PM - 2:15 PM", "CSC");
 

@@ -5,11 +5,15 @@ import {
   getScheduleCacheGeneration,
   subscribeScheduleCache,
 } from "../../cache/scheduleCacheSignal";
-import { parseDayTimeEvent } from "../../schedule/parseScheduleDayTime";
+import {
+  isUntimedDayTime,
+  parseDayTimeEvent,
+} from "../../schedule/parseScheduleDayTime";
 import {
   type ScheduleEvent,
   CALENDAR_COLOR_CART_CLASS,
   CALENDAR_COLOR_ENROLLED_CLASS,
+  calendarBlockShellStyle,
 } from "../../types/calendar";
 import type { SectionLinkedMeeting } from "../../types/section";
 import { datePart, semesterOfItem } from "../../utils/semester";
@@ -163,6 +167,8 @@ export const markOverlaps = (events: ScheduleEvent[]): ScheduleEvent[] => {
       const eventA = result[i];
       const eventB = result[j];
       if (
+        !eventA.allDay &&
+        !eventB.allDay &&
         toMinutes(eventA.start) < toMinutes(eventB.end) &&
         toMinutes(eventA.end) > toMinutes(eventB.start) &&
         hasSharedDay(eventA.days, eventB.days)
@@ -224,11 +230,28 @@ function buildEventsFromTableEntries(
   for (const course of Object.values(courses as Record<string, CachedEntry>)) {
     const scheduleEntry = unpackCachedData(course) as ScheduleTableEntry | null;
 
-    if (!scheduleEntry?.section_details) {
+    if (!Array.isArray(scheduleEntry?.section_details)) {
       continue;
     }
 
     for (const section of scheduleEntry.section_details) {
+      if (
+        isUntimedDayTime(section.meet_days) &&
+        isUntimedDayTime(section.time)
+      ) {
+        const code = scheduleEntry.classs?.trim() || "Class";
+        events.push({
+          id: eventId++,
+          subj: section.section ? `${code} (${section.section})` : code,
+          start: "",
+          end: "",
+          days: [],
+          color,
+          allDay: true,
+          semester: semesterOfItem(scheduleEntry, null) ?? undefined,
+        });
+        continue;
+      }
       if (!section.meet_days || !section.time) {
         continue;
       }
@@ -458,7 +481,12 @@ function buildEventsFromCalendarEntries(
     const start = normalizeTime(startRaw);
     const end = normalizeTime(endRaw);
     const days = weekdaysFromEvent(entry);
-    if (!start || !end || days.length === 0) {
+    const allDay =
+      entry.allDay === true ||
+      entry.allDay === "true" ||
+      (!start && datePart(startRaw) !== null) ||
+      (start === "12:00 AM" && (!end || end === "12:00 AM"));
+    if (!allDay && (!start || !end || days.length === 0)) {
       continue;
     }
 
@@ -477,10 +505,11 @@ function buildEventsFromCalendarEntries(
     events.push({
       id: eventId++,
       subj,
-      start,
-      end,
-      days,
+      start: allDay ? "" : start!,
+      end: allDay ? "" : end!,
+      days: allDay ? [] : days,
       color,
+      ...(allDay ? { allDay: true } : {}),
       ...(semester ? { semester } : {}),
     });
   }
@@ -521,6 +550,9 @@ function eventCoversCandidate(
   existing: ScheduleEvent,
   candidate: ScheduleEvent,
 ): boolean {
+  if (Boolean(existing.allDay) !== Boolean(candidate.allDay)) {
+    return false;
+  }
   if (existing.start !== candidate.start || existing.end !== candidate.end) {
     return false;
   }
@@ -532,6 +564,12 @@ function eventCoversCandidate(
   }
   if (!existingToken && !candidateToken && existing.subj !== candidate.subj) {
     return false;
+  }
+  if (existing.allDay) {
+    return (
+      existing.subj.match(/\([^)]+\)/)?.[0] ===
+      candidate.subj.match(/\([^)]+\)/)?.[0]
+    );
   }
 
   const existingDays = new Set(existing.days.map((day) => day.day));
@@ -744,6 +782,7 @@ export const CalendarView = (params: CalendarViewProps) => {
     );
   }
 
+  const untimedEvents = eventData.filter((event) => event.allDay);
   return (
     <div
       className={
@@ -752,6 +791,27 @@ export const CalendarView = (params: CalendarViewProps) => {
           : "h-full w-full"
       }
     >
+      {untimedEvents.length > 0 ? (
+        <section
+          aria-label="Online / no fixed meeting time"
+          className="mb-2 rounded-xl border border-border bg-muted/20 p-3"
+        >
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Online / no fixed meeting time
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {untimedEvents.map((event) => (
+              <li
+                key={event.id}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                style={calendarBlockShellStyle(event.color)}
+              >
+                {event.subj}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <CalendarGrid eventData={eventData} />
     </div>
   );
