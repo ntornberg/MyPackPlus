@@ -9,11 +9,26 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 
+import { loadPlannerTerms } from "../../../degree-planning/services/packPlanner";
 import {
   descriptionExcerpt,
   findCourses,
   type SearchCourse,
 } from "../../utils/courseSearchIndex";
+import {
+  loadRecentCourses,
+  rememberRecentCourse,
+  suggestCourses,
+  type CourseSuggestion,
+} from "../../utils/courseSuggestions";
+
+// Shown before typing; each example fills the search to show what works.
+const searchHints = [
+  { kind: "Code", example: "CSC 316" },
+  { kind: "Nickname", example: "calc 2" },
+  { kind: "Title", example: "organic chemistry" },
+  { kind: "Topic", example: "machine learning" },
+];
 
 export function CourseFinder({
   value,
@@ -39,7 +54,42 @@ export function CourseFinder({
         : findCourses(query),
     [query, value],
   );
-  const items = useMemo(() => matches.map((match) => match.course), [matches]);
+  // Before anything is typed, offer recent picks and Pack Planner courses.
+  const [suggestions, setSuggestions] = useState<CourseSuggestion[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let current = true;
+    Promise.all([loadRecentCourses(), loadPlannerTerms()])
+      .then(([recent, terms]) => {
+        if (current) setSuggestions(suggestCourses(recent, terms));
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [open]);
+  const suggesting = !query.trim();
+  const reasons = useMemo(
+    () =>
+      new Map(
+        suggestions.map((suggestion) => [
+          suggestion.course.code,
+          suggestion.reason,
+        ]),
+      ),
+    [suggestions],
+  );
+  const items = useMemo(
+    () =>
+      suggesting
+        ? suggestions.map((suggestion) => suggestion.course)
+        : matches.map((match) => match.course),
+    [suggesting, suggestions, matches],
+  );
+  const choose = (course: SearchCourse | null) => {
+    if (course) rememberRecentCourse(course.code).catch(() => {});
+    onSelect(course);
+  };
   const showSelection = value && query === value.label;
   return (
     <Combobox<SearchCourse>
@@ -62,7 +112,7 @@ export function CourseFinder({
       onValueChange={(course) => {
         typed.current = false;
         setQuery(course?.label ?? "");
-        onSelect(course);
+        choose(course);
       }}
     >
       <ComboboxInput
@@ -88,7 +138,7 @@ export function CourseFinder({
           ) {
             const course = highlighted.current;
             typed.current = false;
-            onSelect(course);
+            choose(course);
             setQuery(course.label);
             setOpen(false);
           }
@@ -107,10 +157,33 @@ export function CourseFinder({
         container={portalContainer}
         className="w-(--anchor-width) min-w-0"
       >
-        <ComboboxEmpty>
-          {query.trim()
-            ? "No matching courses. Try a code or different topic."
-            : "Type a course code, title, or topic."}
+        <ComboboxEmpty
+          className={query.trim() ? undefined : "justify-start px-3 text-left"}
+        >
+          {query.trim() ? (
+            "No matching courses. Try a code or different topic."
+          ) : (
+            <div className="flex min-w-0 flex-col gap-2">
+              <span>Search by code, nickname, title, or topic</span>
+              <div className="flex flex-wrap gap-1.5">
+                {searchHints.map(({ kind, example }) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className="rounded-full border border-border px-2.5 py-1 text-xs text-foreground hover:bg-accent"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      typed.current = true;
+                      setQuery(example);
+                    }}
+                  >
+                    <span className="text-muted-foreground">{kind}</span>{" "}
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </ComboboxEmpty>
         <ComboboxList className="max-h-[min(24rem,var(--available-height))]">
           {(course: SearchCourse) => (
@@ -118,11 +191,17 @@ export function CourseFinder({
               <span className="grid min-w-0 w-full grid-cols-[5rem_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 whitespace-normal py-2">
                 <strong>{course.code}</strong>
                 <span className="min-w-0 break-words">{course.title}</span>
-                {matches.find((match) => match.course === course)?.rank ===
-                  4 && (
-                  <span className="col-start-2 line-clamp-2 text-xs text-muted-foreground">
-                    {descriptionExcerpt(course, query)}
+                {suggesting ? (
+                  <span className="col-start-2 text-xs text-muted-foreground">
+                    {reasons.get(course.code)}
                   </span>
+                ) : (
+                  matches.find((match) => match.course === course)?.rank ===
+                    4 && (
+                    <span className="col-start-2 line-clamp-2 text-xs text-muted-foreground">
+                      {descriptionExcerpt(course, query)}
+                    </span>
+                  )
                 )}
               </span>
             </ComboboxItem>

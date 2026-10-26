@@ -244,8 +244,11 @@ function mergeGepData(
 
 export default function SlideOutDrawer({
   showLauncherHint = true,
+  defaultOpen = false,
 }: {
   showLauncherHint?: boolean;
+  /** Start with the planner open (staging screenshots). */
+  defaultOpen?: boolean;
 }) {
   const persisted = useMemo(
     () =>
@@ -253,7 +256,7 @@ export default function SlideOutDrawer({
     [],
   );
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(defaultOpen);
   const [selectedTab, setSelectedTab] = useState<PlannerWorkbenchTab>(() => {
     const fromTabKey = loadPlannerSelectedTab();
     if (fromTabKey) {

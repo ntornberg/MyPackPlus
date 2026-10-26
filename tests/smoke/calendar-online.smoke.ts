@@ -8,7 +8,7 @@ test("online cart courses appear above the hours and disappear after cart remova
   await page.route("https://**/*", (route) =>
     route.fulfill({ json: { data: { courses: [], profs: [] } } }),
   );
-  await page.goto("/planner-staging.html?personal");
+  await page.goto("/planner-staging.html?bare");
   await expect(page).toHaveTitle("Pack Planner Staging");
 
   await page.evaluate(async () => {

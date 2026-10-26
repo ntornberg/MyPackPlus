@@ -1,10 +1,30 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import fixture from "../../src/staging/courseSearchFixture.json" with { type: "json" };
-
 const suggestions = (page: Page) =>
   page.locator('[data-slot="combobox-list"]').getByRole("option");
-const endpoint = "**/courseSearchFixture.json?*";
+// `?network=real` sends registrar searches here instead of answering them in
+// the page, so each test controls responses and counts requests.
+const endpoint = "https://webappprd.acs.ncsu.edu/php/coursecat/search.php";
+
+/** One lecture for whichever course the registrar form asks for. */
+function registrarResponse(route: Route) {
+  const form = new URLSearchParams(route.request().postData() ?? "");
+  const subject = (form.get("subject") ?? "").split(" - ")[0];
+  const code = `${subject} ${form.get("course-number")}`;
+  return {
+    body: JSON.stringify({
+      html: `<div class="course"><h1>${code} <small>Staging course</small><span class="units">Units: 3</span></h1><p>Synthetic section for course-search interaction testing.</p><table class="section-table"><tbody><tr><td>001</td><td>Lec</td><td>10001</td><td><span>Open</span> 10/30</td><td>MW 10:15 AM - 11:30 AM</td><td>Staging room</td><td><a class="instructor-link">Test Instructor</a></td><td>01/11/2027 - 05/05/2027</td><td></td><td></td></tr></tbody></table></div>`,
+    }),
+  };
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.route("https://**/functions/v1/**", (route) =>
+    route.fulfill({
+      json: { data: { results: [], instructors: {} }, meta: {} },
+    }),
+  );
+});
 const finder = (page: Page) =>
   page.getByRole("combobox", { name: "Find a course", exact: true });
 
@@ -24,17 +44,11 @@ test("code/topic suggestions, keyboard selection, browsing, local filters and ca
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route(endpoint, async (route) => {
     requests.push(route.request().url());
-    await route.fulfill({ json: fixture });
+    await route.fulfill(registrarResponse(route));
   });
-  await page.goto("/planner-staging.html?course-search");
-  await page.locator("#extension-overlay-root").evaluate((element) => {
-    element.classList.add("dark");
-    element.setAttribute("data-mpp-theme", "dark");
-  });
+  await page.goto("/planner-staging.html?network=real&theme=dark");
   await expect(
-    page.getByRole("heading", {
-      name: "Course search staging — synthetic sections",
-    }),
+    page.getByRole("dialog", { name: "Pack Planner" }),
   ).toBeVisible();
   await finder(page).fill("chem 101");
   await expect(suggestions(page).first()).toContainText("CH-101");
@@ -124,9 +138,9 @@ test("browse selection, restored selections, clearing pending results and untouc
   let requests = 0;
   await page.route(endpoint, async (route) => {
     requests++;
-    await route.fulfill({ json: fixture });
+    await route.fulfill(registrarResponse(route));
   });
-  await page.goto("/planner-staging.html?course-search&selected=E-101");
+  await page.goto("/planner-staging.html?network=real&course=E-101");
   await expect(page.getByText(/1 section group loaded/)).toBeVisible();
   expect(requests).toBe(1);
   await page.reload();
@@ -166,7 +180,7 @@ test("browse selection, restored selections, clearing pending results and untouc
     .locator("..")
     .locator('[data-slot="combobox-clear"]')
     .click();
-  await pending!.fulfill({ json: fixture });
+  await pending!.fulfill(registrarResponse(pending!));
   await expect(page.getByText("Sections", { exact: true })).toBeVisible();
   await expect(page.getByText(/1 section group loaded/)).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
@@ -179,14 +193,14 @@ test("latest selection wins, repeated in-flight selections deduplicate, errors r
   await page.route(endpoint, (route) => {
     pending.push(route);
   });
-  await page.goto("/planner-staging.html?course-search");
+  await page.goto("/planner-staging.html?network=real");
   await select(page, "e101");
   await expect.poll(() => pending.length).toBe(1);
   await select(page, "csc246");
   await expect.poll(() => pending.length).toBe(2);
   await select(page, "e101");
   expect(pending).toHaveLength(2);
-  await pending[0].fulfill({ json: fixture });
+  await pending[0].fulfill(registrarResponse(pending[0]));
   await expect(page.getByText(/1 section group loaded/)).toBeVisible();
   await pending[1].fulfill({ status: 503, body: "Unavailable" });
   await expect(page.getByText(/^E-101 —/)).toBeVisible();
@@ -198,7 +212,7 @@ test("latest selection wins, repeated in-flight selections deduplicate, errors r
   await expect(page.getByRole("alert")).toContainText("503");
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect.poll(() => pending.length).toBe(4);
-  await pending[3].fulfill({ json: null });
+  await pending[3].fulfill({ body: JSON.stringify({ html: "" }) });
   await expect(
     page.getByText("No sections found for this course and term."),
   ).toBeVisible();

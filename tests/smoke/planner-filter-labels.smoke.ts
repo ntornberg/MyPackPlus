@@ -8,27 +8,29 @@ test.use({ viewport: { width: 1368, height: 912 } });
 test("selected filter labels wrap and remain searchable and clearable", async ({
   page,
 }) => {
-  await page.goto("/planner-staging.html");
-  const course = page.getByRole("combobox").nth(2);
+  // A long course title, so the selected label has to wrap.
+  await page.goto("/planner-staging.html?course=CSC%20246&theme=dark");
+  await page
+    .getByRole("button", { name: "Browse by subject", exact: true })
+    .click();
+  const course = page.getByRole("combobox", { name: "Course", exact: true });
   const group = course.locator("..");
   const label = group.locator('span[aria-hidden="true"]');
-  await expect(label).toContainText("Data Structures");
+  await expect(label).toContainText("Operating Systems");
   expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
     true,
   );
   expect(
     await label.evaluate((el) => el.getBoundingClientRect().height),
   ).toBeGreaterThan(35);
-  await page.getByRole("button", { name: "Light", exact: true }).click();
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
   await page.screenshot({ path: join(tmpdir(), "planner-course-labels.png") });
   await course.focus();
   await expect(label).toHaveCSS("visibility", "hidden");
-  await course.fill("PY");
-  await page.getByRole("option", { name: "PY 208", exact: false }).click();
-  await page
-    .getByRole("heading", { name: "Pack Planner", exact: true })
-    .click();
-  await expect(label).toContainText("PY 208");
+  await course.fill("316");
+  await page.getByRole("option", { name: /CSC-316/ }).click();
+  await page.getByText(/^Use Search to filter, then pick a row/).click();
+  await expect(label).toContainText("CSC-316");
   await expect(label).toHaveCSS("visibility", "visible");
   await group.locator('[data-slot="combobox-clear"]').click();
   await expect(course).toHaveValue("");

@@ -23,55 +23,76 @@ function failOnAppErrors(page: Page): string[] {
   return errors;
 }
 
-test("loads the planner and exposes its primary controls", async ({ page }) => {
+test("opens the real planner with every tab", async ({ page }) => {
   const errors = failOnAppErrors(page);
 
   await page.goto("/planner-staging.html");
 
   await expect(page).toHaveTitle("Pack Planner Staging");
   await expect(
-    page.getByRole("heading", { name: "Pack Planner", level: 1 }),
+    page.getByRole("dialog", { name: "Pack Planner" }),
   ).toBeVisible();
   await expect(
     page.getByRole("tablist", { name: "Planner search tabs" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Search" })).toBeEnabled();
-  await expect(page.getByText("Comparison workspace")).toBeVisible();
+  for (const name of [
+    "Course Search",
+    "GEP Search",
+    "Major Plan Search",
+    "Instructors",
+  ]) {
+    await expect(page.getByRole("tab", { name, exact: true })).toBeVisible();
+  }
+  await expect(
+    page.getByRole("combobox", { name: "Find a course", exact: true }),
+  ).toBeVisible();
   expect(errors).toEqual([]);
 });
 
-test("searches fixture data and switches planner modes", async ({ page }) => {
+test("loads dummy data in every tab", async ({ page }) => {
   const errors = failOnAppErrors(page);
 
-  await page.goto("/planner-staging.html");
-  await page.getByRole("button", { name: "Search" }).click();
-  await expect(page.getByText(/\d+ results? after filters\./)).toBeVisible();
+  await page.goto("/planner-staging.html?course=CSC%20316");
+  await expect(page.getByText(/section groups? loaded/)).toBeVisible();
+  await expect(page.locator('[role="option"]').first()).toContainText(
+    "CSC 316",
+  );
 
-  const gepTab = page.getByRole("tab", { name: "GEP Search" });
-  await gepTab.click();
-  await expect(gepTab).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Comparison workspace")).toBeVisible();
+  await page.getByRole("tab", { name: "GEP Search" }).click();
+  await expect(page.getByText("Your GEP progress")).toBeVisible();
+  await page
+    .getByRole("button", { name: /Visual and Performing Arts/ })
+    .click();
+  await expect(
+    page.getByText(/courses in \d+ departments · 2027 Spring Term/),
+  ).toBeVisible();
 
-  const majorTab = page.getByRole("tab", { name: "Major Plan Search" });
-  await majorTab.click();
-  await expect(majorTab).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Focus")).toBeVisible();
+  await page.getByRole("tab", { name: "Major Plan Search" }).click();
+  await expect(
+    page.getByRole("radio", { name: "My requirements", exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByText(/Computer Science BS · Fall 2025 catalog/),
+  ).toBeVisible();
+
+  await page.getByRole("tab", { name: "Instructors" }).click();
+  await page.getByPlaceholder(/Name, Unity ID, or subject/).fill("CSC");
+  await expect(page.getByText(/\d+ matches for “CSC”/)).toBeVisible();
   expect(errors).toEqual([]);
 });
 
-test("toggles theme and keeps cart behavior safely inside staging", async ({
+test("toggles theme and adds to cart without leaving staging", async ({
   page,
 }) => {
   const errors = failOnAppErrors(page);
 
-  await page.goto("/planner-staging.html");
+  await page.goto("/planner-staging.html?course=PY%20208&theme=dark");
   await expect(page.locator("html")).toHaveAttribute("data-mpp-theme", "dark");
 
-  await page.getByRole("button", { name: "Light" }).click();
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-mpp-theme", "light");
 
   await page.getByRole("button", { name: "Add to cart" }).first().click();
-  await expect(page.getByText("Cart (staging)")).toBeVisible();
-  await expect(page.getByText(/MyPack not available here/)).toBeVisible();
+  await expect(page.getByText("Added to cart").first()).toBeVisible();
   expect(errors).toEqual([]);
 });

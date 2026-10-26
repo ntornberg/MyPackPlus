@@ -79,7 +79,17 @@ const topicAliases: Record<string, string> = {
   ai: "artificial intelligence",
   ml: "machine learning",
 };
-const subjectAliases: Record<string, string> = { cs: "csc", math: "ma" };
+const romanNumerals: Record<string, string> = {
+  "1": "i",
+  "2": "ii",
+  "3": "iii",
+  "4": "iv",
+  "5": "v",
+};
+export const subjectAliases: Record<string, string> = {
+  cs: "csc",
+  math: "ma",
+};
 
 interface RankedCourse {
   course: SearchCourse;
@@ -234,7 +244,7 @@ export function findCourses(query: string, courses = getCourseSearchIndex()) {
         return undefined;
       return nameWords[0]?.startsWith(subjectWords[0]) ? 1 : 2;
     };
-    return courses
+    const catalogMatches = courses
       .flatMap((course) => {
         if (!course.catalogNum.toLowerCase().startsWith(number)) return [];
         const tier = subjectTier(course);
@@ -253,8 +263,36 @@ export function findCourses(query: string, courses = getCourseSearchIndex()) {
           a.rank - b.rank ||
           a.course.code.localeCompare(b.course.code),
       )
-      .slice(0, 20)
       .map(({ course, rank }) => ({ course, rank }));
+    // "calc 1" or "organic chemistry 2" usually means a numbered title
+    // ("Calculus I"), not a catalog-number prefix. Subject codes keep their
+    // prefix search and only fall back when it finds nothing.
+    const roman = romanNumerals[number];
+    const titleMatches =
+      roman && subjectText && (!isSubjectCode || !catalogMatches.length)
+        ? rankText(`${subjectText} ${roman}`, courses)
+            .filter(
+              (match) =>
+                match.rank < 99 && match.course.titleTokens.includes(roman),
+            )
+            .sort(
+              (a, b) =>
+                a.rank - b.rank ||
+                compareKeys(a.keys, b.keys) ||
+                a.course.code.localeCompare(b.course.code),
+            )
+            .map(({ course, rank }) => ({ course, rank }))
+        : [];
+    // Loose title matches ("chem ii" in "Organic Chemistry II") go after a
+    // matching subject's catalog prefix ("chem 2" -> CH-2xx).
+    const strong = (match: { rank: number }) =>
+      !catalogMatches.length || match.rank <= 2;
+    const titleCodes = new Set(titleMatches.map((match) => match.course.code));
+    return [
+      ...titleMatches.filter(strong),
+      ...catalogMatches.filter((match) => !titleCodes.has(match.course.code)),
+      ...titleMatches.filter((match) => !strong(match)),
+    ].slice(0, 20);
   }
   const best = new Map<string, RankedCourse & { scoped: number }>();
   const add = (matches: RankedCourse[], scoped: number) => {

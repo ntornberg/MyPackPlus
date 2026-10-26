@@ -5,7 +5,7 @@ for (const systemTheme of ["light", "dark"] as const) {
     page,
   }) => {
     await page.emulateMedia({ colorScheme: systemTheme });
-    await page.goto("/planner-staging.html");
+    await page.goto("/planner-staging.html?bare");
     await page.evaluate(async () => {
       const domPath = "/src/utils/dom.ts";
       const cssPath = "/src/index.css?inline";

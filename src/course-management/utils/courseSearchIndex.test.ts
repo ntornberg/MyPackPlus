@@ -133,6 +133,23 @@ describe("course discovery", () => {
       findCourses("data analysis", courses).map((match) => match.course.code),
     ).toEqual(["C-101", "B-101"]);
   });
+  it.each([
+    ["calc 1", "MA-141"],
+    ["calc2", "MA-241"],
+    ["organic chemistry 2", "CH-223"],
+    ["diff eq 1", "MA-341"],
+    ["american history 1", "HI-251"],
+  ])("reads the number in %s as a Roman numeral title", (query, code) => {
+    expect(findCourses(query)[0].course.code).toBe(code);
+  });
+  it("keeps catalog prefixes ahead of loose numeral title matches", () => {
+    expect(findCourses("chem 2")[0].course.code).toBe("CH-201");
+    expect(
+      findCourses("csc 2").every((match) =>
+        match.course.catalogNum.startsWith("2"),
+      ),
+    ).toBe(true);
+  });
   it("recognizes multiword subjects and numeric-only queries", () => {
     expect(findCourses("comp sci 246")[0].course.code).toBe("CSC-246");
     expect(findCourses("physics 208")[0].course.code).toBe("PY-208");

@@ -19,26 +19,34 @@ for (const [width, height] of [
     await page.setViewportSize({ width, height });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto("/planner-staging.html");
+    await page.goto("/planner-staging.html?course=CSC%20316");
     await expect(page).toHaveTitle("Pack Planner Staging");
 
-    for (const tab of ["Course Search", "GEP Search", "Major Plan Search"]) {
-      await page.getByRole("tab", { name: tab, exact: true }).click();
-      const row = page.getByRole("option").first();
-      await row.click();
-      await expect(row).toHaveAttribute("aria-selected", "true");
-      const grades = row.getByRole("group", { name: "Grade distribution" });
-      await expect(grades).toBeVisible();
-      const bounds = await grades.evaluate((element) => {
-        const title = element.previousElementSibling!.getBoundingClientRect();
-        const chart = element.getBoundingClientRect();
-        return { titleWidth: title.width, stacked: chart.top >= title.bottom };
-      });
-      expect(bounds.titleWidth).toBeGreaterThanOrEqual(220);
-      // Narrow cards must put the chart below the title instead of squeezing it.
-      if ((await row.boundingBox())!.width < 500)
-        expect(bounds.stacked).toBe(true);
+    const row = page.locator('[role="option"]').first();
+    await row.click();
+    await expect(row).toHaveAttribute("aria-selected", "true");
+    const grades = row.getByRole("group", { name: "Grade distribution" });
+    await expect(grades).toBeVisible();
+    const bounds = await grades.evaluate((element) => {
+      const title = element.previousElementSibling!.getBoundingClientRect();
+      const chart = element.getBoundingClientRect();
+      return { titleWidth: title.width, stacked: chart.top >= title.bottom };
+    });
+    expect(bounds.titleWidth).toBeGreaterThanOrEqual(220);
+    // Narrow cards must put the chart below the title instead of squeezing it.
+    if ((await row.boundingBox())!.width < 500)
+      expect(bounds.stacked).toBe(true);
 
+    for (const tab of [
+      "Course Search",
+      "GEP Search",
+      "Major Plan Search",
+      "Instructors",
+    ]) {
+      await page.getByRole("tab", { name: tab, exact: true }).click();
+      await expect(
+        page.getByRole("tab", { name: tab, exact: true }),
+      ).toHaveAttribute("aria-selected", "true");
       const overflow = await page
         .locator("#extension-overlay-root")
         .evaluate((root) =>

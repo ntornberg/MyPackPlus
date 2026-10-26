@@ -45,7 +45,7 @@ test("calendar hover card supports focus, hover, fallback and cached reopening",
       });
     },
   );
-  await page.goto("/planner-staging.html");
+  await page.goto("/planner-staging.html?bare");
   await page.evaluate(async () => {
     const paths = {
       react: "/node_modules/.vite/deps/react.js",
@@ -146,7 +146,7 @@ test("native calendar supplements the original popup and handles redraw and term
       json: { data: { results: [], instructors: {} }, meta: {} },
     }),
   );
-  await page.goto("/planner-staging.html");
+  await page.goto("/planner-staging.html?bare");
   await page.evaluate(async () => {
     document.getElementById("root")!.hidden = true;
     document

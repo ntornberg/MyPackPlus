@@ -42,7 +42,7 @@ MyPack Plus runs as a Manifest V3 browser extension.
 - `src/ui-system/components` contains shared planner UI, workbench components, and reusable controls.
 - `src/course-management` contains section search, registrar data, cart actions, and result rendering.
 - `src/degree-planning` contains plan/GEP data and injected grade/professor cards.
-- `src/staging` contains the planner staging app used for visual and interaction checks outside MyPack.
+- `src/staging` mounts the real planner outside MyPack with dummy data, for visual checks, screenshots, and smoke tests.
 
 ## Development
 
@@ -58,7 +58,7 @@ Run the Vite dev server:
 npm run dev
 ```
 
-Run the planner staging app:
+Run the planner staging app (the real planner with dummy data, with screenshot presets such as `?tab=gep_search&theme=dark`):
 
 ```bash
 npm run dev:planner-staging
