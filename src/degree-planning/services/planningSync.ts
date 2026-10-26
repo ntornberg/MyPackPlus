@@ -35,12 +35,33 @@ export type PlanningSyncResult =
   | { status: "unavailable" }
   | { status: "failed"; message: string; summary: string };
 
-async function fetchAudits(base: string): Promise<DegreeAudit[]> {
+export type PlanningSyncStep = "audit" | "planner" | "choices";
+
+export type PlanningSyncStepProgress = {
+  state: "pending" | "running" | "done" | "failed";
+  done: number;
+  /** Unknown until the step has listed what it will fetch. */
+  total: number | null;
+};
+
+/** Per-step progress of the running sync; `choices` only on a forced sync. */
+export type PlanningSyncProgress = Partial<
+  Record<PlanningSyncStep, PlanningSyncStepProgress>
+>;
+
+type StepUpdate = (update: Partial<PlanningSyncStepProgress>) => void;
+
+async function fetchAudits(
+  base: string,
+  update: StepUpdate,
+): Promise<DegreeAudit[]> {
   const shell = await fetchText(`${base}${AUDIT_SCRIPT}IScript_DegreeAudit`);
   const programs = parseDegreePrograms(shell);
   if (programs.length === 0) {
     throw new Error("No programs found on the degree audit page");
   }
+  update({ total: programs.length });
+  let done = 0;
   return Promise.all(
     programs.map(async (program) => {
       const url = `${base}${AUDIT_SCRIPT}IScript_getDegreeDetails?${degreeDetailsQuery(program)}`;
@@ -48,17 +69,23 @@ async function fetchAudits(base: string): Promise<DegreeAudit[]> {
       if (!audit) {
         throw new Error(`No report for ${program.acad_plan}`);
       }
+      update({ done: ++done });
       return { ...audit, name: program.descr || program.acad_plan };
     }),
   );
 }
 
-async function fetchPlannerTerms(base: string): Promise<PlannerTerm[]> {
+async function fetchPlannerTerms(
+  base: string,
+  update: StepUpdate,
+): Promise<PlannerTerm[]> {
   // Pack Planner's data scripts need the session initialized by its page first.
   await fetchText(`${base}${PLANNER_SCRIPT}IScript_PackPlanner`);
   const terms = parsePlannerTermList(
     JSON.parse(await fetchText(`${base}${PLANNER_SCRIPT}IScript_getTerms`)),
   );
+  update({ total: terms.length });
+  let done = 0;
   return Promise.all(
     terms.map(async ({ strm, term }) => {
       const courses = parsePlannerTermDetails(
@@ -71,6 +98,7 @@ async function fetchPlannerTerms(base: string): Promise<PlannerTerm[]> {
       if (!courses) {
         throw new Error(`No Pack Planner data for term ${strm}`);
       }
+      update({ done: ++done });
       return { strm, term, courses };
     }),
   );
@@ -91,22 +119,64 @@ export async function markPlanningDataStale(): Promise<void> {
 }
 
 let inflight: Promise<PlanningSyncResult> | null = null;
+let progress: PlanningSyncProgress | null = null;
+const progressListeners = new Set<(progress: PlanningSyncProgress) => void>();
+
+function stepUpdater(step: PlanningSyncStep): StepUpdate {
+  return (update) => {
+    const current = progress?.[step] ?? {
+      state: "running",
+      done: 0,
+      total: null,
+    };
+    progress = { ...progress, [step]: { ...current, ...update } };
+    for (const listener of progressListeners) {
+      listener(progress);
+    }
+  };
+}
+
+/** Runs one sync step, marking it running, then done or failed. */
+async function runStep<T>(
+  step: PlanningSyncStep,
+  run: (update: StepUpdate) => Promise<T>,
+): Promise<T> {
+  const update = stepUpdater(step);
+  update({ state: "running" });
+  try {
+    const value = await run(update);
+    update({ state: "done" });
+    return value;
+  } catch (error) {
+    update({ state: "failed" });
+    throw error;
+  }
+}
 
 /**
  * Fetches every program's degree audit and the live Pack Planner, the same
  * requests MyPack's own pages make. Skipped while the last sync is fresh
  * unless `force`. The two halves store independently, so a planner outage
- * doesn't hold back the audit.
+ * doesn't hold back the audit. `onProgress` hears each step's progress,
+ * including for a sync another caller already started.
  */
 export function syncPlanningData({
   force = false,
   location = typeof window !== "undefined" ? window.location : undefined,
   now = Date.now,
+  onProgress,
 }: {
   force?: boolean;
   location?: Pick<Location, "hostname" | "pathname">;
   now?: () => number;
+  onProgress?: (progress: PlanningSyncProgress) => void;
 } = {}): Promise<PlanningSyncResult> {
+  if (onProgress) {
+    progressListeners.add(onProgress);
+    if (inflight && progress) {
+      onProgress(progress);
+    }
+  }
   inflight ??= (async (): Promise<PlanningSyncResult> => {
     if (typeof chrome === "undefined" || !chrome.storage?.local) {
       return { status: "unavailable" };
@@ -125,9 +195,16 @@ export function syncPlanningData({
       return { status: "fresh" };
     }
 
+    progress = {
+      audit: { state: "pending", done: 0, total: null },
+      planner: { state: "pending", done: 0, total: null },
+      ...(force
+        ? { choices: { state: "pending", done: 0, total: null } as const }
+        : {}),
+    };
     const [audits, terms] = await Promise.allSettled([
-      fetchAudits(base),
-      fetchPlannerTerms(base),
+      runStep("audit", (update) => fetchAudits(base, update)),
+      runStep("planner", (update) => fetchPlannerTerms(base, update)),
     ]);
     if (audits.status === "fulfilled") {
       await storeDegreeAudits(audits.value, { replace: true });
@@ -139,18 +216,27 @@ export function syncPlanningData({
       result.status === "rejected" ? [String(result.reason)] : [],
     );
     if (force && audits.status === "fulfilled") {
-      for (const audit of audits.value) {
-        const choices = await loadRequirementChoices(audit, {
-          force: true,
-          location,
-          now,
-        });
-        failures.push(
-          ...Object.values(choices.results).flatMap((result) =>
-            result.error ? [result.error] : [],
-          ),
-        );
-      }
+      const choiceFailures = await runStep("choices", async (update) => {
+        update({ total: audits.value.length });
+        const errors: string[] = [];
+        for (const [index, audit] of audits.value.entries()) {
+          const choices = await loadRequirementChoices(audit, {
+            force: true,
+            location,
+            now,
+          });
+          errors.push(
+            ...Object.values(choices.results).flatMap((result) =>
+              result.error ? [result.error] : [],
+            ),
+          );
+          update({ done: index + 1 });
+        }
+        return errors;
+      });
+      failures.push(...choiceFailures);
+    } else if (force) {
+      stepUpdater("choices")({ state: "failed" });
     }
     if (failures.length > 0) {
       AppLogger.warn("Planning data sync incomplete:", failures);
@@ -175,6 +261,8 @@ export function syncPlanningData({
     };
   })().finally(() => {
     inflight = null;
+    progress = null;
+    progressListeners.clear();
   });
   return inflight;
 }

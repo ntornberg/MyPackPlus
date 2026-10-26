@@ -5,13 +5,16 @@ import {
   Circle,
   CircleDot,
   Info,
+  Loader2,
   RefreshCw,
   TriangleAlert,
 } from "lucide-react";
 import {
   Fragment,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -26,6 +29,11 @@ import type {
   DegreeAuditLine,
 } from "../../../degree-planning/services/degreeAudit";
 import type { PlannerIndex } from "../../../degree-planning/services/packPlanner";
+import type {
+  PlanningSyncProgress,
+  PlanningSyncStep,
+  PlanningSyncStepProgress,
+} from "../../../degree-planning/services/planningSync";
 import {
   auditLineState,
   courseKeyOf,
@@ -501,6 +509,69 @@ function syncedLabel(syncedAt: number, now = Date.now()): string {
   return new Date(syncedAt).toLocaleDateString();
 }
 
+const SYNC_STEP_LABELS: Record<PlanningSyncStep, string> = {
+  audit: "Degree audit",
+  planner: "Pack Planner",
+  choices: "Course choices",
+};
+
+/** How long the "up to date" confirmation stays after a sync finishes. */
+const SYNC_DONE_FLASH = 2500;
+
+function stepFraction(step: PlanningSyncStepProgress): number {
+  if (step.state === "done" || step.state === "failed") return 1;
+  if (!step.total) return step.state === "running" ? 0.1 : 0;
+  return Math.min(0.1 + (0.9 * step.done) / step.total, 1);
+}
+
+/** Overall progress from 0 to 1, weighting each step equally. */
+function syncFraction(progress: PlanningSyncProgress | undefined): number {
+  const steps = Object.values(progress ?? {});
+  if (steps.length === 0) return 0.05;
+  const total = steps.reduce((sum, step) => sum + stepFraction(step), 0);
+  return Math.max(total / steps.length, 0.05);
+}
+
+function SyncStepChip({
+  step,
+  progress,
+}: {
+  step: PlanningSyncStep;
+  progress: PlanningSyncStepProgress;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1",
+        progress.state === "pending" && "opacity-60",
+      )}
+    >
+      {progress.state === "done" ? (
+        <CheckCircle2
+          className="size-3 text-emerald-600 dark:text-emerald-400"
+          aria-hidden
+        />
+      ) : progress.state === "failed" ? (
+        <TriangleAlert
+          className="size-3 text-amber-600 dark:text-amber-300"
+          aria-hidden
+        />
+      ) : progress.state === "running" ? (
+        <Loader2 className="size-3 animate-spin" aria-hidden />
+      ) : (
+        <Circle className="size-3" aria-hidden />
+      )}
+      {SYNC_STEP_LABELS[step]}
+      {progress.total && progress.state === "running" ? (
+        <span className="tabular-nums">
+          {" "}
+          {progress.done}/{progress.total}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export function PlanningSyncStatus({
   sync,
   syncedAt,
@@ -512,55 +583,126 @@ export function PlanningSyncStatus({
 }) {
   const syncing = sync.status === "syncing";
   const warn = sync.status === "stale" || sync.status === "failed";
+  const progress = sync.status === "syncing" ? sync.progress : undefined;
+  const percent = Math.round(syncFraction(progress) * 100);
+
+  // Briefly confirm a sync that fetched (not one skipped as fresh) and
+  // finished cleanly.
+  const [justSynced, setJustSynced] = useState(false);
+  const previousStatus = useRef(sync.status);
+  const fetched = useRef(false);
+  if (progress) fetched.current = true;
+  useEffect(() => {
+    const wasFetching = previousStatus.current === "syncing" && fetched.current;
+    previousStatus.current = sync.status;
+    if (sync.status !== "syncing") fetched.current = false;
+    if (!wasFetching || sync.status !== "idle") {
+      if (sync.status !== "idle") setJustSynced(false);
+      return;
+    }
+    setJustSynced(true);
+    const timer = setTimeout(() => setJustSynced(false), SYNC_DONE_FLASH);
+    return () => clearTimeout(timer);
+  }, [sync.status]);
+
   return (
     <div
-      role={warn ? "status" : undefined}
+      role="status"
+      aria-live="polite"
       className={cn(
-        "flex items-center justify-between gap-2 text-xs",
+        "flex flex-col gap-1.5 text-xs transition-colors",
         warn
           ? "rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900 dark:border-amber-500/35 dark:bg-amber-950/45 dark:text-amber-100"
-          : "text-muted-foreground",
+          : justSynced
+            ? "text-emerald-700 dark:text-emerald-300"
+            : "text-muted-foreground",
       )}
     >
-      <span
-        className="flex min-w-0 items-center gap-1.5"
-        title={sync.status === "failed" ? sync.message : undefined}
-      >
-        {warn ? (
-          <TriangleAlert
-            className="size-3.5 shrink-0 text-amber-600 dark:text-amber-300"
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className="flex min-w-0 items-center gap-1.5"
+          title={sync.status === "failed" ? sync.message : undefined}
+        >
+          {warn ? (
+            <TriangleAlert
+              className="size-3.5 shrink-0 text-amber-600 dark:text-amber-300"
+              aria-hidden
+            />
+          ) : justSynced ? (
+            <CheckCircle2
+              className="size-3.5 shrink-0 animate-in zoom-in-50 fade-in duration-300"
+              aria-hidden
+            />
+          ) : null}
+          <span>
+            {syncing
+              ? "Syncing with MyPack…"
+              : justSynced
+                ? "Synced — everything's up to date"
+                : sync.status === "failed"
+                  ? (sync.summary ??
+                    "Couldn't sync with MyPack, so progress may be out of date.")
+                  : sync.status === "stale"
+                    ? syncedAt
+                      ? `Degree audit may be out of date (last synced ${syncedLabel(syncedAt)}).`
+                      : "Degree audit needs a sync to reflect recent changes."
+                    : syncedAt
+                      ? `Degree audit synced ${syncedLabel(syncedAt)}`
+                      : "Degree audit not synced yet"}
+          </span>
+        </span>
+        <Button
+          type="button"
+          variant={warn ? "outline" : "ghost"}
+          size="sm"
+          onClick={onRefresh}
+          disabled={syncing}
+          className="h-7 shrink-0 gap-1 px-2 text-xs"
+        >
+          <RefreshCw
+            className={cn("size-3", syncing && "animate-spin")}
             aria-hidden
           />
-        ) : null}
-        <span>
-          {syncing
-            ? "Syncing your degree audit and Pack Planner…"
-            : sync.status === "failed"
-              ? (sync.summary ??
-                "Couldn't sync with MyPack, so progress may be out of date.")
-              : sync.status === "stale"
-                ? syncedAt
-                  ? `Degree audit may be out of date (last synced ${syncedLabel(syncedAt)}).`
-                  : "Degree audit needs a sync to reflect recent changes."
-                : syncedAt
-                  ? `Degree audit synced ${syncedLabel(syncedAt)}`
-                  : "Degree audit not synced yet"}
-        </span>
-      </span>
-      <Button
-        type="button"
-        variant={warn ? "outline" : "ghost"}
-        size="sm"
-        onClick={onRefresh}
-        disabled={syncing}
-        className="h-7 shrink-0 gap-1 px-2 text-xs"
-      >
-        <RefreshCw
-          className={cn("size-3", syncing && "animate-spin")}
-          aria-hidden
-        />
-        {warn ? "Sync now" : "Refresh"}
-      </Button>
+          {syncing ? (
+            <span className="tabular-nums">{percent}%</span>
+          ) : warn ? (
+            "Sync now"
+          ) : (
+            "Refresh"
+          )}
+        </Button>
+      </div>
+      {syncing ? (
+        <div className="flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div
+            role="progressbar"
+            aria-label="Sync progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            className="h-1 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          {progress ? (
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {(Object.keys(SYNC_STEP_LABELS) as PlanningSyncStep[]).map(
+                (step) =>
+                  progress[step] ? (
+                    <SyncStepChip
+                      key={step}
+                      step={step}
+                      progress={progress[step]}
+                    />
+                  ) : null,
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -621,8 +763,14 @@ export function RequirementTree({
           auditGroups,
           planner,
         );
+        // A course approved under several categories is listed once per category.
+        const catalogCourses = [
+          ...new Map(
+            entry.courses.map((course) => [courseKeyOf(course), course]),
+          ).values(),
+        ];
         const courses = [
-          ...entry.courses.map((course) =>
+          ...catalogCourses.map((course) =>
             buildCourseRow(
               courseKeyOf(course),
               course,

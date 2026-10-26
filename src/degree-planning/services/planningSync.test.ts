@@ -122,6 +122,21 @@ describe("syncPlanningData", () => {
     ).toBe("synced");
   });
 
+  it("reports each step's progress until it finishes", async () => {
+    const onProgress = vi.fn();
+    await syncPlanningData({ location: portal, now: () => 1000, onProgress });
+
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audit: { state: "running", done: 1, total: 1 },
+      }),
+    );
+    expect(onProgress).toHaveBeenLastCalledWith({
+      audit: { state: "done", done: 1, total: 1 },
+      planner: { state: "done", done: 1, total: 1 },
+    });
+  });
+
   it("stores what it could and reports the failure", async () => {
     fetchMock.mockImplementation((url: string) =>
       url.includes("WEBLIB_PLANNER")

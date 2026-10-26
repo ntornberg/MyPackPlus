@@ -16,6 +16,7 @@ import {
   PLANNING_SYNC_MAX_AGE,
   PLANNING_SYNCED_AT_KEY,
   syncPlanningData,
+  type PlanningSyncProgress,
 } from "../../../degree-planning/services/planningSync";
 import {
   loadStoredRequirementChoices,
@@ -25,14 +26,14 @@ import {
 
 export type PlanningSyncState =
   | { status: "idle" }
-  | { status: "syncing" }
+  | { status: "syncing"; progress?: PlanningSyncProgress }
   /** Never synced, past the freshness window, or Pack Planner was edited. */
   | { status: "stale" }
   | { status: "failed"; message: string; summary?: string };
 
 type RunState =
   | { status: "idle" }
-  | { status: "syncing" }
+  | { status: "syncing"; progress?: PlanningSyncProgress }
   /** This page can't reach MyPack's scripts, so don't retry automatically. */
   | { status: "unavailable" }
   | { status: "failed"; message: string; summary?: string };
@@ -98,7 +99,15 @@ export function usePlanningData(): PlanningData {
 
   const runSync = useCallback((force: boolean) => {
     setRun({ status: "syncing" });
-    syncPlanningData({ force })
+    syncPlanningData({
+      force,
+      onProgress: (progress) =>
+        setRun((current) =>
+          current.status === "syncing"
+            ? { status: "syncing", progress }
+            : current,
+        ),
+    })
       .then((result) => {
         setRun(
           result.status === "failed"

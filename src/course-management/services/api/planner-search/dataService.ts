@@ -32,6 +32,7 @@ const CACHE_KEYS = {
   OPEN_COURSES: "openCourses",
   GRADE_PROF: "gradeProfData",
   NULL_COURSES: "nullCourses", // Cache for courses that return no data
+  SEARCHED_SUBJECTS: "searchedSubjects", // Subjects whose open courses are all cached
 };
 const OPEN_COURSES_CACHE_TTL_MS = 2 * 60 * 1000;
 
@@ -42,6 +43,10 @@ export function subjectCode(subject: string): string {
 
 function buildNullCourseCacheKey(courseKey: string, term: string): string {
   return `null-${courseKey} ${term}`;
+}
+
+function buildSearchedSubjectCacheKey(subject: string, term: string): string {
+  return `subject-${subject} ${term}`;
 }
 
 type GradeProfRequest = {
@@ -538,20 +543,38 @@ export async function batchFetchCoursesData(
     }
   }
 
-  // Phase 2: Fetch Missing Open Courses Data (in parallel)
-  const openCoursesToFetchCount = Object.keys(openCoursesToFetch).length;
+  // A subject searched within the open-courses TTL already cached every course
+  // it returned, so a requested course still missing isn't offered this term;
+  // searching the subject again would only find the same thing.
+  const missingSubjects = [
+    ...new Set(
+      Object.values(openCoursesToFetch).map((course) => course.course_abr),
+    ),
+  ];
+  const subjectHashKeys = await Promise.all(
+    missingSubjects.map((subject) =>
+      generateCacheKey(buildSearchedSubjectCacheKey(subject, term)),
+    ),
+  );
+  const searchedSubjects = await getGenericCacheMany(
+    CACHE_KEYS.SEARCHED_SUBJECTS,
+    subjectHashKeys,
+  );
+  const subjects_to_fetch = missingSubjects.filter(
+    (_, index) => !searchedSubjects[subjectHashKeys[index]!],
+  );
 
-  if (openCoursesToFetchCount > 0) {
+  // Phase 2: Fetch Missing Open Courses Data (in parallel)
+  const openCoursesToFetchCount = Object.values(openCoursesToFetch).filter(
+    (course) => subjects_to_fetch.includes(course.course_abr),
+  ).length;
+
+  if (subjects_to_fetch.length > 0) {
     const fetchProgressMessage = `Fetching open courses data for ${openCoursesToFetchCount} courses`;
 
     onProgress?.(20, fetchProgressMessage);
 
-    // Create a promise for each course to fetch
-    const subjects_to_fetch = [
-      ...new Set(
-        Object.values(openCoursesToFetch).map((course) => course.course_abr),
-      ),
-    ];
+    // Create a promise for each subject to fetch
     const fetchPromises = subjects_to_fetch.map(async (subject) => {
       try {
         onProgress?.(25, `Fetching open courses data for ${subject}`);
@@ -574,10 +597,18 @@ export async function batchFetchCoursesData(
             openCoursesCache[course.code] = course;
           }
         });
+        const cachedAt = Date.now();
         await setGenericCache(
           CACHE_KEYS.OPEN_COURSES,
           openCourseEntries,
           OPEN_COURSES_CACHE_TTL_MS,
+        );
+        // Marked only once its courses are cached, and expiring no later than
+        // they do, so a marked subject never hides a course it returned.
+        await setGenericCache(
+          CACHE_KEYS.SEARCHED_SUBJECTS,
+          { [subjectHashKeys[missingSubjects.indexOf(subject)]!]: true },
+          OPEN_COURSES_CACHE_TTL_MS - (Date.now() - cachedAt),
         );
 
         // Requested courses this subject search didn't return are not

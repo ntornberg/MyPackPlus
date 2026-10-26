@@ -421,6 +421,34 @@ describe("dataService v2 grade/RMP requests", () => {
       mocks.setGenericCache.mockReset();
     });
 
+    it("doesn't search a subject again for a course it didn't return", async () => {
+      const store = useMemoryCache();
+      mocks.batchSearchOpenCourses.mockResolvedValue([courseData]);
+      const unoffered = { ...course, catalog_num: "499", course_id: "id-3" };
+
+      await batchFetchCoursesData([course, unoffered], "Spring 2027");
+      const result = await batchFetchCoursesData(
+        [course, unoffered],
+        "Spring 2027",
+      );
+
+      expect(mocks.batchSearchOpenCourses).toHaveBeenCalledTimes(1);
+      expect(Object.keys(result)).toEqual(["MA 241"]);
+      expect(mocks.setGenericCache).toHaveBeenCalledWith(
+        "searchedSubjects",
+        { "hash:subject-MA Spring 2027": true },
+        expect.any(Number),
+      );
+
+      // Once the subject marker expires, the subject is searched again.
+      store.delete("searchedSubjects:hash:subject-MA Spring 2027");
+      await batchFetchCoursesData([course, unoffered], "Spring 2027");
+      expect(mocks.batchSearchOpenCourses).toHaveBeenCalledTimes(2);
+      mocks.getGenericCache.mockReset();
+      mocks.setGenericCache.mockReset();
+      mocks.batchSearchOpenCourses.mockReset();
+    });
+
     it("waits for a subject search already running instead of searching again", async () => {
       mocks.getGenericCache.mockResolvedValue(null);
       let finishSubject!: (courses: unknown[]) => void;
