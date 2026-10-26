@@ -65,6 +65,74 @@ describe("course discovery", () => {
       );
     },
   );
+  it("treats an exact subject code as that subject only", () => {
+    expect(findCourses("ch 101").map((match) => match.course.code)).toEqual([
+      "CH-101",
+    ]);
+    expect(findCourses("ch101")[0].course.code).toBe("CH-101");
+  });
+  it("ranks subject-name matches on the first name word above later words", () => {
+    const codes = findCourses("chem 101").map((match) => match.course.code);
+    expect(codes[0]).toBe("CH-101");
+    expect(codes.indexOf("CH-101")).toBeLessThan(codes.indexOf("PCC-101"));
+  });
+  it.each(["csc algorithms", "computer science algorithms"])(
+    "scopes %s to the leading subject before other matches",
+    (query) => {
+      const matches = findCourses(query);
+      expect(matches[0].course.code).toBe("CSC-316");
+      expect(
+        matches
+          .filter((match) => match.rank === matches[0].rank)
+          .every((match) => match.course.subject.startsWith("CSC")),
+      ).toBe(true);
+    },
+  );
+  it("falls back to the whole query when the subject scope finds nothing", () => {
+    expect(findCourses("e commerce")[0].course.title).toMatch(/Commerce/);
+  });
+  it("breaks ties by title start, undergraduate level, then title length", () => {
+    const base = courseSearchIndex[0];
+    const course = (code: string, catalogNum: string, title: string) => ({
+      ...base,
+      code,
+      catalogNum,
+      normalizedCode: code.toLowerCase().replace("-", ""),
+      normalizedTitle: title,
+      titleTokens: title.split(" "),
+      paddedTitle: ` ${title} `,
+      descriptionTokens: [""],
+    });
+    const courses = [
+      course("A-101", "101", "advanced robot design"),
+      course("B-501", "501", "robot design"),
+      course("C-201", "201", "robot design studio"),
+      course("D-101", "101", "robot design"),
+    ];
+    expect(
+      findCourses("robot design", courses).map((match) => match.course.code),
+    ).toEqual(["D-101", "B-501", "C-201", "A-101"]);
+  });
+  it("requires description words to appear close together", () => {
+    const base = courseSearchIndex[0];
+    const course = (code: string, description: string) => ({
+      ...base,
+      code,
+      normalizedCode: code.toLowerCase().replace("-", ""),
+      normalizedTitle: "unrelated",
+      titleTokens: ["unrelated"],
+      paddedTitle: " unrelated ",
+      descriptionTokens: description.split(" "),
+    });
+    const courses = [
+      course("A-101", "data a b c d e f g h i j analysis"),
+      course("B-101", "data then some analysis"),
+      course("C-101", "data analysis"),
+    ];
+    expect(
+      findCourses("data analysis", courses).map((match) => match.course.code),
+    ).toEqual(["C-101", "B-101"]);
+  });
   it("recognizes multiword subjects and numeric-only queries", () => {
     expect(findCourses("comp sci 246")[0].course.code).toBe("CSC-246");
     expect(findCourses("physics 208")[0].course.code).toBe("PY-208");

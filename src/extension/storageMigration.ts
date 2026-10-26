@@ -46,21 +46,29 @@ export function initializeBackgroundStorage() {
   return initialization;
 }
 
+let refresh: Promise<void> | undefined;
+
 /** Claim the refresh before reloading so repeated update events cannot loop. */
-export async function refreshMigratedTabs(): Promise<void> {
-  const stored = await chrome.storage.local.get(REFRESH_KEY);
-  if (stored[REFRESH_KEY] >= STORAGE_REVISION) return;
-  const tabs = await chrome.tabs.query({
-    url: [
-      "https://portalsp.acs.ncsu.edu/*",
-      "https://webappprd.acs.ncsu.edu/*",
-    ],
+export function refreshMigratedTabs(): Promise<void> {
+  refresh ??= (async () => {
+    const stored = await chrome.storage.local.get(REFRESH_KEY);
+    if (stored[REFRESH_KEY] >= STORAGE_REVISION) return;
+    const tabs = await chrome.tabs.query({
+      url: [
+        "https://portalsp.acs.ncsu.edu/*",
+        "https://webappprd.acs.ncsu.edu/*",
+      ],
+    });
+    await chrome.storage.local.set({ [REFRESH_KEY]: STORAGE_REVISION });
+    // A closed or inaccessible tab must not prevent the remaining tabs refreshing.
+    await Promise.allSettled(
+      tabs.filter((tab) => tab.id !== undefined).map((tab) => chrome.tabs.reload(tab.id!)),
+    );
+  })().catch((error) => {
+    refresh = undefined;
+    throw error;
   });
-  await chrome.storage.local.set({ [REFRESH_KEY]: STORAGE_REVISION });
-  // A closed or inaccessible tab must not prevent the remaining tabs refreshing.
-  await Promise.allSettled(
-    tabs.filter((tab) => tab.id !== undefined).map((tab) => chrome.tabs.reload(tab.id!)),
-  );
+  return refresh;
 }
 
 function clearSiteKeys(storage: Storage): void {

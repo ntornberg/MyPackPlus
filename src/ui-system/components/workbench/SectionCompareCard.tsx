@@ -469,220 +469,230 @@ export const SectionCompareCard = memo(function SectionCompareCard({
               starClassName={compact ? "size-3" : "size-3.5"}
             />
           </div>
+          <div
+            className={cn(
+              "flex flex-col text-sm",
+              compact ? "pt-1 gap-1" : "pt-2 gap-1.5",
+            )}
+          >
+            {compact ? (
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <Clock
+                  className="mt-0.5 size-4 shrink-0 text-primary"
+                  aria-hidden
+                />
+                <span className="leading-snug">
+                  Section {section.section} · {section.classNumber}
+                  {section.component ? ` · ${section.component}` : ""}
+                  {section.dayTime ? ` · ${section.dayTime}` : ""}
+                  {section.location ? ` · ${section.location}` : ""}
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-foreground">
+                  <BookMarkedIcon
+                    className="size-4 shrink-0 text-primary"
+                    aria-hidden
+                  />
+                  <span>
+                    Section {section.section} · {section.classNumber}
+                    {section.component ? (
+                      <>
+                        {" "}
+                        ·{" "}
+                        <span className="text-muted-foreground">
+                          {section.component}
+                        </span>
+                      </>
+                    ) : null}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <MapPinIcon
+                    className="size-4 shrink-0 text-primary"
+                    aria-hidden
+                  />
+                  <span>{section.location || "—"}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="size-4 shrink-0 text-primary" aria-hidden />
+                  <span>{section.dayTime || "—"}</span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <SectionGradeDistributionBlock section={section} compact={compact} />
       </div>
 
-      <div
-        className={cn(
-          "flex flex-col text-sm",
-          compact ? "mt-1.5 gap-1" : "mt-3 gap-1.5",
-        )}
-      >
-        {compact ? (
-          <div className="flex items-start gap-2 text-muted-foreground">
-            <Clock
-              className="mt-0.5 size-4 shrink-0 text-primary"
-              aria-hidden
-            />
-            <span className="leading-snug">
-              Section {section.section} · {section.classNumber}
-              {section.component ? ` · ${section.component}` : ""}
-              {section.dayTime ? ` · ${section.dayTime}` : ""}
-              {section.location ? ` · ${section.location}` : ""}
-            </span>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 text-foreground">
-              <BookMarkedIcon
-                className="size-4 shrink-0 text-primary"
-                aria-hidden
-              />
-              <span>
-                Section {section.section} · {section.classNumber}
-                {section.component ? (
-                  <>
-                    {" "}
-                    ·{" "}
-                    <span className="text-muted-foreground">
-                      {section.component}
-                    </span>
-                  </>
-                ) : null}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <MapPinIcon
-                className="size-4 shrink-0 text-primary"
-                aria-hidden
-              />
-              <span>{section.location || "—"}</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="size-4 shrink-0 text-primary" aria-hidden />
-              <span>{section.dayTime || "—"}</span>
-            </div>
-          </>
-        )}
-        {multiLab ? (
-          <div
-            role="group"
-            className={cn(
-              "border-l-2 border-primary/50 pl-3",
-              compact ? "mt-1.5 space-y-1.5" : "mt-2 space-y-2",
-            )}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            <Label className="sr-only">
-              {linkedPanelTitle} for this lecture meeting; choose one for add to
-              cart and schedule preview. List can be collapsed to save space.
-            </Label>
-            <button
-              type="button"
+      {linkedLabs.length > 0 ? (
+        <div
+          className={cn(
+            "flex flex-col text-sm",
+            compact ? "mt-1.5 gap-1" : "mt-3 gap-1.5",
+          )}
+        >
+          {multiLab ? (
+            <div
+              role="group"
               className={cn(
-                "flex w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 text-left text-sm text-foreground shadow-sm backdrop-blur-sm transition hover:border-primary/35 hover:bg-background/90 dark:border-white/10 dark:bg-[rgb(12,18,32)]/85 dark:hover:bg-[rgb(14,22,38)]/95",
-                compact ? "px-2 py-1.5" : "py-2 pl-2 pr-2",
+                "border-l-2 border-primary/50 pl-3",
+                compact ? "mt-1.5 space-y-1.5" : "mt-2 space-y-2",
               )}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setLabPanelOpen((o) => !o);
-              }}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
             >
-              <ChevronDown
+              <Label className="sr-only">
+                {linkedPanelTitle} for this lecture meeting; choose one for add
+                to cart and schedule preview. List can be collapsed to save
+                space.
+              </Label>
+              <button
+                type="button"
                 className={cn(
-                  "size-4 shrink-0 text-primary transition-transform duration-200",
-                  labPanelOpen && "rotate-180",
+                  "flex w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 text-left text-sm text-foreground shadow-sm backdrop-blur-sm transition hover:border-primary/35 hover:bg-background/90 dark:border-white/10 dark:bg-[rgb(12,18,32)]/85 dark:hover:bg-[rgb(14,22,38)]/95",
+                  compact ? "px-2 py-1.5" : "py-2 pl-2 pr-2",
                 )}
-              />
-              <span className="font-medium">
-                {linkedPanelTitle}
-                <span className="ml-1.5 font-normal text-muted-foreground">
-                  ({linkedLabs.length})
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLabPanelOpen((o) => !o);
+                }}
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-4 shrink-0 text-primary transition-transform duration-200",
+                    labPanelOpen && "rotate-180",
+                  )}
+                />
+                <span className="font-medium">
+                  {linkedPanelTitle}
+                  <span className="ml-1.5 font-normal text-muted-foreground">
+                    ({linkedLabs.length})
+                  </span>
                 </span>
-              </span>
-              <span className="ml-auto truncate text-xs font-normal tabular-nums text-muted-foreground">
-                #{activeLab?.classNumber}
-              </span>
-            </button>
-            <p
-              className={cn(
-                "pl-1 text-[11px] leading-snug text-primary/90 dark:text-primary/80",
-                compact && "line-clamp-2",
-              )}
-            >
-              For cart & preview: {activeLab?.component} · Sec{" "}
-              {activeLab?.section ?? "—"} · #{activeLab?.classNumber} ·{" "}
-              {activeLab?.dayTime} · {activeLab?.location}
-            </p>
-            {labPanelOpen ? (
-              <div
+                <span className="ml-auto truncate text-xs font-normal tabular-nums text-muted-foreground">
+                  #{activeLab?.classNumber}
+                </span>
+              </button>
+              <p
                 className={cn(
-                  "flex max-h-52 flex-col gap-1.5 overflow-y-auto rounded-lg border border-border/50 bg-card/40 dark:border-white/[0.08] dark:bg-[rgb(8,14,26)]/60",
-                  compact ? "p-1" : "p-1.5",
+                  "pl-1 text-[11px] leading-snug text-primary/90 dark:text-primary/80",
+                  compact && "line-clamp-2",
                 )}
               >
-                {linkedLabs.map((m) => {
-                  const selected =
-                    String(m.classNumber) === String(activeLabClass);
-                  return (
-                    <button
-                      key={m.classNumber ?? m.component}
-                      type="button"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (m.classNumber != null) {
-                          onLabClassChange?.(String(m.classNumber));
-                        }
-                      }}
-                      className={cn(
-                        "flex flex-col items-start rounded-md border text-left transition",
-                        compact ? "px-2 py-1.5" : "px-3 py-2",
-                        "border-transparent bg-transparent hover:border-border hover:bg-primary/[0.06]",
-                        selected &&
-                          "border-primary/40 bg-primary/[0.12] shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)] dark:border-primary/50 dark:bg-primary/15",
-                      )}
-                    >
-                      <span className="text-sm font-medium text-foreground">
-                        {m.component} · Sec {m.section ?? "—"} · #
-                        {m.classNumber}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {m.dayTime} · {m.location}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          linkedLabs.map((m, i) => (
-            <div
-              key={`${m.classNumber ?? m.component}-${i}`}
-              className={cn(
-                "border-t border-border/50",
-                compact ? "pt-1.5" : "pt-2",
-              )}
-            >
-              {compact ? (
-                <div className="flex items-start gap-2 text-muted-foreground">
-                  <Clock
-                    className="mt-0.5 size-4 shrink-0 text-primary"
-                    aria-hidden
-                  />
-                  <span className="leading-snug">
-                    {m.component}
-                    {m.section ? ` · Sec ${m.section}` : ""}
-                    {m.classNumber ? ` · #${m.classNumber}` : ""}
-                    {m.dayTime ? ` · ${m.dayTime}` : ""}
-                    {m.location ? ` · ${m.location}` : ""}
-                  </span>
+                For cart & preview: {activeLab?.component} · Sec{" "}
+                {activeLab?.section ?? "—"} · #{activeLab?.classNumber} ·{" "}
+                {activeLab?.dayTime} · {activeLab?.location}
+              </p>
+              {labPanelOpen ? (
+                <div
+                  className={cn(
+                    "flex max-h-52 flex-col gap-1.5 overflow-y-auto rounded-lg border border-border/50 bg-card/40 dark:border-white/[0.08] dark:bg-[rgb(8,14,26)]/60",
+                    compact ? "p-1" : "p-1.5",
+                  )}
+                >
+                  {linkedLabs.map((m) => {
+                    const selected =
+                      String(m.classNumber) === String(activeLabClass);
+                    return (
+                      <button
+                        key={m.classNumber ?? m.component}
+                        type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (m.classNumber != null) {
+                            onLabClassChange?.(String(m.classNumber));
+                          }
+                        }}
+                        className={cn(
+                          "flex flex-col items-start rounded-md border text-left transition",
+                          compact ? "px-2 py-1.5" : "px-3 py-2",
+                          "border-transparent bg-transparent hover:border-border hover:bg-primary/[0.06]",
+                          selected &&
+                            "border-primary/40 bg-primary/[0.12] shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)] dark:border-primary/50 dark:bg-primary/15",
+                        )}
+                      >
+                        <span className="text-sm font-medium text-foreground">
+                          {m.component} · Sec {m.section ?? "—"} · #
+                          {m.classNumber}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {m.dayTime} · {m.location}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 text-foreground">
-                    <BookMarkedIcon
-                      className="size-4 shrink-0 text-primary"
+              ) : null}
+            </div>
+          ) : (
+            linkedLabs.map((m, i) => (
+              <div
+                key={`${m.classNumber ?? m.component}-${i}`}
+                className={cn(
+                  "border-t border-border/50",
+                  compact ? "pt-1.5" : "pt-2",
+                )}
+              >
+                {compact ? (
+                  <div className="flex items-start gap-2 text-muted-foreground">
+                    <Clock
+                      className="mt-0.5 size-4 shrink-0 text-primary"
                       aria-hidden
                     />
-                    <span>
+                    <span className="leading-snug">
                       {m.component}
-                      {m.classNumber ? (
-                        <>
-                          {" "}
-                          ·{" "}
-                          <span className="text-muted-foreground">
-                            {m.classNumber}
-                          </span>
-                        </>
-                      ) : null}
+                      {m.section ? ` · Sec ${m.section}` : ""}
+                      {m.classNumber ? ` · #${m.classNumber}` : ""}
+                      {m.dayTime ? ` · ${m.dayTime}` : ""}
+                      {m.location ? ` · ${m.location}` : ""}
                     </span>
                   </div>
-                  <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
-                    <MapPinIcon
-                      className="size-4 shrink-0 text-primary"
-                      aria-hidden
-                    />
-                    <span>{m.location}</span>
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
-                    <Clock
-                      className="size-4 shrink-0 text-primary"
-                      aria-hidden
-                    />
-                    <span>{m.dayTime}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-foreground">
+                      <BookMarkedIcon
+                        className="size-4 shrink-0 text-primary"
+                        aria-hidden
+                      />
+                      <span>
+                        {m.component}
+                        {m.classNumber ? (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <span className="text-muted-foreground">
+                              {m.classNumber}
+                            </span>
+                          </>
+                        ) : null}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
+                      <MapPinIcon
+                        className="size-4 shrink-0 text-primary"
+                        aria-hidden
+                      />
+                      <span>{m.location}</span>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
+                      <Clock
+                        className="size-4 shrink-0 text-primary"
+                        aria-hidden
+                      />
+                      <span>{m.dayTime}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
 
       <div
         className={cn(
