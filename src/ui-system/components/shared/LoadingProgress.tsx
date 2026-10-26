@@ -20,7 +20,7 @@ export function LoadingProgress({
 }: {
   active: boolean;
   value: number;
-  label?: string;
+  label?: string | null;
   /** Whether finishing now counts as success; a cancel or error shouldn't flash. */
   succeeded?: boolean;
   doneLabel?: string;
