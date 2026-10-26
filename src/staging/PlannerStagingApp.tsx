@@ -442,10 +442,7 @@ export function PlannerStagingApp() {
 
   const resultsPanel = (
     <Card className="overflow-visible bg-card/80 shadow-sm">
-      <CardHeader className="gap-1 pb-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Comparison workspace
-        </div>
+      <CardHeader className="gap-1">
         <CardTitle className="text-base">Sections</CardTitle>
         <CardDescription>
           {hasSearched

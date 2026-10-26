@@ -12,7 +12,7 @@ await mkdir(extension);
 const manifest = JSON.parse(
   await readFile(path.join(root, "dist/manifest.json"), "utf8"),
 );
-assert.equal(manifest.version, "3.8.17");
+assert.equal(manifest.version, "3.8.18");
 // An older-version fixture with the same extension ID and storage layout.
 await writeFile(
   path.join(extension, "manifest.json"),

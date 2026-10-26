@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 import {
   Combobox,
@@ -32,6 +32,10 @@ type PlannerFilterComboboxProps = {
   emptyLabel: string;
   disabled?: boolean;
   portalContainer: HTMLElement | null;
+  /** Display text for an item when the stored value is not human-readable; also used for typed filtering. */
+  itemLabel?: (item: string) => string;
+  /** Custom option content; defaults to the label. */
+  renderItem?: (item: string) => ReactNode;
 };
 
 export function PlannerFilterCombobox({
@@ -44,6 +48,8 @@ export function PlannerFilterCombobox({
   emptyLabel,
   disabled = false,
   portalContainer,
+  itemLabel,
+  renderItem,
 }: PlannerFilterComboboxProps) {
   const stableItems = useStableStringItems(items);
   const [open, setOpen] = useState(false);
@@ -53,6 +59,7 @@ export function PlannerFilterCombobox({
   return (
     <Combobox
       items={stableItems}
+      itemToStringLabel={itemLabel}
       value={value}
       onValueChange={(nextValue) => {
         typed.current = false;
@@ -101,7 +108,7 @@ export function PlannerFilterCombobox({
             aria-hidden="true"
             className="pointer-events-none order-first min-w-0 flex-1 break-words py-2 pl-2.5 text-sm leading-snug group-has-[input:focus]/input-group:invisible"
           >
-            {value}
+            {itemLabel ? itemLabel(value) : value}
           </span>
         ) : null}
       </ComboboxInput>
@@ -110,7 +117,11 @@ export function PlannerFilterCombobox({
         <ComboboxList>
           {(item) => (
             <ComboboxItem key={item} value={item}>
-              {item}
+              {renderItem
+                ? renderItem(item)
+                : itemLabel
+                  ? itemLabel(item)
+                  : item}
             </ComboboxItem>
           )}
         </ComboboxList>

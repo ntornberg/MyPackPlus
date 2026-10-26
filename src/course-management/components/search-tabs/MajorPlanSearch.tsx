@@ -45,9 +45,10 @@ import {
 } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
 import { CircularProgressWithLabel } from "../../../ui-system/components/shared/CircularProgressWithLabel";
+import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
 import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/PlannerWorkbenchLayout";
-import { formatSectionInstructors } from "../../../ui-system/components/workbench/sectionCompareUtils";
+import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
 import { usePlanningData } from "../../../ui-system/components/workbench/usePlanningData";
@@ -56,7 +57,7 @@ import { type PlannerSectionPreview } from "../../../ui-system/components/workbe
 import { AppLogger } from "../../../utils/logger";
 import { fetchCourseSearchData } from "../../services/api/planner-search/dataService";
 import type { ScheduleEvent } from "../../types/calendar";
-import type { MergedCourseData } from "../../types/section";
+import type { MergedCourseData, ModifiedSection } from "../../types/section";
 import type { SectionSortMode } from "../../types/sectionSorting";
 import {
   type MajorPlanSearchData,
@@ -235,24 +236,19 @@ export default function MajorPlanSearch({
   );
 
   const planInstructorOptions = useMemo(() => {
-    const names = new Set<string>();
+    const lectures: ModifiedSection[] = [];
     const courses = activeOpenCourses as Record<string, MergedCourseData>;
     for (const c of Object.values(courses)) {
       if (!c?.sections) {
         continue;
       }
       for (const g of Object.values(c.sections)) {
-        const lec = g.lecture;
-        if (!lec) {
-          continue;
-        }
-        const s = formatSectionInstructors(lec).trim();
-        if (s) {
-          names.add(s);
+        if (g.lecture) {
+          lectures.push(g.lecture);
         }
       }
     }
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
+    return buildInstructorFilterOptions(lectures);
   }, [activeOpenCourses]);
   const subplanOptions = majorPlanSearchData.selectedMajor
     ? Object.keys(
@@ -768,15 +764,13 @@ export default function MajorPlanSearch({
         )}
         <Field>
           <FieldLabel htmlFor="plan_instructor_filter">Instructor</FieldLabel>
-          <PlannerFilterCombobox
-            items={planInstructorOptions}
+          <InstructorFilterCombobox
+            id="plan_instructor_filter"
+            options={planInstructorOptions}
             value={majorPlanSearchData.instructorFilter}
             onValueChange={(value) =>
               setMajorPlanSearchTabData("instructorFilter", value)
             }
-            placeholder="Any instructor"
-            emptyLabel="Run search to load instructors."
-            disabled={planInstructorOptions.length === 0}
             portalContainer={portalContainer}
           />
           <FieldDescription>
@@ -826,7 +820,6 @@ export default function MajorPlanSearch({
 
   const resultsPanel = (
     <PlannerPanel
-      eyebrow="Comparison Workspace"
       title="Requirement Tree"
       actions={
         <SectionDensityToggle

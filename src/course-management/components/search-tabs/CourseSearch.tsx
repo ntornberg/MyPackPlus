@@ -14,8 +14,9 @@ import { TermIdByName } from "../../../generated/catalogs/termIds";
 import { SectionSortField } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
 import { CircularProgressWithLabel } from "../../../ui-system/components/shared/CircularProgressWithLabel";
+import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
-import { formatSectionInstructors } from "../../../ui-system/components/workbench/sectionCompareUtils";
+import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
 import { useScheduleBackgroundEvents } from "../../../ui-system/components/workbench/useScheduleBackgroundEvents";
@@ -125,18 +126,11 @@ export default function CourseSearch({
   }, [courseData?.sections]);
 
   const instructorOptions = useMemo(() => {
-    const names = new Set<string>();
-    for (const section of sectionsArray) {
-      const lecture = section.lecture;
-      if (!lecture) {
-        continue;
-      }
-      const s = formatSectionInstructors(lecture).trim();
-      if (s) {
-        names.add(s);
-      }
-    }
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
+    return buildInstructorFilterOptions(
+      sectionsArray.flatMap((section) =>
+        section.lecture ? [section.lecture] : [],
+      ),
+    );
   }, [sectionsArray]);
 
   const emptyStateMessage = error
@@ -176,23 +170,11 @@ export default function CourseSearch({
         </div>
       }
     >
-      <FieldGroup className="grid grid-cols-1 items-start gap-4 @min-[640px]:grid-cols-[minmax(0,1fr)_14rem]">
-        <Field className="@min-[640px]:col-start-2 @min-[640px]:row-start-1">
-          <FieldLabel htmlFor="term_selector">Term</FieldLabel>
-          <PlannerFilterCombobox
-            id="term_selector"
-            items={Object.keys(TermIdByName)}
-            value={courseSearchData.selectedTerm}
-            onValueChange={handleTermChange}
-            placeholder="Select term"
-            emptyLabel="No terms found."
-            portalContainer={portalContainer}
-          />
-        </Field>
-
+      {/* Wrapping row: the term keeps its width and drops below the course fields when space runs out. */}
+      <FieldGroup className="flex-row flex-wrap items-start gap-4">
         {browse ? (
           <>
-            <Field>
+            <Field className="min-w-0 flex-1 basis-48">
               <FieldLabel htmlFor="subject_selector">Subject</FieldLabel>
               <PlannerFilterCombobox
                 id="subject_selector"
@@ -205,7 +187,7 @@ export default function CourseSearch({
                 acceptOnTab
               />
             </Field>
-            <Field>
+            <Field className="min-w-0 flex-1 basis-48">
               <FieldLabel htmlFor="course_selector">Course</FieldLabel>
               <PlannerFilterCombobox
                 id="course_selector"
@@ -221,7 +203,7 @@ export default function CourseSearch({
             </Field>
           </>
         ) : (
-          <Field className="@min-[640px]:col-start-1 @min-[640px]:row-start-1">
+          <Field className="min-w-0 flex-1 basis-64">
             <FieldLabel htmlFor="course_selector">Find a course</FieldLabel>
             <CourseFinder
               value={selectedCourse}
@@ -234,6 +216,19 @@ export default function CourseSearch({
             </FieldDescription>
           </Field>
         )}
+
+        <Field className="w-52 max-w-full shrink-0">
+          <FieldLabel htmlFor="term_selector">Term</FieldLabel>
+          <PlannerFilterCombobox
+            id="term_selector"
+            items={Object.keys(TermIdByName)}
+            value={courseSearchData.selectedTerm}
+            onValueChange={handleTermChange}
+            placeholder="Select term"
+            emptyLabel="No terms found."
+            portalContainer={portalContainer}
+          />
+        </Field>
       </FieldGroup>
 
       {isLoading ? (
@@ -256,7 +251,6 @@ export default function CourseSearch({
 
   const resultsPanel = (
     <PlannerPanel
-      eyebrow="Comparison workspace"
       title={
         selectedCourse
           ? `${selectedCourse.code} — ${selectedCourse.title}`
@@ -276,7 +270,6 @@ export default function CourseSearch({
         />
       }
       contentClassName="min-w-0 space-y-3"
-      headerClassName="pb-3"
     >
       {hasSectionResults ? (
         <FieldGroup className="mb-4 grid grid-cols-1 gap-4 @min-[640px]:grid-cols-2">
@@ -284,16 +277,13 @@ export default function CourseSearch({
             <FieldLabel htmlFor="course_instructor_filter">
               Instructor
             </FieldLabel>
-            <PlannerFilterCombobox
+            <InstructorFilterCombobox
               id="course_instructor_filter"
-              items={instructorOptions}
+              options={instructorOptions}
               value={courseSearchData.instructorFilter}
               onValueChange={(value) =>
                 setCourseSearchTabData("instructorFilter", value)
               }
-              placeholder="Any instructor"
-              emptyLabel="Run search to load instructors."
-              disabled={instructorOptions.length === 0}
               portalContainer={portalContainer}
             />
             <FieldDescription>

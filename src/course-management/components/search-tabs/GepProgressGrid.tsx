@@ -30,23 +30,42 @@ function categoryDetail(progress: GepCategoryProgress): string {
 
 /**
  * One tile per GEP category with its audit status. Choosing a tile searches
- * that category's courses.
+ * that category's courses. Without an audit or plan (`showStatus` false) the
+ * tiles are plain category pickers.
  */
 export function GepProgressGrid({
   categories,
   progress,
   selectedCode,
   onSelect,
+  showStatus = true,
 }: {
   categories: { code: GEPCode; label: string }[];
   progress: Record<GEPCode, GepCategoryProgress>;
   selectedCode: GEPCode | null;
   onSelect: (code: GEPCode) => void;
+  showStatus?: boolean;
 }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2">
       {categories.map(({ code, label }) => {
         const category = progress[code];
+        if (!showStatus || !category) {
+          return (
+            <button
+              key={code}
+              type="button"
+              onClick={() => onSelect(code)}
+              aria-pressed={selectedCode === code}
+              className={cn(
+                "rounded-lg border border-border bg-card/50 px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted/50",
+                selectedCode === code && "border-primary bg-primary/5",
+              )}
+            >
+              {label}
+            </button>
+          );
+        }
         const meta = STATUS_META[category.status];
         const StatusIcon = meta.icon;
         const unknown = category.status === "unknown";

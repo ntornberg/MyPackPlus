@@ -27,7 +27,6 @@ import {
 import {
   fetchUpcomingV2,
   instructorToProf,
-  splitInstructorName,
 } from "../../../course-management/services/api/gradesV2";
 import type {
   MatchedRateMyProf,
@@ -37,6 +36,7 @@ import type {
 import { StarRating } from "../shared/StarRating";
 
 import { DifficultyChip, OtherSchoolBadge } from "./PlannerSectionInsights";
+import { formatInstructorDisplayName } from "./sectionCompareUtils";
 
 export const UPCOMING_TERM_LABEL = "Spring 2027";
 
@@ -45,8 +45,7 @@ const SECTION_LABEL =
 
 /** "Griggs,John Richard" -> "John Richard Griggs" */
 export function displayInstructorName(name: string): string {
-  const { first, last } = splitInstructorName(name);
-  return [first, last].filter(Boolean).join(" ") || name.trim();
+  return formatInstructorDisplayName(name);
 }
 
 function RatingDetails({ prof }: { prof: MatchedRateMyProf | null }) {

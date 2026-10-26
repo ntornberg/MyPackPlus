@@ -151,6 +151,37 @@ export function DifficultyChip({
   );
 }
 
+/** Compact "RMP 4.3" chip whose hue slides from red (1.0) to green (5.0). */
+export function RmpScoreChip({
+  value,
+  className,
+}: {
+  value: number;
+  className?: string;
+}) {
+  const hue = Math.round(((Math.min(5, Math.max(1, value)) - 1) / 4) * 130);
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums",
+        className,
+      )}
+      // Mixing with the theme foreground keeps the hue readable in light and dark
+      // themes (dark mode can come from the OS, where `dark:` does not apply).
+      style={{
+        backgroundColor: `hsl(${hue} 80% 45% / 0.16)`,
+        color: `color-mix(in oklab, hsl(${hue} 75% 45%) 55%, var(--foreground))`,
+      }}
+      title={`Rate My Professor rating: ${value.toFixed(1)} out of 5`}
+    >
+      <span className="text-[10px] font-semibold tracking-wide opacity-70">
+        RMP
+      </span>
+      {value.toFixed(1)}
+    </span>
+  );
+}
+
 /** "Other school" label for ratings posted at a different institution. */
 export function OtherSchoolBadge({
   school,

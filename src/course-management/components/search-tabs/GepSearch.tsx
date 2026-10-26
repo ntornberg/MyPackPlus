@@ -33,13 +33,13 @@ import { TermIdByName } from "../../../generated/catalogs/termIds";
 import {
   HideEmptySectionsField,
   SectionSortField,
-  SearchSubmitButton,
 } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
 import { CircularProgressWithLabel } from "../../../ui-system/components/shared/CircularProgressWithLabel";
+import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
 import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/PlannerWorkbenchLayout";
-import { formatSectionInstructors } from "../../../ui-system/components/workbench/sectionCompareUtils";
+import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
 import { usePlanningData } from "../../../ui-system/components/workbench/usePlanningData";
@@ -48,7 +48,7 @@ import { type PlannerSectionPreview } from "../../../ui-system/components/workbe
 import { AppLogger } from "../../../utils/logger";
 import { fetchGEPCourseData } from "../../services/api/planner-search/dataService";
 import type { ScheduleEvent } from "../../types/calendar";
-import type { MergedCourseData } from "../../types/section";
+import type { MergedCourseData, ModifiedSection } from "../../types/section";
 import type { SectionSortMode } from "../../types/sectionSorting";
 import { type GepSearchData, type TabUpdater } from "../tab-state/tabState";
 
@@ -64,11 +64,9 @@ import {
 
 /* eslint-disable react/prop-types -- TypeScript props on memo inner components */
 
-interface AutocompletesProps {
+interface TermFieldProps {
   selectedTerm: string | null;
-  searchSubject: string | null;
   onTermChange: (value: string | null) => void;
-  onSubjectChange: (value: string | null) => void;
   portalContainer: HTMLElement | null;
 }
 
@@ -90,8 +88,6 @@ const GEP_SUBJECTS: { code: GepSubjectCode; label: string }[] = [
   { code: "VPA", label: "Visual and Performing Arts" },
 ];
 
-const SUBJECT_OPTIONS = GEP_SUBJECTS.map((subject) => subject.label);
-
 const GEP_LABEL_BY_CODE = new Map(
   GEP_SUBJECTS.map((subject) => [subject.code, subject.label]),
 );
@@ -108,14 +104,8 @@ function findGepSubject(value: string | null) {
   );
 }
 
-const MemoizedAutocompletes: React.FC<AutocompletesProps> = React.memo(
-  ({
-    selectedTerm,
-    searchSubject,
-    onTermChange,
-    onSubjectChange,
-    portalContainer,
-  }) => {
+const MemoizedTermField: React.FC<TermFieldProps> = React.memo(
+  ({ selectedTerm, onTermChange, portalContainer }) => {
     return (
       <FieldGroup>
         <Field>
@@ -128,19 +118,8 @@ const MemoizedAutocompletes: React.FC<AutocompletesProps> = React.memo(
             emptyLabel="No terms found."
             portalContainer={portalContainer}
           />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="subject_selector">GEP Subject</FieldLabel>
-          <PlannerFilterCombobox
-            items={SUBJECT_OPTIONS}
-            value={findGepSubject(searchSubject)?.label ?? searchSubject}
-            onValueChange={onSubjectChange}
-            placeholder="Select GEP subject"
-            emptyLabel="No GEP subjects found."
-            portalContainer={portalContainer}
-          />
           <FieldDescription>
-            Choose a GEP bucket to load matching courses and sections.
+            Pick a GEP category on the right to load its courses and sections.
           </FieldDescription>
         </Field>
       </FieldGroup>
@@ -418,29 +397,23 @@ export default function GepSearch({
   const selectedSubject = findGepSubject(searchSubject);
   const selectedSubjectCode = selectedSubject?.code ?? null;
   const selectedSubjectLabel = selectedSubject?.label ?? searchSubject;
-  const isSearchDisabled = !selectedTerm || !selectedSubjectCode;
   const portalContainer = useOverlayPortalContainer();
   const scheduleBackground = useScheduleBackgroundEvents(selectedTerm);
 
   const gepInstructorOptions = useMemo(() => {
-    const names = new Set<string>();
+    const lectures: ModifiedSection[] = [];
     const data = courseData as Record<string, MergedCourseData>;
     for (const c of Object.values(data)) {
       if (!c?.sections) {
         continue;
       }
       for (const g of Object.values(c.sections)) {
-        const lec = g.lecture;
-        if (!lec) {
-          continue;
-        }
-        const s = formatSectionInstructors(lec).trim();
-        if (s) {
-          names.add(s);
+        if (g.lecture) {
+          lectures.push(g.lecture);
         }
       }
     }
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
+    return buildInstructorFilterOptions(lectures);
   }, [courseData]);
 
   // Bumped on every search and on term/category changes so a slower, older
@@ -670,7 +643,7 @@ export default function GepSearch({
     () => gepProgress(auditList, planner, GEP_COURSES),
     [auditList, planner],
   );
-  const hasAudit = auditList.length > 0;
+  const hasProgress = auditList.length > 0 || !!planner;
   const lookupCourseState = useMemo(
     () => courseStateLookup(auditList, planner),
     [auditList, planner],
@@ -709,25 +682,21 @@ export default function GepSearch({
       title="Parameters"
       description="Browse matching requirement buckets and keep a section preview pinned while you compare."
     >
-      <MemoizedAutocompletes
+      <MemoizedTermField
         selectedTerm={selectedTerm}
-        searchSubject={searchSubject}
         onTermChange={handleTermChange}
-        onSubjectChange={handleSubjectChange}
         portalContainer={portalContainer}
       />
       <FieldGroup className="mt-4">
         <Field>
           <FieldLabel htmlFor="gep_instructor_filter">Instructor</FieldLabel>
-          <PlannerFilterCombobox
-            items={gepInstructorOptions}
+          <InstructorFilterCombobox
+            id="gep_instructor_filter"
+            options={gepInstructorOptions}
             value={instructorFilter}
             onValueChange={(value) =>
               setGepSearchTabData("instructorFilter", value)
             }
-            placeholder="Any instructor"
-            emptyLabel="Run search to load instructors."
-            disabled={gepInstructorOptions.length === 0}
             portalContainer={portalContainer}
           />
           <FieldDescription>
@@ -742,10 +711,6 @@ export default function GepSearch({
         />
       </FieldGroup>
       <div className="mt-4 flex flex-col gap-3">
-        <SearchSubmitButton
-          onClick={() => void courseSearch()}
-          disabled={isSearchDisabled}
-        />
         <HideEmptySectionsField
           id="hide-empty-gep"
           checked={hideNoSections}
@@ -802,7 +767,6 @@ export default function GepSearch({
 
   const resultsPanel = (
     <PlannerPanel
-      eyebrow="Comparison Workspace"
       title="Requirement Matches"
       actions={
         <SectionDensityToggle
@@ -815,22 +779,25 @@ export default function GepSearch({
     >
       <section className="mb-6 flex flex-col gap-2">
         <SectionHeading
-          title="Your GEP progress"
-          description="From your degree audit. Pick a category to see the courses that count toward it."
+          title={hasProgress ? "Your GEP progress" : "GEP categories"}
+          description={
+            hasProgress
+              ? "From your degree audit. Pick a category to see the courses that count toward it."
+              : "Pick a category to see the courses that count toward it. Sync your degree audit to see your progress."
+          }
         />
         <PlanningSyncStatus
           sync={planningData.sync}
           syncedAt={planningData.syncedAt}
           onRefresh={planningData.refresh}
         />
-        {hasAudit || planner ? (
-          <GepProgressGrid
-            categories={GEP_SUBJECTS}
-            progress={categoryProgress}
-            selectedCode={selectedSubjectCode}
-            onSelect={handleCategorySelect}
-          />
-        ) : null}
+        <GepProgressGrid
+          categories={GEP_SUBJECTS}
+          progress={categoryProgress}
+          selectedCode={selectedSubjectCode}
+          onSelect={handleCategorySelect}
+          showStatus={hasProgress}
+        />
       </section>
       <section className="flex flex-col gap-2">
         <SectionHeading

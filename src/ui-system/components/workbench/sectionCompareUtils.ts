@@ -4,6 +4,7 @@ import type {
   SectionLinkedMeeting,
 } from "../../../course-management/types/section";
 import type { GradeData } from "../../../types/api";
+import { describeRating } from "../../../utils/rmpDisplay";
 
 import { getPreviewSectionId } from "./workbenchTypes";
 
@@ -74,6 +75,61 @@ export function defaultLabClassForGroup(
   return String(labs[0]!.classNumber);
 }
 
+/** Registrar names for a section, trimmed and de-duplicated (co-taught rows can repeat a name). */
+export function sectionInstructorNames(section: ModifiedSection): string[] {
+  const n = section.instructor_name;
+  const list = Array.isArray(n) ? n : typeof n === "string" ? [n] : [];
+  return Array.from(
+    new Set(list.map((name) => name?.trim()).filter(Boolean) as string[]),
+  );
+}
+
+const NAME_CREDENTIALS =
+  /\b(?:Ph\.?D|Ed\.?D|M\.?D|DVM|PharmD|DNP|MBA|MPH)\.?(?=\s|$)/gi;
+
+/** "Crume PhD,Jeff" -> "Jeff Crume"; names without a comma (e.g. "Staff") pass through. */
+export function formatInstructorDisplayName(raw: string): string {
+  const [last, ...rest] = raw.split(",");
+  const first = rest.join(",").trim();
+  const cleanLast = (last ?? "")
+    .replace(NAME_CREDENTIALS, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!first) {
+    return cleanLast || raw.trim();
+  }
+  return cleanLast ? `${first} ${cleanLast}` : first;
+}
+
+export type InstructorFilterOptions = {
+  /** Registrar names (the stored filter value), sorted by last name. */
+  items: string[];
+  /** Average RMP rating per registrar name, when one is known. */
+  ratings: Map<string, number>;
+};
+
+/** One option per instructor across the given lecture rows, with any known RMP rating. */
+export function buildInstructorFilterOptions(
+  lectures: Iterable<ModifiedSection>,
+): InstructorFilterOptions {
+  const names = new Set<string>();
+  const ratings = new Map<string, number>();
+  for (const lecture of lectures) {
+    const sectionNames = sectionInstructorNames(lecture);
+    for (const name of sectionNames) {
+      names.add(name);
+    }
+    // professor_rating is looked up for the first listed instructor only.
+    const primary = sectionNames[0];
+    const avg = describeRating(lecture.professor_rating).avgRating;
+    if (primary && avg != null && !ratings.has(primary)) {
+      ratings.set(primary, avg);
+    }
+  }
+  const items = Array.from(names).sort((a, b) => a.localeCompare(b));
+  return { items, ratings };
+}
+
 export function sectionMatchesInstructorFilter(
   section: ModifiedSection,
   instructorFilter: string | null,
@@ -81,7 +137,12 @@ export function sectionMatchesInstructorFilter(
   if (!instructorFilter) {
     return true;
   }
-  return formatSectionInstructors(section).trim() === instructorFilter.trim();
+  const filter = instructorFilter.trim();
+  return (
+    sectionInstructorNames(section).includes(filter) ||
+    // Filters saved before per-instructor options held the joined list.
+    formatSectionInstructors(section).trim() === filter
+  );
 }
 
 export function gradeDistributionTotal(g: GradeData | undefined): number {

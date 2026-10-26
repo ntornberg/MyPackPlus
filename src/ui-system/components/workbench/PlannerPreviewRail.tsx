@@ -60,11 +60,8 @@ export function PlannerPreviewRail({
       )}
     >
       <CardHeader className="gap-2 border-b border-border/60 bg-muted/20 dark:bg-transparent">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-          Preview
-        </div>
         <CardTitle className="text-base font-semibold">
-          {selectedPreview ? "Selected Section" : "Current MyPack Context"}
+          {selectedPreview ? "Selected Section" : "Calendar"}
         </CardTitle>
         <p className="text-sm text-muted-foreground">
           {selectedPreview

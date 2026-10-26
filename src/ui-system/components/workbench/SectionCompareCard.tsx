@@ -40,7 +40,8 @@ import {
 } from "./PlannerSectionInsights";
 import {
   formatGradePointAsLetter,
-  formatSectionInstructors,
+  formatInstructorDisplayName,
+  sectionInstructorNames,
   gradeDistributionAverageGradePoint,
   gradePercentChipColor,
   gradePointToPercent,
@@ -364,7 +365,9 @@ export const SectionCompareCard = memo(function SectionCompareCard({
 
   const courseCode = section.courseData?.code ?? section.course_id ?? "";
   const title = section.courseData?.title ?? "";
-  const instructor = formatSectionInstructors(section);
+  const [primaryInstructor, ...coInstructors] = sectionInstructorNames(
+    section,
+  ).map(formatInstructorDisplayName);
   const handleSelectPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || event.defaultPrevented) {
       return;
@@ -438,27 +441,36 @@ export const SectionCompareCard = memo(function SectionCompareCard({
               compact={compact}
             />
           ) : null}
+          <div
+            className={cn(
+              "flex min-w-0 flex-col text-sm",
+              compact ? "pt-0.5 gap-0.5" : "pt-2 gap-1",
+            )}
+          >
+            <InstructorPopover
+              instructor={section.professor_rating?.instructor}
+              className="min-w-0 font-medium text-foreground"
+            >
+              {primaryInstructor ?? ""}
+            </InstructorPopover>
+            {coInstructors.length > 0 ? (
+              <span
+                className="min-w-0 text-xs leading-snug text-muted-foreground"
+                title={coInstructors.join(", ")}
+              >
+                {compact
+                  ? `+ ${coInstructors.length} more`
+                  : `with ${coInstructors.join(", ")}`}
+              </span>
+            ) : null}
+            <RmpStarsWithScore
+              avgRating={section.professor_rating?.avgRating ?? null}
+              rating={section.professor_rating ?? null}
+              starClassName={compact ? "size-3" : "size-3.5"}
+            />
+          </div>
         </div>
         <SectionGradeDistributionBlock section={section} compact={compact} />
-      </div>
-
-      <div
-        className={cn(
-          "flex min-w-0 flex-col text-sm",
-          compact ? "mt-1 gap-0.5" : "mt-2 gap-1",
-        )}
-      >
-        <InstructorPopover
-          instructor={section.professor_rating?.instructor}
-          className="min-w-0 font-medium text-foreground"
-        >
-          {instructor}
-        </InstructorPopover>
-        <RmpStarsWithScore
-          avgRating={section.professor_rating?.avgRating ?? null}
-          rating={section.professor_rating ?? null}
-          starClassName={compact ? "size-3" : "size-3.5"}
-        />
       </div>
 
       <div
