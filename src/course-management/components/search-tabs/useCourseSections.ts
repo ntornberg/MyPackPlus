@@ -4,6 +4,9 @@ import { GRADE_DATA_CACHE_VERSION } from "../../cache/courseRetrieval";
 import { fetchPlannerCourseSections } from "../../services/api/planner-search/dataService";
 import type { MergedCourseData } from "../../types/section";
 
+/** Matches the open-courses cache, so seat counts refresh about as often. */
+export const SECTIONS_SESSION_TTL_MS = 2 * 60 * 1000;
+
 type Result = {
   key: string;
   data: MergedCourseData | null;
@@ -21,6 +24,38 @@ const empty: Result = {
   label: "",
 };
 
+/**
+ * A fresh session entry's data, or undefined when it's missing, stale or
+ * invalid. Entries written before the expiry existed have no `at`, so they
+ * read as stale.
+ */
+export function readSessionEntry(
+  key: string,
+  now: number,
+): MergedCourseData | null | undefined {
+  const cached = sessionStorage.getItem(key);
+  if (!cached) return undefined;
+  const parsed = JSON.parse(cached);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    typeof parsed.at !== "number" ||
+    now - parsed.at >= SECTIONS_SESSION_TTL_MS
+  ) {
+    return undefined;
+  }
+  const { data } = parsed;
+  if (
+    data === null ||
+    (typeof data === "object" &&
+      data.sections &&
+      typeof data.sections === "object")
+  ) {
+    return data;
+  }
+  return undefined;
+}
+
 export function useCourseSections(
   subject: string | null,
   catalogNum: string | null,
@@ -34,7 +69,6 @@ export function useCourseSections(
       : "";
   const [result, setResult] = useState<Result>(empty);
   const [attempt, setAttempt] = useState(0);
-  const requests = useRef(new Map<string, Promise<MergedCourseData | null>>());
   const current = useRef<{
     key: string;
     progress: (value: number, label?: string) => void;
@@ -48,18 +82,10 @@ export function useCourseSections(
     }
     setResult({ ...empty, key, loading: true, label: "Loading sections…" });
     try {
-      const cached = sessionStorage.getItem(key);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (
-          parsed === null ||
-          (typeof parsed === "object" &&
-            parsed.sections &&
-            typeof parsed.sections === "object")
-        ) {
-          setResult({ ...empty, key, data: parsed });
-          return;
-        }
+      const cached = readSessionEntry(key, Date.now());
+      if (cached !== undefined) {
+        setResult({ ...empty, key, data: cached });
+        return;
       }
     } catch {
       /* An unavailable or invalid cache must not block searching. */
@@ -76,39 +102,35 @@ export function useCourseSections(
           }));
       },
     };
-    let request = requests.current.get(key);
-    if (!request) {
-      request = load(subject, catalogNum, id, term, (progress, label) => {
-        if (current.current?.key === key)
-          current.current.progress(progress, label);
+    // `load` shares requests already in flight for the same course and term.
+    void load(subject, catalogNum, id, term, (progress, label) => {
+      if (current.current?.key === key)
+        current.current.progress(progress, label);
+    })
+      .then((data) => {
+        try {
+          sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data }));
+        } catch {
+          /* quota */
+        }
+        return data;
       })
-        .then((data) => {
-          try {
-            sessionStorage.setItem(key, JSON.stringify(data));
-          } catch {
-            /* quota */
-          }
-          return data;
-        })
-        .finally(() => requests.current.delete(key));
-      requests.current.set(key, request);
-    }
-    void request.then(
-      (data) => {
-        if (active) setResult({ ...empty, key, data });
-      },
-      (error) => {
-        if (active)
-          setResult({
-            ...empty,
-            key,
-            error:
-              error instanceof Error
-                ? error
-                : new Error("Could not load sections"),
-          });
-      },
-    );
+      .then(
+        (data) => {
+          if (active) setResult({ ...empty, key, data });
+        },
+        (error) => {
+          if (active)
+            setResult({
+              ...empty,
+              key,
+              error:
+                error instanceof Error
+                  ? error
+                  : new Error("Could not load sections"),
+            });
+        },
+      );
     return () => {
       active = false;
       current.current = null;

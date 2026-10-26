@@ -35,6 +35,11 @@ const CACHE_KEYS = {
 };
 const OPEN_COURSES_CACHE_TTL_MS = 2 * 60 * 1000;
 
+/** "CSC" from a subject menu label like "CSC - Computer Science" (or "CSC" itself). */
+export function subjectCode(subject: string): string {
+  return subject.split(" - ")[0]!.trim();
+}
+
 function buildNullCourseCacheKey(courseKey: string, term: string): string {
   return `null-${courseKey} ${term}`;
 }
@@ -80,26 +85,205 @@ function gradeProfKeySource(
   return `${GRADE_DATA_CACHE_VERSION}-${courseKey}-${instructorName}-${term}`;
 }
 
-/** Same path as mergeData so lecture rows get `linkedMeetings` (labs/rec only get that in mergeData). */
-function mergeCourseDataWithoutGradeBatch(
-  courseKey: string,
-  courseData: CourseData,
-  course: RequiredCourse,
+type GradeProfLoad = {
+  gradeProfData: BatchDataRequestResponse;
+  /** Lookups that missed the cache and were requested from the API. */
+  sectionsToFetch: GradeProfRequest[];
+  /** Key sources already cached, so they aren't written again. */
+  cachedProfKeys: Set<string>;
+  failed: boolean;
+};
+
+/**
+ * Grade/RMP data for every instructor in `openCourses`, one cache entry per
+ * (course, instructor). Single-course and batch searches share these entries,
+ * so either one (or a background prefetch) warms the other.
+ */
+async function loadGradeProfData(
+  openCourses: Record<string, CourseData>,
   term: string,
-): MergedCourseData {
-  const emptyBatch: BatchDataRequestResponse = { courses: [], profs: [] };
-  const merged = mergeData(
-    { [courseKey]: courseData },
-    emptyBatch,
-    { [courseKey]: course },
-    term,
-  );
-  const result = merged[courseKey];
-  if (!result) {
-    throw new Error(`mergeData missing course key: ${courseKey}`);
+): Promise<GradeProfLoad> {
+  const sectionsToFetch: GradeProfRequest[] = [];
+  const cachedProfKeys = new Set<string>();
+  const gradeProfData: BatchDataRequestResponse = { courses: [], profs: [] };
+
+  // One lookup per (course, instructor): sections sharing an instructor share a cache entry.
+  const gradeProfLookups = new Map<string, GradeProfRequest>();
+  for (const [courseKey, courseData] of Object.entries(openCourses)) {
+    if (!courseData || !courseData.sections || !courseData.code) continue;
+    for (const section of courseData.sections) {
+      if (!section.instructor_name || section.instructor_name.length === 0) {
+        continue;
+      }
+      const request = toGradeProfRequest(courseData.code, section);
+      const keySource = gradeProfKeySource(
+        courseKey,
+        request.instructor_name,
+        term,
+      );
+      if (!gradeProfLookups.has(keySource)) {
+        gradeProfLookups.set(keySource, request);
+      }
+    }
   }
-  return result;
+  if (gradeProfLookups.size === 0) {
+    return { gradeProfData, sectionsToFetch, cachedProfKeys, failed: false };
+  }
+
+  const gradeProfEntries = [...gradeProfLookups];
+  const gradeProfHashKeys = await Promise.all(
+    gradeProfEntries.map(([keySource]) => generateCacheKey(keySource)),
+  );
+  const cachedGradeProfs = await getGenericCacheMany(
+    CACHE_KEYS.GRADE_PROF,
+    gradeProfHashKeys,
+  );
+  gradeProfEntries.forEach(([keySource, request], index) => {
+    const cachedGradeProf = cachedGradeProfs[gradeProfHashKeys[index]!];
+    if (!cachedGradeProf) {
+      sectionsToFetch.push(request);
+      return;
+    }
+    cachedProfKeys.add(keySource);
+    const cacheData: BatchDataRequestResponse =
+      typeof cachedGradeProf.combinedData === "string"
+        ? JSON.parse(cachedGradeProf.combinedData)
+        : cachedGradeProf.combinedData;
+    if (cacheData.courses) {
+      (gradeProfData.courses ??= []).push(...cacheData.courses);
+    }
+    if (cacheData.profs) {
+      (gradeProfData.profs ??= []).push(...cacheData.profs);
+    }
+  });
+
+  let failed = false;
+  if (sectionsToFetch.length > 0) {
+    try {
+      const responseData = await fetchGradeProfData(sectionsToFetch);
+      if (responseData?.courses) {
+        (gradeProfData.courses ??= []).push(...responseData.courses);
+      }
+      if (responseData?.profs) {
+        (gradeProfData.profs ??= []).push(...responseData.profs);
+      }
+    } catch (error) {
+      // Grades are an enhancement; still show registrar sections without them.
+      AppLogger.error("Error fetching grade/professor data:", error);
+      failed = true;
+    }
+  }
+  return { gradeProfData, sectionsToFetch, cachedProfKeys, failed };
 }
+
+/** Writes freshly fetched grade/RMP data back as one entry per (course, instructor). */
+async function cacheGradeProfByInstructor(
+  mergedData: Record<string, MergedCourseData>,
+  { sectionsToFetch, cachedProfKeys, failed }: GradeProfLoad,
+  term: string,
+): Promise<void> {
+  // Don't cache empty grade data when the fetch failed.
+  if (failed || sectionsToFetch.length === 0) return;
+
+  // Lecture groups per course, keyed by the lecture's primary instructor; built once per course.
+  const groupsByInstructor = new Map<string, Map<string, GroupedSections[]>>();
+  const instructorGroups = (
+    courseTitle: string,
+    courseData: MergedCourseData,
+  ): Map<string, GroupedSections[]> => {
+    let groups = groupsByInstructor.get(courseTitle);
+    if (!groups) {
+      groups = new Map();
+      for (const groupedSections of Object.values(courseData.sections)) {
+        const instructor = groupedSections.lecture?.instructor_name[0];
+        if (instructor === undefined) continue;
+        const list = groups.get(instructor);
+        if (list) {
+          list.push(groupedSections);
+        } else {
+          groups.set(instructor, [groupedSections]);
+        }
+      }
+      groupsByInstructor.set(courseTitle, groups);
+    }
+    return groups;
+  };
+
+  const cacheWrites: { cacheKey: string; courses: BatchDataRequestResponse }[] =
+    [];
+  for (const section of sectionsToFetch) {
+    // Possible bug where you return grade data for a section that has no instructor because of a partial hash key (who knows)
+    const { course_title, instructor_name } = section;
+    const cacheKey = gradeProfKeySource(course_title, instructor_name, term);
+    const courseData = mergedData[course_title];
+    if (!courseData || cachedProfKeys.has(cacheKey)) continue;
+
+    const groups =
+      instructorGroups(course_title, courseData).get(instructor_name) ?? [];
+    cacheWrites.push({
+      cacheKey,
+      courses: {
+        courses: groups
+          .flatMap((groupedSections) => {
+            const labSects = (groupedSections.labs ?? [])
+              .map((sec) => sec.grade_distribution)
+              .filter(Boolean);
+            const lectureSect = groupedSections.lecture?.grade_distribution;
+            return lectureSect ? [...labSects, lectureSect] : labSects;
+          })
+          .filter((grade): grade is GradeData => grade !== undefined),
+        profs: groups
+          .flatMap(
+            (groupedSections) => groupedSections.lecture?.professor_rating,
+          )
+          .filter((prof): prof is MatchedRateMyProf => prof !== undefined),
+      },
+    });
+    cachedProfKeys.add(cacheKey);
+  }
+  if (cacheWrites.length === 0) return;
+
+  // Convert responses to a map of hash keys to course data
+  const cacheWriteHashKeys = await Promise.all(
+    cacheWrites.map(({ cacheKey }) => generateCacheKey(cacheKey)),
+  );
+  const courseMap: Record<string, BatchDataRequestResponse> = {};
+  cacheWrites.forEach(({ courses }, index) => {
+    courseMap[cacheWriteHashKeys[index]!] = courses;
+  });
+  await setGenericCache(CACHE_KEYS.GRADE_PROF, courseMap);
+}
+
+/** Subject searches in flight, so a single-course search can reuse one already running. */
+const inflightSubjects = new Map<string, Promise<CourseData[]>>();
+
+function searchSubject(term: string, subject: string): Promise<CourseData[]> {
+  const key = `${subject}|${term}`;
+  let request = inflightSubjects.get(key);
+  if (!request) {
+    request = batchSearchOpenCourses(term, subject).finally(() =>
+      inflightSubjects.delete(key),
+    );
+    inflightSubjects.set(key, request);
+  }
+  return request;
+}
+
+/** The course from a subject search that was running, if any. */
+async function fromSubjectSearch(
+  pending: Promise<CourseData[]> | undefined,
+  courseKey: string,
+): Promise<CourseData | null> {
+  if (!pending) return null;
+  try {
+    return (await pending).find((course) => course.code === courseKey) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Single-course searches in flight, so callers asking for the same course share one. */
+const inflightCourses = new Map<string, Promise<MergedCourseData | null>>();
 
 /**
  * Fetches course data for a single course by combining open-sections data and instructor grade/professor info.
@@ -112,7 +296,30 @@ function mergeCourseDataWithoutGradeBatch(
  * @param {(progress: number, statusMessage?: string) => void} [onProgress] Optional progress callback receiving [0..100] and a status label
  * @returns {Promise<MergedCourseData | null>} Merged course data or null when not found
  */
-export async function fetchPlannerCourseSections(
+export function fetchPlannerCourseSections(
+  courseAbr: string,
+  catalogNum: string,
+  course_id: string,
+  term: string,
+  onProgress?: (progress: number, statusMessage?: string) => void,
+): Promise<MergedCourseData | null> {
+  // A caller joining a request already in flight gets no progress updates.
+  const key = `${subjectCode(courseAbr)} ${catalogNum}|${term}`;
+  let request = inflightCourses.get(key);
+  if (!request) {
+    request = loadPlannerCourseSections(
+      courseAbr,
+      catalogNum,
+      course_id,
+      term,
+      onProgress,
+    ).finally(() => inflightCourses.delete(key));
+    inflightCourses.set(key, request);
+  }
+  return request;
+}
+
+async function loadPlannerCourseSections(
   courseAbr: string,
   catalogNum: string,
   course_id: string,
@@ -122,7 +329,14 @@ export async function fetchPlannerCourseSections(
   // Report initial progress
   onProgress?.(10, `Initializing search for ${courseAbr} ${catalogNum}`);
 
-  const courseKey = `${courseAbr} ${catalogNum}`;
+  // Keyed by the short code like batch searches, so the two share cache
+  // entries; the registrar request still gets the subject as passed.
+  const courseKey = `${subjectCode(courseAbr)} ${catalogNum}`;
+  // Taken before any await: a subject search (e.g. a background prefetch)
+  // finishing during the cache reads below must still serve this course.
+  const pendingSubject = inflightSubjects.get(
+    `${subjectCode(courseAbr)}|${term}`,
+  );
   AppLogger.info("Fetching single course data for:", courseKey, term);
 
   // Generate hash for persistent cache lookup
@@ -167,6 +381,11 @@ export async function fetchPlannerCourseSections(
     courseData = JSON.parse(cachedOpenCourses.combinedData);
     onProgress?.(30, `Found open courses data in cache for ${courseKey}`);
   } else {
+    // A subject search that was running usually covers this course; fall
+    // back to the single search when it doesn't.
+    courseData = await fromSubjectSearch(pendingSubject, courseKey);
+  }
+  if (!cachedOpenCourses && !courseData) {
     // Fetch open courses if not in cache
     AppLogger.info(
       "Open courses cache miss for:",
@@ -199,7 +418,8 @@ export async function fetchPlannerCourseSections(
       onProgress?.(100, `No open courses data found for ${courseKey}`);
       return null;
     }
-
+  }
+  if (!cachedOpenCourses && courseData) {
     // Cache open courses data
     await setGenericCache(
       CACHE_KEYS.OPEN_COURSES,
@@ -216,75 +436,16 @@ export async function fetchPlannerCourseSections(
     return null;
   }
 
-  // Prepare data for grade/professor API request
-  onProgress?.(50, `Processing ${courseKey} sections for grade/professor data`);
-
-  // Filter sections with instructor names
-  const courseSectionsWithProfs = courseData.sections
-    .filter(
-      (section) =>
-        section.instructor_name.length > 0 && courseData.code.length > 0,
-    )
-    .map((section) => toGradeProfRequest(courseData.code, section));
-
-  // If no sections with professors, still run mergeData so `linkedMeetings` is set on lectures
-  // (e.g. CH 101 "Staff" rows have empty instructor_name[] but many Rec rows per Lec).
-  if (courseSectionsWithProfs.length === 0) {
-    onProgress?.(100, `Completed processing ${courseKey} (no instructor data)`);
-    return mergeCourseDataWithoutGradeBatch(
-      courseKey,
-      courseData,
-      course,
-      term,
-    );
-  }
-
-  // Generate hash for grade/professor cache lookup
-  const instructorList = courseSectionsWithProfs
-    .map((cs) => cs.instructor_name)
-    .sort()
-    .join(",");
-  const gradeProfCacheKey = gradeProfKeySource(courseKey, instructorList, term);
-  const gradeProfHashKey = await generateCacheKey(gradeProfCacheKey);
-
-  // Check grade/professor cache
-  onProgress?.(60, `Checking grade/professor cache for ${courseKey}`);
-  const cachedGradeProf = await getGenericCache(
-    CACHE_KEYS.GRADE_PROF,
-    gradeProfHashKey,
-  );
-
-  let gradeProfData: BatchDataRequestResponse = {
-    courses: [],
-    profs: [],
+  // Grade/RMP data, one cache entry per instructor (shared with batch searches).
+  // Courses without instructors (e.g. CH 101 "Staff" rows) still go through
+  // mergeData so `linkedMeetings` is set on lectures.
+  onProgress?.(60, `Loading grade/professor data for ${courseKey}`);
+  const courseDataMap: Record<string, CourseData> = {
+    [courseKey]: courseData,
   };
-
-  // If grade/professor data is cached, use it
-  if (cachedGradeProf) {
-    AppLogger.info("Grade/professor cache hit for:", courseKey);
-    gradeProfData = JSON.parse(cachedGradeProf.combinedData);
-    onProgress?.(70, `Found grade/professor data in cache for ${courseKey}`);
-  } else {
-    // Fetch grade/professor data if not in cache
-    onProgress?.(70, `Fetching grade/professor data for ${courseKey}`);
-    try {
-      gradeProfData = await fetchGradeProfData(courseSectionsWithProfs);
-      // Cache grade/professor data
-
-      await setGenericCache(CACHE_KEYS.GRADE_PROF, {
-        [gradeProfHashKey]: JSON.stringify(gradeProfData),
-      });
-      onProgress?.(80, `Cached grade/professor data for ${courseKey}`);
-    } catch (error) {
-      AppLogger.error("Error fetching grade/professor data:", error);
-      onProgress?.(85, `Error fetching grade/professor data: ${error}`);
-      return mergeCourseDataWithoutGradeBatch(
-        courseKey,
-        courseData,
-        course,
-        term,
-      );
-    }
+  const gradeLoad = await loadGradeProfData(courseDataMap, term);
+  if (gradeLoad.failed) {
+    onProgress?.(85, `Grade/professor data unavailable for ${courseKey}`);
   }
 
   // Merge data
@@ -292,16 +453,13 @@ export async function fetchPlannerCourseSections(
   const courseInfoMap: Record<string, RequiredCourse> = {
     [courseKey]: course,
   };
-  const courseDataMap: Record<string, CourseData> = {
-    [courseKey]: courseData,
-  };
-
   const mergedData = mergeData(
     courseDataMap,
-    gradeProfData || {},
+    gradeLoad.gradeProfData,
     courseInfoMap,
     term,
   );
+  await cacheGradeProfByInstructor(mergedData, gradeLoad, term);
   const result = mergedData[courseKey];
 
   onProgress?.(100, `Completed processing ${courseKey}`);
@@ -397,15 +555,25 @@ export async function batchFetchCoursesData(
     const fetchPromises = subjects_to_fetch.map(async (subject) => {
       try {
         onProgress?.(25, `Fetching open courses data for ${subject}`);
-        const subjectCourses = await batchSearchOpenCourses(term, subject);
+        const subjectCourses = await searchSubject(term, subject);
 
+        // Cache every course the subject search returned, not only the ones
+        // asked for, so the next search in this subject (e.g. a tab's own
+        // search after a prefetch) reuses it instead of searching again.
+        const hashKeys = await Promise.all(
+          subjectCourses.map(
+            (course) =>
+              openCoursesHashKeys[course.code] ??
+              generateCacheKey(`${course.code} ${term}`),
+          ),
+        );
         const openCourseEntries: Record<string, string> = {};
-        for (const course of subjectCourses) {
-          if (!openCoursesToFetch[course.code]) continue;
-          openCourseEntries[openCoursesHashKeys[course.code]] =
-            JSON.stringify(course);
-          openCoursesCache[course.code] = course;
-        }
+        subjectCourses.forEach((course, index) => {
+          openCourseEntries[hashKeys[index]!] = JSON.stringify(course);
+          if (openCoursesToFetch[course.code]) {
+            openCoursesCache[course.code] = course;
+          }
+        });
         await setGenericCache(
           CACHE_KEYS.OPEN_COURSES,
           openCourseEntries,
@@ -427,156 +595,22 @@ export async function batchFetchCoursesData(
     await Promise.all(fetchPromises);
   }
 
-  // Phase 4: Fetch Grade/Professor Data (per course)
+  // Phase 4: Fetch Grade/Professor Data (per course, instructor)
   onProgress?.(50, "Processing grade/professor data for each course");
-  const cachedProfKeys = new Set<string>(); // Used when setting the cache at the end to avoid unnessecary writes
-  const sectionsToFetch: GradeProfRequest[] = [];
-  const gradeProfData: BatchDataRequestResponse = { courses: [], profs: [] };
-
-  // One lookup per (course, instructor): sections sharing an instructor share a cache entry.
-  const gradeProfLookups = new Map<string, GradeProfRequest>();
-  for (const [courseKey, courseData] of Object.entries(openCoursesCache)) {
-    if (!courseData || !courseData.sections || !courseData.code) continue;
-    for (const section of courseData.sections) {
-      if (!section.instructor_name || section.instructor_name.length === 0) {
-        continue;
-      }
-      const request = toGradeProfRequest(courseData.code, section);
-      const keySource = gradeProfKeySource(
-        courseKey,
-        request.instructor_name,
-        term,
-      );
-      if (!gradeProfLookups.has(keySource)) {
-        gradeProfLookups.set(keySource, request);
-      }
-    }
-  }
-
-  const gradeProfEntries = [...gradeProfLookups];
-  const gradeProfHashKeys = await Promise.all(
-    gradeProfEntries.map(([keySource]) => generateCacheKey(keySource)),
-  );
-  const cachedGradeProfs = await getGenericCacheMany(
-    CACHE_KEYS.GRADE_PROF,
-    gradeProfHashKeys,
-  );
-  gradeProfEntries.forEach(([keySource, request], index) => {
-    const cachedGradeProf = cachedGradeProfs[gradeProfHashKeys[index]!];
-    if (!cachedGradeProf) {
-      sectionsToFetch.push(request);
-      return;
-    }
-    cachedProfKeys.add(keySource);
-    const cacheData: BatchDataRequestResponse =
-      typeof cachedGradeProf.combinedData === "string"
-        ? JSON.parse(cachedGradeProf.combinedData)
-        : cachedGradeProf.combinedData;
-    if (cacheData.courses) {
-      (gradeProfData.courses ??= []).push(...cacheData.courses);
-    }
-    if (cacheData.profs) {
-      (gradeProfData.profs ??= []).push(...cacheData.profs);
-    }
-  });
-
-  let gradeFetchFailed = false;
-  if (sectionsToFetch.length > 0) {
-    try {
-      const responseData = await fetchGradeProfData(sectionsToFetch);
-      if (responseData?.courses) {
-        (gradeProfData.courses ??= []).push(...responseData.courses);
-      }
-      if (responseData?.profs) {
-        (gradeProfData.profs ??= []).push(...responseData.profs);
-      }
-    } catch (error) {
-      // Grades are an enhancement; still show registrar sections without them.
-      AppLogger.error("Error fetching grade/professor data:", error);
-      onProgress?.(70, "Grade/professor data unavailable");
-      gradeFetchFailed = true;
-    }
+  const gradeLoad = await loadGradeProfData(openCoursesCache, term);
+  if (gradeLoad.failed) {
+    onProgress?.(70, "Grade/professor data unavailable");
   }
 
   // Phase 5: Merge Data
   onProgress?.(80, "Merging course data");
-  // Merge data for each course
   const mergedData = mergeData(
     openCoursesCache,
-    gradeProfData,
+    gradeLoad.gradeProfData,
     courseKeyMapping,
     term,
   );
-
-  // Lecture groups per course, keyed by the lecture's primary instructor; built once per course.
-  const groupsByInstructor = new Map<string, Map<string, GroupedSections[]>>();
-  const instructorGroups = (
-    courseTitle: string,
-    courseData: MergedCourseData,
-  ): Map<string, GroupedSections[]> => {
-    let groups = groupsByInstructor.get(courseTitle);
-    if (!groups) {
-      groups = new Map();
-      for (const groupedSections of Object.values(courseData.sections)) {
-        const instructor = groupedSections.lecture?.instructor_name[0];
-        if (instructor === undefined) continue;
-        const list = groups.get(instructor);
-        if (list) {
-          list.push(groupedSections);
-        } else {
-          groups.set(instructor, [groupedSections]);
-        }
-      }
-      groupsByInstructor.set(courseTitle, groups);
-    }
-    return groups;
-  };
-
-  // Don't cache empty grade data when the fetch failed.
-  const sectionsToCache = gradeFetchFailed ? [] : sectionsToFetch;
-  const cacheWrites: { cacheKey: string; courses: BatchDataRequestResponse }[] =
-    [];
-  for (const section of sectionsToCache) {
-    // Possible bug where you return grade data for a section that has no instructor because of a partial hash key (who knows)
-    const { course_title, instructor_name } = section;
-    const cacheKey = gradeProfKeySource(course_title, instructor_name, term);
-    const courseData = mergedData[course_title];
-    if (!courseData || cachedProfKeys.has(cacheKey)) continue;
-
-    const groups =
-      instructorGroups(course_title, courseData).get(instructor_name) ?? [];
-    cacheWrites.push({
-      cacheKey,
-      courses: {
-        courses: groups
-          .flatMap((groupedSections) => {
-            const labSects = (groupedSections.labs ?? [])
-              .map((sec) => sec.grade_distribution)
-              .filter(Boolean);
-            const lectureSect = groupedSections.lecture?.grade_distribution;
-            return lectureSect ? [...labSects, lectureSect] : labSects;
-          })
-          .filter((grade): grade is GradeData => grade !== undefined),
-        profs: groups
-          .flatMap(
-            (groupedSections) => groupedSections.lecture?.professor_rating,
-          )
-          .filter((prof): prof is MatchedRateMyProf => prof !== undefined),
-      },
-    });
-    cachedProfKeys.add(cacheKey);
-  }
-
-  // Convert responses to a map of hash keys to course data
-  const cacheWriteHashKeys = await Promise.all(
-    cacheWrites.map(({ cacheKey }) => generateCacheKey(cacheKey)),
-  );
-  const courseMap: Record<string, BatchDataRequestResponse> = {};
-  cacheWrites.forEach(({ courses }, index) => {
-    courseMap[cacheWriteHashKeys[index]!] = courses;
-  });
-
-  await setGenericCache(CACHE_KEYS.GRADE_PROF, courseMap);
+  await cacheGradeProfByInstructor(mergedData, gradeLoad, term);
   // Add to result
   Object.assign(result, mergedData);
 

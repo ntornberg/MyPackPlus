@@ -1,5 +1,11 @@
 import { GraduationCapIcon, MoonStarIcon, SunMediumIcon } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +30,10 @@ import {
   type TabUpdater,
 } from "../../course-management/components/tab-state/tabState";
 import { refreshCart } from "../../course-management/services/refreshCart";
+import {
+  PLANNING_SYNCED_AT_KEY,
+  syncPlanningData,
+} from "../../degree-planning/services/planningSync";
 import PlannerLauncherHint from "../../user-experience/components/UserGuide/PlannerLauncherHint";
 import { StatusBanner } from "../../user-experience/status/StatusBanner";
 
@@ -45,16 +55,29 @@ import {
   type PlannerWorkbenchTab,
 } from "./workbench/workbenchTypes";
 
-const CourseSearch = React.lazy(
-  () => import("../../course-management/components/search-tabs/CourseSearch"),
-);
-const GepSearch = React.lazy(
-  () => import("../../course-management/components/search-tabs/GepSearch"),
-);
-const MajorPlanSearch = React.lazy(
-  () =>
-    import("../../course-management/components/search-tabs/MajorPlanSearch"),
-);
+const loadCourseSearch = () =>
+  import("../../course-management/components/search-tabs/CourseSearch");
+const loadGepSearch = () =>
+  import("../../course-management/components/search-tabs/GepSearch");
+const loadMajorPlanSearch = () =>
+  import("../../course-management/components/search-tabs/MajorPlanSearch");
+const CourseSearch = React.lazy(loadCourseSearch);
+const GepSearch = React.lazy(loadGepSearch);
+const MajorPlanSearch = React.lazy(loadMajorPlanSearch);
+
+/**
+ * Warms the caches for the term's likely courses. Imported on demand because
+ * it pulls in the course catalog, which the launcher doesn't need.
+ */
+function prefetchLikelyCourses(term: string | null, { force = false } = {}) {
+  if (!term) return;
+  import("../../course-management/services/prefetch/prefetchLikelyCourses")
+    .then(({ clearPrefetchThrottle, schedulePrefetch }) => {
+      if (force) clearPrefetchThrottle(term);
+      schedulePrefetch(term);
+    })
+    .catch(() => undefined);
+}
 
 const MemoizedCourseSearchTab = React.memo(
   ({
@@ -321,6 +344,51 @@ export default function SlideOutDrawer({
     [],
   );
 
+  // Term of the tab in view (Instructor search has none; use Course search's).
+  const activeTerm =
+    selectedTab === "gep_search"
+      ? GepSearchData.selectedTerm
+      : selectedTab === "major_plan_search"
+        ? majorPlanSearchData.selectedTerm
+        : courseSearchData.selectedTerm;
+
+  // First hover or focus on the launcher: load the tab code and refresh
+  // Pack Planner and the audit (a no-op while the last sync is fresh).
+  const warmedUp = useRef(false);
+  const warmUp = useCallback(() => {
+    if (warmedUp.current) return;
+    warmedUp.current = true;
+    void Promise.all([
+      loadCourseSearch(),
+      loadGepSearch(),
+      loadMajorPlanSearch(),
+    ]).catch(() => undefined);
+    void syncPlanningData().catch(() => undefined);
+  }, []);
+
+  // While open, prefetch the term in view, and again once a planning sync
+  // lands, since it can bring courses the first pass didn't know about.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    prefetchLikelyCourses(activeTerm);
+    const onChanged =
+      typeof chrome !== "undefined" ? chrome.storage?.onChanged : undefined;
+    if (!onChanged) return;
+    const listener = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string,
+    ) => {
+      if (
+        areaName === "local" &&
+        typeof changes[PLANNING_SYNCED_AT_KEY]?.newValue === "number"
+      ) {
+        prefetchLikelyCourses(activeTerm, { force: true });
+      }
+    };
+    onChanged.addListener(listener);
+    return () => onChanged.removeListener(listener);
+  }, [drawerOpen, activeTerm]);
+
   const handleDrawerOpen = useCallback(() => {
     if (drawerOpen) {
       return;
@@ -408,6 +476,8 @@ export default function SlideOutDrawer({
           <Button
             type="button"
             onClick={handleDrawerOpen}
+            onPointerEnter={warmUp}
+            onFocus={warmUp}
             size="sm"
             aria-label="Open Pack Planner"
             className={plannerFloatingButtonClassName}

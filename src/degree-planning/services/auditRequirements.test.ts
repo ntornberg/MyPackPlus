@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { auditRequirementEntries, choiceErrors } from "./auditRequirements";
+import {
+  auditRequirementEntries,
+  choiceErrors,
+  plannedAuditCourses,
+} from "./auditRequirements";
 import type { DegreeAudit, DegreeAuditGroup } from "./degreeAudit";
 import {
   personalAuditFixture,
@@ -30,6 +34,16 @@ const codes = (audit: DegreeAudit, withChoices?: RequirementChoices) =>
       entry.courses.map((c) => `${c.course_abr} ${c.catalog_num}`),
     ]),
   );
+
+describe("plannedAuditCourses", () => {
+  it("lists only the lines MyPack marks planned", () => {
+    expect(
+      plannedAuditCourses(personalAuditFixture).map(
+        (c) => `${c.course_abr} ${c.catalog_num}`,
+      ),
+    ).toEqual(["TST 406"]);
+  });
+});
 
 describe("auditRequirementEntries", () => {
   it("lists applied courses, then approved choices for open groups", () => {

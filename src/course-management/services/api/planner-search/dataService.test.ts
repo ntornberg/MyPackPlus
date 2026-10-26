@@ -321,6 +321,135 @@ describe("dataService v2 grade/RMP requests", () => {
     );
   });
 
+  describe("sharing between single-course and batch searches", () => {
+    const twoInstructorCourse = {
+      ...courseData,
+      sections: [
+        courseData.sections[0]!,
+        {
+          ...courseData.sections[0]!,
+          id: "002-5678",
+          section: "002",
+          classNumber: "5678",
+          instructor_name: ["Smith,Ann"],
+          instructor_unity_ids: ["asmith"],
+        },
+      ],
+    };
+    const course = {
+      course_abr: "MA",
+      catalog_num: "241",
+      course_descrip: "",
+      course_id: "id-1",
+    };
+
+    /** A working cache, so a write from one search is visible to the next. */
+    function useMemoryCache() {
+      const store = new Map<string, { combinedData: unknown }>();
+      mocks.getGenericCache.mockImplementation(
+        async (category: string, hash: string) =>
+          store.get(`${category}:${hash}`) ?? null,
+      );
+      mocks.setGenericCache.mockImplementation(
+        async (category: string, entries: Record<string, unknown>) => {
+          for (const [hash, value] of Object.entries(entries)) {
+            store.set(`${category}:${hash}`, { combinedData: value });
+          }
+        },
+      );
+      return store;
+    }
+
+    it("reuses a batch search's per-instructor grade entries in a single-course search", async () => {
+      useMemoryCache();
+      mocks.batchSearchOpenCourses.mockResolvedValueOnce([twoInstructorCourse]);
+
+      await batchFetchCoursesData([course], "Spring 2027");
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      // Course Search passes the full subject menu label.
+      await fetchPlannerCourseSections(
+        "MA - Mathematics",
+        "241",
+        "id-1",
+        "Spring 2027",
+      );
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(mocks.searchOpenCoursesByParams).not.toHaveBeenCalled();
+      mocks.getGenericCache.mockReset();
+      mocks.setGenericCache.mockReset();
+    });
+
+    it("shares one request between concurrent searches for the same course", async () => {
+      mocks.getGenericCache.mockResolvedValue(null);
+      mocks.searchOpenCoursesByParams.mockResolvedValue(courseData);
+
+      const [first, second] = await Promise.all([
+        fetchPlannerCourseSections("MA", "241", "id-1", "Spring 2027"),
+        fetchPlannerCourseSections(
+          "MA - Mathematics",
+          "241",
+          "id-1",
+          "Spring 2027",
+        ),
+      ]);
+
+      expect(first).toBe(second);
+      expect(mocks.searchOpenCoursesByParams).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      mocks.getGenericCache.mockReset();
+      mocks.searchOpenCoursesByParams.mockReset();
+    });
+
+    it("caches every course a subject search returns for later searches", async () => {
+      useMemoryCache();
+      const otherCourse = { ...courseData, code: "MA 242", sections: [] };
+      mocks.batchSearchOpenCourses.mockResolvedValueOnce([
+        courseData,
+        otherCourse,
+      ]);
+
+      await batchFetchCoursesData([course], "Spring 2027");
+      await batchFetchCoursesData(
+        [{ ...course, catalog_num: "242", course_id: "id-2" }],
+        "Spring 2027",
+      );
+
+      expect(mocks.batchSearchOpenCourses).toHaveBeenCalledTimes(1);
+      mocks.getGenericCache.mockReset();
+      mocks.setGenericCache.mockReset();
+    });
+
+    it("waits for a subject search already running instead of searching again", async () => {
+      mocks.getGenericCache.mockResolvedValue(null);
+      let finishSubject!: (courses: unknown[]) => void;
+      mocks.batchSearchOpenCourses.mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishSubject = resolve;
+        }),
+      );
+
+      const batch = batchFetchCoursesData([course], "Spring 2027");
+      // Let the batch get past its cache reads and start the subject search.
+      await vi.waitFor(() =>
+        expect(mocks.batchSearchOpenCourses).toHaveBeenCalled(),
+      );
+      const single = fetchPlannerCourseSections(
+        "MA - Mathematics",
+        "241",
+        "id-1",
+        "Spring 2027",
+      );
+      finishSubject([courseData]);
+      const [, result] = await Promise.all([batch, single]);
+
+      expect(mocks.searchOpenCoursesByParams).not.toHaveBeenCalled();
+      expect(Object.keys(result!.sections)).toHaveLength(1);
+      mocks.getGenericCache.mockReset();
+    });
+  });
+
   describe("batch requests for sections sharing an instructor", () => {
     const course = {
       course_abr: "MA",

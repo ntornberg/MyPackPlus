@@ -13,12 +13,12 @@ import catalogSources from "../../../../docs/research/ncsu-major-requirement-sou
 import {
   auditRequirementEntries,
   choiceErrors,
+  plannedAuditCourses,
 } from "../../../degree-planning/services/auditRequirements";
 import {
   auditKey,
   findDegreeAudit,
   isOpenGroup,
-  isRequirementGroup,
   requisiteTermLabel,
   type DegreeAudit,
 } from "../../../degree-planning/services/degreeAudit";
@@ -339,18 +339,7 @@ export default function MajorPlanSearch({
           if (openIds.has(entry.requirementId)) entry.courses.forEach(add);
         }
         // Planned courses still need registering, so look them up too.
-        for (const group of selectedAudit.groups.filter(isRequirementGroup)) {
-          for (const line of group.lines) {
-            if (line.status === "P" && line.subject && line.catalogNbr) {
-              add({
-                course_id: line.courseId,
-                course_abr: line.subject,
-                catalog_num: line.catalogNbr,
-                course_descrip: line.title,
-              });
-            }
-          }
-        }
+        plannedAuditCourses(selectedAudit).forEach(add);
         const data = courses.size
           ? await fetchCourseSearchData(
               [

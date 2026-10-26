@@ -19,6 +19,24 @@ export type AuditRequirementEntry = {
   courses: RequiredCourse[];
 };
 
+/** Courses the audit lists as planned ("P"), which still need registering. */
+export function plannedAuditCourses(audit: DegreeAudit): RequiredCourse[] {
+  return audit.groups.filter(isRequirementGroup).flatMap((group) =>
+    group.lines.flatMap((line) =>
+      line.status === "P" && line.subject && line.catalogNbr
+        ? [
+            {
+              course_id: line.courseId,
+              course_abr: line.subject,
+              catalog_num: line.catalogNbr,
+              course_descrip: line.title,
+            },
+          ]
+        : [],
+    ),
+  );
+}
+
 /**
  * Requirement groups straight from the student's audit. Each lists the
  * courses MyPack applied to it and, for requirements MyPack marks unmet,
