@@ -1,7 +1,9 @@
 import { useAutoSize } from "../../../hooks/useAutoSize";
 import type { GradeData } from "../../../types/api";
 import {
+  formatGradeAverage,
   GradeDistributionChart,
+  gradeDistributionPercents,
   hasGradeDistribution,
   isSatUnsatDistribution,
 } from "../../../ui-system/components/shared/GradeDistributionChart";
@@ -13,12 +15,11 @@ export function GradeCard({
   data: GradeData;
   className?: string;
 }) {
-  const { class_avg_min, class_avg_max } = data;
-
   const [wrapRef, { w, h }] = useAutoSize(140, 0.62);
   if (!hasGradeDistribution(data)) return null;
 
   const chartSize = Math.max(96, Math.min(w, h, 160));
+  const average = formatGradeAverage(data);
 
   return (
     <div
@@ -33,18 +34,31 @@ export function GradeCard({
         <GradeDistributionChart data={data} size={chartSize} />
       </div>
 
-      {class_avg_max > 0 ? (
-        <h4 className="mpp-grade-card-average">
-          Avg{" "}
-          <strong>
-            {class_avg_min}% - {class_avg_max}%
-          </strong>
+      <ul className="mpp-grade-legend">
+        {gradeDistributionPercents(data).map((row) => (
+          <li
+            key={row.label}
+            className="mpp-grade-legend-item"
+            title={`${row.label} — ${row.pct.toFixed(1)}%`}
+          >
+            <span
+              className="mpp-grade-legend-swatch"
+              style={{ backgroundColor: row.color }}
+              aria-hidden
+            />
+            <strong>{row.label}</strong>
+            {row.pct > 0 && row.pct < 1 ? "<1" : row.pct.toFixed(0)}%
+          </li>
+        ))}
+      </ul>
+
+      {average ? (
+        <h4
+          className="mpp-grade-card-average"
+          title="Class average ± standard deviation of student grades"
+        >
+          Avg <strong>{average}</strong>
         </h4>
-      ) : null}
-      {data.section_count ? (
-        <p className="mpp-degree-card-muted mpp-degree-card-meta">
-          {data.section_count} sections
-        </p>
       ) : null}
     </div>
   );

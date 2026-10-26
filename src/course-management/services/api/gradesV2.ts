@@ -175,6 +175,8 @@ export function v2GradeToGradeData(
     f_average: grade.f_average,
     class_avg_min: grade.class_avg_min ?? 0,
     class_avg_max: grade.class_avg_max ?? 0,
+    class_avg: grade.class_avg ?? undefined,
+    class_avg_stddev: grade.class_avg_stddev ?? undefined,
     unity_id: request.unity_id ?? null,
     section_count: grade.section_count ?? undefined,
     has_letter_grades: grade.has_letter_grades ?? undefined,

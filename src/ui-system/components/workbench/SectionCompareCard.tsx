@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 
 import type { ModifiedSection } from "../../../course-management/types/section";
 import {
+  formatGradeAverage,
   GradeDistributionChart,
   gradeDistributionPercents,
   hasGradeDistribution,
@@ -86,6 +87,7 @@ function SectionGradeDistributionBlock({
     averageGradePoint != null
       ? formatGradePointAsLetter(averageGradePoint)
       : null;
+  const classAverage = g ? formatGradeAverage(g) : null;
 
   const detailRows = useMemo(() => {
     if (!hasSample || !g) {
@@ -217,19 +219,17 @@ function SectionGradeDistributionBlock({
               fractionDigits={1}
             />
             {averageGradePoint != null ? (
-              <p className="pt-0.5 text-[10px] leading-snug text-muted-foreground sm:text-[11px]">
+              <p
+                className="pt-0.5 text-[10px] leading-snug text-muted-foreground sm:text-[11px]"
+                title={g?.terms?.length ? g.terms.join(", ") : undefined}
+              >
                 Typical class grade{" "}
                 <span className="font-semibold tabular-nums text-foreground">
                   {averageGradeLetter}
                 </span>
-              </p>
-            ) : null}
-            {g?.section_count ? (
-              <p
-                className="text-[10px] leading-snug text-muted-foreground tabular-nums"
-                title={g.terms?.length ? g.terms.join(", ") : undefined}
-              >
-                {g.section_count} sections
+                {classAverage ? (
+                  <span className="tabular-nums"> · {classAverage}</span>
+                ) : null}
               </p>
             ) : null}
           </div>

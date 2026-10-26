@@ -75,6 +75,7 @@ const DialogContent = React.forwardRef<
     overlayClassName,
     onOverlayPointerDown,
     onPointerDownOutside,
+    forceMount,
     ...props
   },
   forwardedRef,
@@ -115,13 +116,15 @@ const DialogContent = React.forwardRef<
   );
 
   return (
-    <DialogPortal container={portalContainer}>
+    <DialogPortal container={portalContainer} forceMount={forceMount}>
       <DialogOverlay
         className={overlayClassName}
         onPointerDown={onOverlayPointerDown}
+        forceMount={forceMount}
       />
       <DialogPrimitive.Content
         ref={composedRef}
+        forceMount={forceMount}
         data-slot="dialog-content"
         className={cn(
           "pointer-events-auto fixed z-50 bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-200 outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",

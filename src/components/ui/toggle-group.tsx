@@ -31,7 +31,7 @@ const toggleGroupVariants = cva("group/toggle-group inline-flex items-center", {
 });
 
 const toggleGroupItemVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-1 rounded-md border border-transparent font-medium whitespace-nowrap transition-all outline-none disabled:pointer-events-none disabled:opacity-50 data-[state=on]:shadow-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-1 rounded-md border border-transparent font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow] outline-none disabled:pointer-events-none disabled:opacity-50 data-[state=on]:shadow-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {

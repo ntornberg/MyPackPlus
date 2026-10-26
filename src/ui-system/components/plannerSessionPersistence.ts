@@ -153,3 +153,51 @@ export function persistPlannerSession(payload: PersistedPlannerSession): void {
     /* quota or private mode — selected tab was still persisted above */
   }
 }
+
+let pendingSession: PersistedPlannerSession | null = null;
+let pendingHandle: number | null = null;
+let flushOnHideRegistered = false;
+
+/**
+ * Saves the session once the browser is idle rather than on every change:
+ * stringifying the tab data can take long enough to drop animation frames.
+ * The latest payload wins, and a pending save is flushed when the page hides.
+ */
+export function schedulePlannerSessionPersist(
+  payload: PersistedPlannerSession,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  pendingSession = payload;
+  if (!flushOnHideRegistered) {
+    flushOnHideRegistered = true;
+    window.addEventListener("pagehide", flushPlannerSessionPersist);
+  }
+  if (pendingHandle !== null) {
+    return;
+  }
+  pendingHandle =
+    typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(flushPlannerSessionPersist, {
+          timeout: 1000,
+        })
+      : window.setTimeout(flushPlannerSessionPersist, 200);
+}
+
+/** Writes a pending scheduled save now. */
+export function flushPlannerSessionPersist(): void {
+  if (pendingHandle !== null) {
+    if (typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(pendingHandle);
+    } else {
+      window.clearTimeout(pendingHandle);
+    }
+    pendingHandle = null;
+  }
+  const payload = pendingSession;
+  pendingSession = null;
+  if (payload) {
+    persistPlannerSession(payload);
+  }
+}

@@ -140,6 +140,37 @@
   color: #f59e0b;
 }
 
+.mpp-grade-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.mpp-grade-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #64748b;
+}
+
+.mpp-grade-legend-item strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.mpp-grade-legend-swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
 .mpp-grade-card-average {
   margin: 0.125rem 0 0;
   color: #64748b;
@@ -148,4 +179,3 @@
   font-weight: 600;
   line-height: 1.2;
 }
-

@@ -50,6 +50,10 @@ export interface GradeData {
   class_avg_min: number;
   class_avg_max: number;
   // v2 fields (absent on legacy responses)
+  /** Bucket-midpoint class average (0-100); midpoint of `class_avg_min`/`class_avg_max`. */
+  class_avg?: number;
+  /** Per-student standard deviation (percentage points) around `class_avg`. */
+  class_avg_stddev?: number;
   unity_id?: string | null;
   section_count?: number;
   /** False when the history contains no letter grades; absent when unknown. */
@@ -131,6 +135,8 @@ export interface V2GradeRow {
   f_average: number;
   class_avg_max: number | null;
   class_avg_min: number | null;
+  class_avg?: number | null;
+  class_avg_stddev?: number | null;
   link_status: string | null;
   section_count: number | null;
   has_letter_grades: boolean | null;

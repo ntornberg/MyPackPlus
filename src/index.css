@@ -138,6 +138,12 @@
   --sidebar-accent-foreground: #1e3a8a;
   --sidebar-border: rgb(100 116 139 / 0.34);
   --sidebar-ring: rgb(37 99 235 / 0.35);
+  /* Motion tokens: things enter on a long ease-out and leave quicker on an ease-in. */
+  --mpp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --mpp-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --mpp-duration-enter: 240ms;
+  --mpp-duration-exit: 160ms;
+  --mpp-duration-micro: 120ms;
   color-scheme: light;
   font-family: var(--font-sans);
   color: var(--foreground);
@@ -358,6 +364,18 @@
   --tw-content: "";
 }
 
+/* Reduced motion: tw-animate enter/exit become plain fades (no slide or zoom). */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    --tw-enter-scale: 1 !important;
+    --tw-enter-translate-x: 0 !important;
+    --tw-enter-translate-y: 0 !important;
+    --tw-exit-scale: 1 !important;
+    --tw-exit-translate-x: 0 !important;
+    --tw-exit-translate-y: 0 !important;
+  }
+}
+
 #extension-overlay-root button:not(:disabled),
 #extension-overlay-root [role="button"]:not(:disabled) {
   cursor: pointer;
@@ -371,6 +389,29 @@
 /* Native <details> plan requirement groups (MajorPlanSearch): rotate chevron when open. */
 #extension-overlay-root .plan-req-disclosure[open] > summary .plan-req-chevron {
   transform: rotate(90deg);
+}
+
+/* Expand/collapse the group body where `::details-content` is supported; others snap open. */
+#extension-overlay-root .plan-req-disclosure {
+  interpolate-size: allow-keywords;
+}
+
+#extension-overlay-root .plan-req-disclosure::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition:
+    block-size 200ms var(--mpp-ease-out),
+    content-visibility 200ms allow-discrete;
+}
+
+#extension-overlay-root .plan-req-disclosure[open]::details-content {
+  block-size: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #extension-overlay-root .plan-req-disclosure::details-content {
+    transition: none;
+  }
 }
 
 /* Extension: sheet is injected into ShadowRoot (`:host`). Utilities are unlayered

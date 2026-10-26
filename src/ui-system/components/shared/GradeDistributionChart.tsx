@@ -66,9 +66,28 @@ export function hasGradeDistribution(data: GradeData | undefined): boolean {
   return Boolean(data) && gradeDistributionPercents(data!).length > 0;
 }
 
+/**
+ * "93.5% ± 4.4%": bucket-midpoint class average with the per-student spread when known.
+ * Null when there is no letter-grade average (Sat/Unsat-only or missing history).
+ */
+export function formatGradeAverage(data: GradeData): string | null {
+  if (!(data.class_avg_max > 0)) {
+    return null;
+  }
+  const avg = data.class_avg ?? (data.class_avg_min + data.class_avg_max) / 2;
+  const stddev = data.class_avg_stddev;
+  return stddev != null
+    ? `${avg.toFixed(1)}% ± ${stddev.toFixed(1)}%`
+    : `${avg.toFixed(1)}%`;
+}
+
 /** True when the chartable distribution is Sat/Unsat rather than letter grades. */
 export function isSatUnsatDistribution(data: GradeData | undefined): boolean {
   return Boolean(data) && gradeDistributionPercents(data!)[0]?.label === "S";
+}
+
+function sliceTitle(slice: { label: string; pct: number }): string {
+  return `${slice.label} — ${slice.pct.toFixed(1)}%`;
 }
 
 type GradePieSlice = {
@@ -163,7 +182,9 @@ export function GradeDistributionChart({
         role="img"
         aria-label="Grade distribution pie chart"
       >
-        <circle cx={cx} cy={cy} r={r} fill={only.color} />
+        <circle cx={cx} cy={cy} r={r} fill={only.color}>
+          <title>{sliceTitle(only)}</title>
+        </circle>
       </svg>
     );
   }
@@ -185,7 +206,9 @@ export function GradeDistributionChart({
           stroke="var(--popover, #fff)"
           strokeWidth={strokeW}
           vectorEffect="non-scaling-stroke"
-        />
+        >
+          <title>{sliceTitle(s)}</title>
+        </path>
       ))}
     </svg>
   );

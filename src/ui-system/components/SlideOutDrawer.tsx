@@ -1,5 +1,6 @@
 import { GraduationCapIcon, MoonStarIcon, SunMediumIcon } from "lucide-react";
 import React, {
+  startTransition,
   useCallback,
   useEffect,
   useMemo,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 import InstructorSearch from "../../course-management/components/search-tabs/InstructorSearch";
 import {
@@ -41,12 +43,15 @@ import {
   plannerActionButtonClassName,
   plannerDrawerContentClassName,
   plannerFloatingButtonClassName,
+  plannerLauncherClassName,
+  plannerOverlayClassName,
 } from "./planner/plannerShellStyles";
 import {
+  flushPlannerSessionPersist,
   loadPersistedPlannerSession,
   loadPlannerSelectedTab,
   persistPlannerSelectedTab,
-  persistPlannerSession,
+  schedulePlannerSessionPersist,
 } from "./plannerSessionPersistence";
 import { PlannerPreviewRail } from "./workbench/PlannerPreviewRail";
 import { useOverlayPortalContainer } from "./workbench/useOverlayPortalContainer";
@@ -178,6 +183,13 @@ const MemoizedMajorPlanSearchTab = React.memo(
   ),
 );
 
+const PLANNER_TABS: PlannerWorkbenchTab[] = [
+  "course_search",
+  "gep_search",
+  "major_plan_search",
+  "instructor_search",
+];
+
 const MemoizedPlannerPreviewRail = React.memo(
   PlannerPreviewRail,
   (prev, next) =>
@@ -280,6 +292,10 @@ export default function SlideOutDrawer({
   );
 
   const [drawerOpen, setDrawerOpen] = useState(defaultOpen);
+  // Once mounted the panel stays mounted, so reopening only runs the animation.
+  // `parked`: closed and the exit animation has finished, so it isn't rendered.
+  const [panelMounted, setPanelMounted] = useState(defaultOpen);
+  const [parked, setParked] = useState(!defaultOpen);
   const [selectedTab, setSelectedTab] = useState<PlannerWorkbenchTab>(() => {
     const fromTabKey = loadPlannerSelectedTab();
     if (fromTabKey) {
@@ -287,6 +303,12 @@ export default function SlideOutDrawer({
     }
     return persisted?.selectedTab ?? "course_search";
   });
+  // Only the tab in view mounts with the panel; the rest follow once it has opened.
+  const [mountedTabs, setMountedTabs] = useState<
+    ReadonlySet<PlannerWorkbenchTab>
+  >(() => new Set([selectedTab]));
+  const launcherRef = useRef<HTMLButtonElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [selectedPreview, setSelectedPreview] =
     useState<PlannerSectionPreview | null>(null);
   const [themeMode, setThemeMode] = useState<"light" | "dark">(() => {
@@ -352,8 +374,9 @@ export default function SlideOutDrawer({
         ? majorPlanSearchData.selectedTerm
         : courseSearchData.selectedTerm;
 
-  // First hover or focus on the launcher: load the tab code and refresh
-  // Pack Planner and the audit (a no-op while the last sync is fresh).
+  // First hover or focus on the launcher: load the tab code, refresh Pack
+  // Planner and the audit (a no-op while the last sync is fresh), and mount the
+  // closed panel so the first open doesn't pay for it mid-animation.
   const warmedUp = useRef(false);
   const warmUp = useCallback(() => {
     if (warmedUp.current) return;
@@ -364,6 +387,7 @@ export default function SlideOutDrawer({
       loadMajorPlanSearch(),
     ]).catch(() => undefined);
     void syncPlanningData().catch(() => undefined);
+    startTransition(() => setPanelMounted(true));
   }, []);
 
   // While open, prefetch the term in view, and again once a planning sync
@@ -393,21 +417,53 @@ export default function SlideOutDrawer({
     if (drawerOpen) {
       return;
     }
+    setPanelMounted(true);
+    setParked(false);
     setDrawerOpen(true);
-    refreshCart();
   }, [drawerOpen]);
 
+  // The session effect below saves the state, so closing only flips `open`.
   const handleDrawerClose = useCallback(() => {
-    persistPlannerSession({
-      version: 1,
-      selectedTab,
-      courseSearchData,
-      majorPlanSearchData,
-      GepSearchData,
-    });
     setDrawerOpen(false);
-    setSelectedPreview(null);
-  }, [courseSearchData, GepSearchData, majorPlanSearchData, selectedTab]);
+  }, []);
+
+  // Work that would drop frames runs once the open or close animation is done.
+  const handlePanelAnimationEnd = useCallback(
+    (event: React.AnimationEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget) {
+        return;
+      }
+      if (!drawerOpen) {
+        setParked(true);
+        setSelectedPreview(null);
+        return;
+      }
+      refreshCart();
+      startTransition(() => setMountedTabs(new Set(PLANNER_TABS)));
+    },
+    [drawerOpen],
+  );
+
+  // A kept-mounted panel doesn't get Radix's open/close focus moves, so do them
+  // here: into the panel on reopen, back to the launcher on close.
+  const wasOpen = useRef(drawerOpen);
+  useEffect(() => {
+    if (wasOpen.current === drawerOpen) {
+      return;
+    }
+    wasOpen.current = drawerOpen;
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+    const root = content.getRootNode() as Document | ShadowRoot;
+    const focusInside = content.contains(root.activeElement);
+    if (drawerOpen) {
+      if (!focusInside) content.focus({ preventScroll: true });
+    } else if (focusInside || !root.activeElement) {
+      launcherRef.current?.focus({ preventScroll: true });
+    }
+  }, [drawerOpen]);
 
   useEffect(() => {
     try {
@@ -443,7 +499,7 @@ export default function SlideOutDrawer({
   }, [themeMode]);
 
   useEffect(() => {
-    persistPlannerSession({
+    schedulePlannerSessionPersist({
       version: 1,
       selectedTab,
       courseSearchData,
@@ -451,6 +507,8 @@ export default function SlideOutDrawer({
       GepSearchData,
     });
   }, [courseSearchData, GepSearchData, majorPlanSearchData, selectedTab]);
+
+  useEffect(() => flushPlannerSessionPersist, []);
 
   const selectedPreviewId = selectedPreview?.id ?? null;
   const previewRail = useMemo(
@@ -471,44 +529,64 @@ export default function SlideOutDrawer({
 
   return (
     <div className="mypack-shell flex flex-col items-end gap-2">
-      {!drawerOpen ? (
-        <PlannerLauncherHint enabled={showLauncherHint}>
-          <Button
-            type="button"
-            onClick={handleDrawerOpen}
-            onPointerEnter={warmUp}
-            onFocus={warmUp}
-            size="sm"
-            aria-label="Open Pack Planner"
-            className={plannerFloatingButtonClassName}
-          >
-            <GraduationCapIcon className="size-4" strokeWidth={2.25} />
-            Pack Planner
-          </Button>
-        </PlannerLauncherHint>
-      ) : null}
+      <PlannerLauncherHint enabled={showLauncherHint && !drawerOpen}>
+        <Button
+          ref={launcherRef}
+          type="button"
+          onClick={handleDrawerOpen}
+          onPointerEnter={warmUp}
+          onFocus={warmUp}
+          size="sm"
+          aria-label="Open Pack Planner"
+          data-hidden={drawerOpen || undefined}
+          inert={drawerOpen}
+          className={cn(
+            plannerFloatingButtonClassName,
+            plannerLauncherClassName,
+          )}
+        >
+          <GraduationCapIcon className="size-4" strokeWidth={2.25} />
+          Pack Planner
+        </Button>
+      </PlannerLauncherHint>
 
       <Dialog
         open={drawerOpen}
         modal={false}
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && drawerOpen) {
             handleDrawerClose();
           }
         }}
       >
         <DialogContent
+          ref={contentRef}
           container={portalContainer}
+          forceMount={panelMounted || undefined}
+          inert={!drawerOpen}
           showCloseButton={false}
-          overlayClassName="!bg-slate-950/45 supports-backdrop-filter:backdrop-blur-[2px] dark:!bg-black/60"
+          overlayClassName={cn(
+            plannerOverlayClassName,
+            parked && "planner-parked",
+          )}
           onOverlayPointerDown={(e) => {
             if (e.target === e.currentTarget) {
               handleDrawerClose();
             }
           }}
+          // Mounted closed on warm-up: keep focus out of the hidden panel.
+          onOpenAutoFocus={(e) => {
+            if (!drawerOpen) e.preventDefault();
+          }}
+          // It never unmounts on close; the focus effect above handles this.
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onAnimationEnd={handlePanelAnimationEnd}
           onWheelCapture={(e) => e.stopPropagation()}
           onTouchMoveCapture={(e) => e.stopPropagation()}
-          className={plannerDrawerContentClassName}
+          className={cn(
+            plannerDrawerContentClassName,
+            parked && "planner-parked",
+          )}
         >
           <TooltipProvider delayDuration={150}>
             <DialogTitle className="sr-only">Pack Planner</DialogTitle>
@@ -523,6 +601,9 @@ export default function SlideOutDrawer({
               onValueChange={(value) => {
                 const next = value as PlannerWorkbenchTab;
                 setSelectedTab(next);
+                setMountedTabs((tabs) =>
+                  tabs.has(next) ? tabs : new Set([...tabs, next]),
+                );
                 persistPlannerSelectedTab(next);
                 setSelectedPreview(null);
               }}
@@ -626,83 +707,93 @@ export default function SlideOutDrawer({
                   forceMount
                   className={
                     selectedTab === "course_search"
-                      ? "block min-h-0"
+                      ? "planner-tab-panel block min-h-0"
                       : "hidden min-h-0"
                   }
                 >
-                  <MemoizedCourseSearchTab
-                    setCourseSearchTabData={setCourseSearchTabData}
-                    courseSearchData={courseSearchData}
-                    onPreviewSectionChange={setSelectedPreview}
-                    previewContent={
-                      selectedTab === "course_search"
-                        ? previewRail
-                        : inactivePreviewRail
-                    }
-                    selectedPreviewId={
-                      selectedTab === "course_search" ? selectedPreviewId : null
-                    }
-                  />
+                  {mountedTabs.has("course_search") ? (
+                    <MemoizedCourseSearchTab
+                      setCourseSearchTabData={setCourseSearchTabData}
+                      courseSearchData={courseSearchData}
+                      onPreviewSectionChange={setSelectedPreview}
+                      previewContent={
+                        selectedTab === "course_search"
+                          ? previewRail
+                          : inactivePreviewRail
+                      }
+                      selectedPreviewId={
+                        selectedTab === "course_search"
+                          ? selectedPreviewId
+                          : null
+                      }
+                    />
+                  ) : null}
                 </TabsContent>
                 <TabsContent
                   value="gep_search"
                   forceMount
                   className={
                     selectedTab === "gep_search"
-                      ? "block min-h-0"
+                      ? "planner-tab-panel block min-h-0"
                       : "hidden min-h-0"
                   }
                 >
-                  <MemoizedGepSearchTab
-                    setGepSearchTabData={setGepSearchTabData}
-                    GepSearchData={GepSearchData}
-                    onPreviewSectionChange={setSelectedPreview}
-                    previewContent={
-                      selectedTab === "gep_search"
-                        ? previewRail
-                        : inactivePreviewRail
-                    }
-                    selectedPreviewId={
-                      selectedTab === "gep_search" ? selectedPreviewId : null
-                    }
-                    isActive={selectedTab === "gep_search"}
-                  />
+                  {mountedTabs.has("gep_search") ? (
+                    <MemoizedGepSearchTab
+                      setGepSearchTabData={setGepSearchTabData}
+                      GepSearchData={GepSearchData}
+                      onPreviewSectionChange={setSelectedPreview}
+                      previewContent={
+                        selectedTab === "gep_search"
+                          ? previewRail
+                          : inactivePreviewRail
+                      }
+                      selectedPreviewId={
+                        selectedTab === "gep_search" ? selectedPreviewId : null
+                      }
+                      isActive={selectedTab === "gep_search"}
+                    />
+                  ) : null}
                 </TabsContent>
                 <TabsContent
                   value="major_plan_search"
                   forceMount
                   className={
                     selectedTab === "major_plan_search"
-                      ? "block min-h-0"
+                      ? "planner-tab-panel block min-h-0"
                       : "hidden min-h-0"
                   }
                 >
-                  <MemoizedMajorPlanSearchTab
-                    setMajorPlanSearchTabData={setMajorPlanSearchTabData}
-                    majorPlanSearchData={majorPlanSearchData}
-                    onPreviewSectionChange={setSelectedPreview}
-                    previewContent={
-                      selectedTab === "major_plan_search"
-                        ? previewRail
-                        : inactivePreviewRail
-                    }
-                    selectedPreviewId={
-                      selectedTab === "major_plan_search"
-                        ? selectedPreviewId
-                        : null
-                    }
-                  />
+                  {mountedTabs.has("major_plan_search") ? (
+                    <MemoizedMajorPlanSearchTab
+                      setMajorPlanSearchTabData={setMajorPlanSearchTabData}
+                      majorPlanSearchData={majorPlanSearchData}
+                      onPreviewSectionChange={setSelectedPreview}
+                      previewContent={
+                        selectedTab === "major_plan_search"
+                          ? previewRail
+                          : inactivePreviewRail
+                      }
+                      selectedPreviewId={
+                        selectedTab === "major_plan_search"
+                          ? selectedPreviewId
+                          : null
+                      }
+                    />
+                  ) : null}
                 </TabsContent>
                 <TabsContent
                   value="instructor_search"
                   forceMount
                   className={
                     selectedTab === "instructor_search"
-                      ? "block min-h-0"
+                      ? "planner-tab-panel block min-h-0"
                       : "hidden min-h-0"
                   }
                 >
-                  <InstructorSearch />
+                  {mountedTabs.has("instructor_search") ? (
+                    <InstructorSearch />
+                  ) : null}
                 </TabsContent>
               </div>
             </Tabs>

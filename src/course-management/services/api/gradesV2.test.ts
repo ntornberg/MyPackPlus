@@ -122,6 +122,8 @@ describe("v2ToBatchResponse", () => {
             f_average: 0,
             class_avg_max: null,
             class_avg_min: null,
+            class_avg: 85,
+            class_avg_stddev: 5,
             link_status: "linked",
             section_count: 3,
             has_letter_grades: false,
@@ -149,6 +151,8 @@ describe("v2ToBatchResponse", () => {
       course_name: "ARE 201",
       instructor_name: "Varron, Madi",
       class_avg_max: 0,
+      class_avg: 85,
+      class_avg_stddev: 5,
       has_letter_grades: false,
     });
     // Ambiguous names produce no professor rather than guessing a person.

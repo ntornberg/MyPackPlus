@@ -37,16 +37,28 @@ function compareMarkup(data?: GradeData) {
   );
 }
 
-it("renders grade charts and section metadata without historical student totals", () => {
+it("renders grade charts without section counts or historical student totals", () => {
   const stale = { ...grade, total_students: 12345 };
   for (const html of [
     renderToStaticMarkup(<GradeCard data={stale} />),
     compareMarkup(stale),
   ]) {
-    expect(html).toContain("sections");
+    expect(html).not.toContain("sections");
     expect(html).not.toMatch(/12,?345|students/);
-    expect(html).toContain("svg");
+    expect(html).toContain("<title>A — 50.0%</title>");
   }
+});
+
+it("shows per-grade shares and the class average with its spread", () => {
+  const withSpread = { ...grade, class_avg: 85, class_avg_stddev: 5 };
+  const card = renderToStaticMarkup(<GradeCard data={withSpread} />);
+  expect(card).toMatch(/<strong>A<\/strong>50%/);
+  expect(card).toContain("85.0% ± 5.0%");
+  expect(compareMarkup(withSpread)).toContain("85.0% ± 5.0%");
+  // Legacy rows without class_avg fall back to the min/max midpoint.
+  expect(renderToStaticMarkup(<GradeCard data={grade} />)).toContain(
+    "Avg <strong>85.0%</strong>",
+  );
 });
 
 it("distinguishes no letter grades from missing history without a count", () => {

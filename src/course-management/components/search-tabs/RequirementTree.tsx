@@ -683,8 +683,8 @@ export function PlanningSyncStatus({
             className="h-1 overflow-hidden rounded-full bg-muted"
           >
             <div
-              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
-              style={{ width: `${percent}%` }}
+              className="h-full w-full origin-left rounded-full bg-primary transition-transform duration-500 ease-out"
+              style={{ transform: `scaleX(${percent / 100})` }}
             />
           </div>
           {progress ? (

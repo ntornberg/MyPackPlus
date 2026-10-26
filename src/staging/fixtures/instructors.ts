@@ -190,7 +190,17 @@ export function stagingGrades(requests: V2GradeRequest[]): V2CoursesData {
     const c = (100 - a - b) * (0.5 + random() * 0.3);
     const d = (100 - a - b - c) * 0.55;
     const f = 100 - a - b - c - d;
-    const gpaMax = 2.9 + (a / 100) * 1.1;
+    // Same bucket scores as v2_get_courses: floors, ceilings and midpoints.
+    const shares = [a, b, c, d, f].map((p) => p / 100);
+    const dot = (scores: number[]) =>
+      shares.reduce((sum, p, i) => sum + p * scores[i]!, 0);
+    const mean = dot([95, 85, 75, 65, 30]);
+    const stddev = Math.sqrt(
+      Math.max(
+        0,
+        dot([95 ** 2, 85 ** 2, 75 ** 2, 65 ** 2, 30 ** 2]) - mean ** 2,
+      ),
+    );
     return {
       request,
       instructor_id: instructor.instructor_id,
@@ -207,8 +217,10 @@ export function stagingGrades(requests: V2GradeRequest[]): V2CoursesData {
         c_average: Math.round(c * 10) / 10,
         d_average: Math.round(d * 10) / 10,
         f_average: Math.round(f * 10) / 10,
-        class_avg_min: Math.round((gpaMax - 0.35 - random() * 0.3) * 100) / 100,
-        class_avg_max: Math.round(gpaMax * 100) / 100,
+        class_avg_min: Math.round(dot([90, 80, 70, 60, 0]) * 100) / 100,
+        class_avg_max: Math.round(dot([100, 90, 80, 70, 60]) * 100) / 100,
+        class_avg: Math.round(mean * 100) / 100,
+        class_avg_stddev: Math.round(stddev * 10) / 10,
         link_status: "linked",
         section_count: 2 + Math.floor(random() * 14),
         has_letter_grades: true,

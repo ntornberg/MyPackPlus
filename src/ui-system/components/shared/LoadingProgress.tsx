@@ -84,10 +84,11 @@ export function LoadingProgress({
       >
         <div
           className={cn(
-            "h-full rounded-full transition-[width,background-color] duration-500 ease-out",
+            // scaleX rather than width: no layout pass on every frame.
+            "h-full w-full origin-left rounded-full transition-[transform,background-color] duration-500 ease-out",
             justDone ? "bg-emerald-500" : "bg-primary",
           )}
-          style={{ width: `${percent}%` }}
+          style={{ transform: `scaleX(${percent / 100})` }}
         />
       </div>
     </div>
