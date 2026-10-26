@@ -427,6 +427,21 @@ export default function SlideOutDrawer({
     setDrawerOpen(false);
   }, []);
 
+  // The open animation has started, so the panel is visible and can take focus.
+  const handlePanelAnimationStart = useCallback(
+    (event: React.AnimationEvent<HTMLDivElement>) => {
+      const content = event.currentTarget;
+      if (!drawerOpen || event.target !== content) {
+        return;
+      }
+      const root = content.getRootNode() as Document | ShadowRoot;
+      if (!content.contains(root.activeElement)) {
+        content.focus({ preventScroll: true });
+      }
+    },
+    [drawerOpen],
+  );
+
   // Work that would drop frames runs once the open or close animation is done.
   const handlePanelAnimationEnd = useCallback(
     (event: React.AnimationEvent<HTMLDivElement>) => {
@@ -444,23 +459,24 @@ export default function SlideOutDrawer({
     [drawerOpen],
   );
 
-  // A kept-mounted panel doesn't get Radix's open/close focus moves, so do them
-  // here: into the panel on reopen, back to the launcher on close.
+  // A kept-mounted panel doesn't get Radix's focus moves. On close, send focus
+  // back to the launcher (going inert drops the panel's focus to the body); on
+  // reopen, handlePanelAnimationStart moves it in.
   const wasOpen = useRef(drawerOpen);
   useEffect(() => {
-    if (wasOpen.current === drawerOpen) {
-      return;
-    }
+    const justClosed = wasOpen.current && !drawerOpen;
     wasOpen.current = drawerOpen;
     const content = contentRef.current;
-    if (!content) {
+    if (!justClosed || !content) {
       return;
     }
-    const root = content.getRootNode() as Document | ShadowRoot;
-    const focusInside = content.contains(root.activeElement);
-    if (drawerOpen) {
-      if (!focusInside) content.focus({ preventScroll: true });
-    } else if (focusInside || !root.activeElement) {
+    const active = (content.getRootNode() as Document | ShadowRoot)
+      .activeElement;
+    if (
+      !active ||
+      active === content.ownerDocument.body ||
+      content.contains(active)
+    ) {
       launcherRef.current?.focus({ preventScroll: true });
     }
   }, [drawerOpen]);
@@ -580,6 +596,7 @@ export default function SlideOutDrawer({
           }}
           // It never unmounts on close; the focus effect above handles this.
           onCloseAutoFocus={(e) => e.preventDefault()}
+          onAnimationStart={handlePanelAnimationStart}
           onAnimationEnd={handlePanelAnimationEnd}
           onWheelCapture={(e) => e.stopPropagation()}
           onTouchMoveCapture={(e) => e.stopPropagation()}

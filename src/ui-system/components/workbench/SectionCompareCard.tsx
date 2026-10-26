@@ -399,7 +399,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
       }}
       aria-selected={isSelected}
       className={cn(
-        "cursor-pointer rounded-xl border-2 text-left transition outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "cursor-pointer rounded-xl border-2 text-left transition-[color,background-color,border-color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-ring",
         compact ? "p-2.5" : "p-4",
         isSelected
           ? "border-primary bg-primary/[0.12] shadow-sm ring-2 ring-primary/25 dark:border-primary/50 dark:bg-primary/12 dark:shadow-[inset_0_0_0_1px_rgba(79,140,255,0.25)] dark:ring-primary/35"
@@ -562,7 +562,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
               <button
                 type="button"
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 text-left text-sm text-foreground shadow-sm backdrop-blur-sm transition hover:border-primary/35 hover:bg-background/90 dark:border-white/10 dark:bg-[rgb(12,18,32)]/85 dark:hover:bg-[rgb(14,22,38)]/95",
+                  "flex w-full items-center gap-2 rounded-lg border border-border/60 bg-background/85 text-left text-sm text-foreground shadow-sm transition-[color,background-color,border-color,box-shadow] hover:border-primary/35 hover:bg-background/90 dark:border-white/10 dark:bg-[rgb(12,18,32)]/85 dark:hover:bg-[rgb(14,22,38)]/95",
                   compact ? "px-2 py-1.5" : "py-2 pl-2 pr-2",
                 )}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -619,7 +619,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
                           }
                         }}
                         className={cn(
-                          "flex flex-col items-start rounded-md border text-left transition",
+                          "flex flex-col items-start rounded-md border text-left transition-[color,background-color,border-color,box-shadow]",
                           compact ? "px-2 py-1.5" : "px-3 py-2",
                           "border-transparent bg-transparent hover:border-border hover:bg-primary/[0.06]",
                           selected &&
