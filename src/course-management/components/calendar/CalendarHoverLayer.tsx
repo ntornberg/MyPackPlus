@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { Popover, PopoverContent } from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   GradeDistributionChart,
   gradeDistributionPercents,
@@ -41,15 +42,32 @@ export function CalendarHoverLayer({
     rect: DOMRect;
     side: "right" | "left" | "bottom";
   } | null>(null);
+  // The last card stays rendered after `active` clears so it can animate out.
+  const [shown, setShown] = useState(active);
+  if (active && active !== shown) setShown(active);
+  const card = active ?? shown;
   const content = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  // While a card is open (or just closed), moving to another event swaps it
+  // in immediately instead of waiting out the hover-intent delay again.
+  const open = useRef(false);
+  const closedAt = useRef(-Infinity);
   const id = useId();
   const cancelClose = useCallback(() => clearTimeout(closeTimer.current), []);
   const scheduleClose = useCallback(() => {
     cancelClose();
     closeTimer.current = setTimeout(() => setActive(null), 180);
+  }, [cancelClose]);
+  // Forced dismissals (Escape, a redraw, a term change) snap shut without the
+  // exit animation and don't warm the next hover.
+  const dismissNow = useCallback(() => {
+    cancelClose();
+    open.current = false;
+    closedAt.current = -Infinity;
+    setActive(null);
+    setShown(null);
   }, [cancelClose]);
 
   useEffect(() => {
@@ -82,8 +100,10 @@ export function CalendarHoverLayer({
       cancelClose();
       clearTimeout(opening);
       hovered = element;
+      const warm = open.current || performance.now() - closedAt.current < 300;
       if (event.type === "focusin") show(element, true);
-      else opening = setTimeout(() => show(element, false), 250);
+      else if (warm) show(element, false);
+      else opening = setTimeout(() => show(element, false), 120);
     };
     const leave = (event: Event) => {
       const element = find(event.target);
@@ -100,8 +120,7 @@ export function CalendarHoverLayer({
     };
     const dismiss = () => {
       clearTimeout(opening);
-      cancelClose();
-      setActive(null);
+      dismissNow();
     };
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") dismiss();
@@ -129,7 +148,15 @@ export function CalendarHoverLayer({
       doc.removeEventListener("keydown", keydown);
       doc.removeEventListener("mypack-calendar-card", anotherCard);
     };
-  }, [events, targetRef, resolveEvent, id, cancelClose, scheduleClose]);
+  }, [
+    events,
+    targetRef,
+    resolveEvent,
+    id,
+    cancelClose,
+    scheduleClose,
+    dismissNow,
+  ]);
 
   useEffect(() => {
     if (!active) return;
@@ -154,7 +181,7 @@ export function CalendarHoverLayer({
     };
     const sync = () => {
       if (!active.anchor.isConnected) {
-        setActive(null);
+        dismissNow();
         return;
       }
       const course = active.event.course!;
@@ -192,7 +219,7 @@ export function CalendarHoverLayer({
       found.addEventListener("focusin", cancelClose);
       found.addEventListener("focusout", scheduleClose);
     };
-    const dismiss = () => setActive(null);
+    const dismiss = dismissNow;
     // sync forces layout, so coalesce bursts of page mutations to one per frame.
     const view = doc.defaultView ?? window;
     let frame = 0;
@@ -218,7 +245,7 @@ export function CalendarHoverLayer({
       release();
       doc.removeEventListener("change", dismiss);
     };
-  }, [active, resolveEvent, cancelClose, scheduleClose]);
+  }, [active, resolveEvent, cancelClose, scheduleClose, dismissNow]);
 
   // Leave events never fire when the hovered node (the native tooltip or a
   // re-rendered calendar event) is removed under the pointer, so also track
@@ -256,6 +283,14 @@ export function CalendarHoverLayer({
     active && (!resolveEvent || nativePopup || active.keyboard),
   );
 
+  useEffect(() => {
+    if (visible) open.current = true;
+    else if (open.current) {
+      open.current = false;
+      closedAt.current = performance.now();
+    }
+  }, [visible]);
+
   return (
     <Popover
       open={visible}
@@ -263,7 +298,7 @@ export function CalendarHoverLayer({
         if (!open) setActive(null);
       }}
     >
-      {active && (
+      {card && (
         <Primitive.Anchor
           virtualRef={{
             current: nativePopup
@@ -273,11 +308,11 @@ export function CalendarHoverLayer({
                       ? nativePopup.element.getBoundingClientRect()
                       : nativePopup.rect,
                 }
-              : active.anchor,
+              : card.anchor,
           }}
         />
       )}
-      {active && visible && (
+      {card && (
         <PopoverContent
           ref={content}
           id={id}
@@ -286,7 +321,7 @@ export function CalendarHoverLayer({
           updatePositionStrategy="always"
           collisionPadding={12}
           className="w-[340px] max-h-[min(460px,80vh)] overflow-y-auto text-sm"
-          aria-label={`${active.event.course?.code} class information`}
+          aria-label={`${card.event.course?.code} class information`}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => {
@@ -300,7 +335,7 @@ export function CalendarHoverLayer({
                 : null;
             if (
               nativePopup?.element.contains(e.target as Node) ||
-              active.anchor.contains(e.target as Node) ||
+              card.anchor.contains(e.target as Node) ||
               (next && (!resolveEvent || resolveEvent(next)))
             )
               e.preventDefault();
@@ -311,14 +346,14 @@ export function CalendarHoverLayer({
           onBlurCapture={(e) => {
             if (
               !e.currentTarget.contains(e.relatedTarget) &&
-              !active.anchor.contains(e.relatedTarget)
+              !card.anchor.contains(e.relatedTarget)
             )
               scheduleClose();
           }}
         >
           <CourseCard
-            key={JSON.stringify(active.event.course)}
-            event={active.event}
+            key={JSON.stringify(card.event.course)}
+            event={card.event}
           />
         </PopoverContent>
       )}
@@ -372,56 +407,77 @@ function CourseCard({ event }: { event: ScheduleEvent }) {
             {course.instructors.map((i) => i.name).join("; ") ||
               "Instructor not assigned"}
           </p>
-          <p role="status">Loading grades and ratings…</p>
+          <div className="flex flex-col gap-2 border-t border-border pt-2">
+            <p role="status" className="text-xs text-muted-foreground">
+              Loading grades and ratings…
+            </p>
+            <div className="flex items-center gap-3" aria-hidden>
+              <Skeleton className="size-[72px] rounded-full" />
+              <div className="flex flex-col gap-1.5">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-12" />
+                <Skeleton className="h-3 w-14" />
+              </div>
+            </div>
+          </div>
         </>
       )}
-      {insights?.map((insight, index) => {
-        const rating = describeRating(insight.professor);
-        return (
-          <section
-            key={index}
-            className="flex flex-col gap-2 border-t border-border pt-2"
-          >
-            <h4 className="font-medium">{insight.name}</h4>
-            {insight.error ? (
-              <p role="status">
-                Could not load grades and ratings. Hover again to retry.
-              </p>
-            ) : (
-              <>
-                <p className="text-xs" title={rating.description}>
-                  {insight.ambiguous
-                    ? "Instructor match is ambiguous; rating unavailable."
-                    : rating.avgRating != null
-                      ? `RMP ${rating.avgRating.toFixed(1)}/5${rating.numRatings != null ? ` · ${formatRatingCount(rating.numRatings)}` : ""}${rating.otherSchool ? ` · ${rating.otherSchool}` : ""}`
-                      : rating.label}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {insight.courseWide
-                    ? "Course-wide grade history"
-                    : "Instructor’s grade history for this course"}
-                </p>
-                {insight.grade ? (
-                  <div className="flex items-center gap-3">
-                    <GradeDistributionChart data={insight.grade} size={72} />
-                    <div className="text-xs">
-                      {gradeDistributionPercents(insight.grade).map((row) => (
-                        <div key={row.label}>
-                          {row.label}: {row.pct.toFixed(0)}%
-                        </div>
-                      ))}
-                      {gradeDistributionPercents(insight.grade).length === 0 &&
-                        "No letter-grade history available."}
-                    </div>
-                  </div>
+      {insights && (
+        <div className="mpp-stagger flex flex-col gap-3">
+          {insights.map((insight, index) => {
+            const rating = describeRating(insight.professor);
+            return (
+              <section
+                key={index}
+                className="flex flex-col gap-2 border-t border-border pt-2"
+              >
+                <h4 className="font-medium">{insight.name}</h4>
+                {insight.error ? (
+                  <p role="status">
+                    Could not load grades and ratings. Hover again to retry.
+                  </p>
                 ) : (
-                  <p className="text-xs">No grade history available.</p>
+                  <>
+                    <p className="text-xs" title={rating.description}>
+                      {insight.ambiguous
+                        ? "Instructor match is ambiguous; rating unavailable."
+                        : rating.avgRating != null
+                          ? `RMP ${rating.avgRating.toFixed(1)}/5${rating.numRatings != null ? ` · ${formatRatingCount(rating.numRatings)}` : ""}${rating.otherSchool ? ` · ${rating.otherSchool}` : ""}`
+                          : rating.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {insight.courseWide
+                        ? "Course-wide grade history"
+                        : "Instructor’s grade history for this course"}
+                    </p>
+                    {insight.grade ? (
+                      <div className="flex items-center gap-3">
+                        <GradeDistributionChart
+                          data={insight.grade}
+                          size={72}
+                        />
+                        <div className="text-xs">
+                          {gradeDistributionPercents(insight.grade).map(
+                            (row) => (
+                              <div key={row.label}>
+                                {row.label}: {row.pct.toFixed(0)}%
+                              </div>
+                            ),
+                          )}
+                          {gradeDistributionPercents(insight.grade).length ===
+                            0 && "No letter-grade history available."}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs">No grade history available.</p>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </section>
-        );
-      })}
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
