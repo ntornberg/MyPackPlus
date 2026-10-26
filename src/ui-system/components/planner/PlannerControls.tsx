@@ -1,9 +1,16 @@
-import { ChevronDownIcon, SearchIcon } from "lucide-react";
+import { SearchIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import {
@@ -37,29 +44,24 @@ export function SectionSortField({
   return (
     <Field>
       <FieldLabel htmlFor={id}>Sort by</FieldLabel>
-      <div className="relative">
-        <select
-          id={id}
-          value={value}
-          onChange={(event) =>
-            onValueChange(event.target.value as SectionSortMode)
-          }
-          aria-describedby={`${id}-desc`}
-          // Matches InputGroup (border-2, primary focus ring). Native option
-          // lists ignore page styles unless colors/color-scheme are set here.
-          className="h-9 w-full cursor-pointer appearance-none rounded-lg border-2 border-border bg-background pr-9 pl-3 text-sm text-foreground transition-colors outline-none focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-ring/30 dark:bg-input/40 dark:[color-scheme:dark] [&>option]:bg-popover [&>option]:text-popover-foreground"
-        >
+      <Select
+        items={SECTION_SORT_OPTIONS}
+        value={value}
+        onValueChange={(next) => {
+          if (next) onValueChange(next);
+        }}
+      >
+        <SelectTrigger id={id} aria-describedby={`${id}-desc`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
           {SECTION_SORT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value}>
               {option.label}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <ChevronDownIcon
-          className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-      </div>
+        </SelectContent>
+      </Select>
       <FieldDescription id={`${id}-desc`}>
         {sortHint(value, scheduleKnown)}
       </FieldDescription>

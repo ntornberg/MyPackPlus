@@ -9,8 +9,7 @@
 @custom-variant dark (&:is(.dark *, #extension-overlay-root[data-mpp-theme="dark"] *));
 
 @theme inline {
-  --font-sans:
-    'Geist Variable', sans-serif;
+  --font-sans: "Geist Variable", sans-serif;
   --font-mono:
     "JetBrains Mono", "SFMono-Regular", ui-monospace, SFMono-Regular, Consolas,
     "Liberation Mono", Menlo, monospace;
@@ -40,40 +39,23 @@
   --shadow-xs: var(--planner-shadow-xs, 0 1px 2px rgb(15 23 42 / 0.04));
   --shadow-sm: var(--planner-shadow-sm, 0 2px 4px -2px rgb(15 23 42 / 0.08));
   --shadow-md: var(--planner-shadow-md, 0 4px 10px -4px rgb(15 23 42 / 0.1));
-  --font-heading:
-    var(--font-sans);
-  --color-sidebar-ring:
-    var(--sidebar-ring);
-  --color-sidebar-border:
-    var(--sidebar-border);
-  --color-sidebar-accent-foreground:
-    var(--sidebar-accent-foreground);
-  --color-sidebar-accent:
-    var(--sidebar-accent);
-  --color-sidebar-primary-foreground:
-    var(--sidebar-primary-foreground);
-  --color-sidebar-primary:
-    var(--sidebar-primary);
-  --color-sidebar-foreground:
-    var(--sidebar-foreground);
-  --color-sidebar:
-    var(--sidebar);
-  --color-chart-5:
-    var(--chart-5);
-  --color-chart-4:
-    var(--chart-4);
-  --color-chart-3:
-    var(--chart-3);
-  --color-chart-2:
-    var(--chart-2);
-  --color-chart-1:
-    var(--chart-1);
-  --radius-2xl:
-    calc(var(--radius) * 1.8);
-  --radius-3xl:
-    calc(var(--radius) * 2.2);
-  --radius-4xl:
-    calc(var(--radius) * 2.6);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 #extension-overlay-root {
@@ -144,6 +126,9 @@
   --mpp-duration-enter: 240ms;
   --mpp-duration-exit: 160ms;
   --mpp-duration-micro: 120ms;
+  /* Small overshoot for pops (checks, icons); falls back to ease-out where linear() is unsupported. */
+  --mpp-ease-spring: var(--mpp-ease-out);
+  --mpp-stagger: 30ms;
   color-scheme: light;
   font-family: var(--font-sans);
   color: var(--foreground);
@@ -373,6 +358,110 @@
     --tw-exit-scale: 1 !important;
     --tw-exit-translate-x: 0 !important;
     --tw-exit-translate-y: 0 !important;
+  }
+}
+
+@supports (animation-timing-function: linear(0, 1)) {
+  #extension-overlay-root {
+    --mpp-ease-spring: linear(
+      0,
+      0.2 6%,
+      0.62 15%,
+      0.92 24%,
+      1.06 32%,
+      1.09 38%,
+      1.06 46%,
+      1.01 58%,
+      0.99 70%,
+      1
+    );
+  }
+}
+
+/* Children rise in one after another as they mount (capped at 8 steps so long lists stay quick). */
+.mpp-stagger > * {
+  animation: mpp-rise-in var(--mpp-duration-enter) var(--mpp-ease-out) backwards;
+}
+.mpp-stagger > :nth-child(2) {
+  animation-delay: calc(1 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(3) {
+  animation-delay: calc(2 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(4) {
+  animation-delay: calc(3 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(5) {
+  animation-delay: calc(4 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(6) {
+  animation-delay: calc(5 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(7) {
+  animation-delay: calc(6 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(8) {
+  animation-delay: calc(7 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(n + 9) {
+  animation-delay: calc(8 * var(--mpp-stagger));
+}
+
+.mpp-rise-in {
+  animation: mpp-rise-in var(--mpp-duration-enter) var(--mpp-ease-out) backwards;
+}
+
+@keyframes mpp-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes mpp-pop-in {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+/* The checkbox tick mounts on check, so it pops in with a little overshoot. */
+.mpp-check-pop {
+  animation: mpp-pop-in 220ms var(--mpp-ease-spring) backwards;
+}
+
+/* StarRating fill (also defined in degreeAuditCards.css for the native-page rating card). */
+@keyframes mpp-star-pop {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
+
+@keyframes mpp-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mpp-stagger > *,
+  .mpp-rise-in,
+  .mpp-check-pop,
+  .mpp-star-fill {
+    animation-name: mpp-fade-in;
+    animation-delay: 0s;
+  }
+
+  .mpp-indicator {
+    transition: none !important;
+  }
+
+  .mpp-skeleton {
+    animation: none !important;
   }
 }
 

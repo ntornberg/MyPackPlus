@@ -18,11 +18,15 @@ export function SectionCompareList({
     <div className="space-y-3">
       {header}
       {isEmpty ? (
-        <p className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
+        <p className="mpp-rise-in rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
           {emptyMessage}
         </p>
       ) : (
-        <div role="listbox" aria-label="Course sections" className="space-y-3">
+        <div
+          role="listbox"
+          aria-label="Course sections"
+          className="mpp-stagger space-y-3"
+        >
           {children}
         </div>
       )}

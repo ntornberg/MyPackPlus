@@ -8,6 +8,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+import { cn } from "@/lib/utils";
 
 import { DEPT_COURSES } from "../../../generated/catalogs/course-search/departmentCourses.typed";
 import { TermIdByName } from "../../../generated/catalogs/termIds";
@@ -314,11 +315,19 @@ export default function CourseSearch({
           compact={courseSearchData.compactSections}
         />
       ) : (
-        <div className="flex flex-col items-center gap-2 py-12 text-center">
-          <div className="rounded-full bg-primary/10 p-4 text-primary">
+        <div className="mpp-stagger flex flex-col items-center gap-2 py-12 text-center">
+          <div
+            className={cn(
+              "rounded-full bg-primary/10 p-4 text-primary",
+              isLoading && "animate-pulse",
+            )}
+          >
             <SearchIcon />
           </div>
-          <p className="text-sm text-muted-foreground">{emptyStateMessage}</p>
+          {/* Keyed so each new message rises in rather than swapping in place. */}
+          <p key={emptyStateMessage} className="text-sm text-muted-foreground">
+            {emptyStateMessage}
+          </p>
         </div>
       )}
     </PlannerPanel>

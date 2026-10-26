@@ -96,7 +96,7 @@ export function StatusBanner({ className }: { className?: string }) {
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex max-w-[min(56vw,360px)] items-center gap-2 rounded-full border px-2.5 py-1.5 text-left text-xs font-medium shadow-sm",
+        "inline-flex max-w-[min(56vw,360px)] animate-in items-center gap-2 rounded-full border px-2.5 py-1.5 text-left text-xs font-medium shadow-sm fade-in slide-in-from-top-1 duration-(--mpp-duration-enter) ease-(--mpp-ease-out)",
         levelStyles[status.level],
         className,
       )}

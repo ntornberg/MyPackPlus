@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import type { GradeData } from "@/types/api";
@@ -142,19 +142,48 @@ export function GradeDistributionChart({
   size,
   className,
   wedgeStrokeWidth,
+  animate = false,
 }: {
   data: GradeData;
   size: number;
   className?: string;
   /** Wedge outline; slightly thicker reads better on larger pies. */
   wedgeStrokeWidth?: number;
+  /** Draw the pie in clockwise on mount (styled by `.mpp-pie-sweep`). */
+  animate?: boolean;
 }) {
   const slices = useMemo(() => gradePieSlices(data), [data]);
+  const maskId = `mpp-pie-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const pad = size >= 72 ? 2.5 : 2;
   const strokeW = wedgeStrokeWidth ?? (size >= 64 ? 1.5 : 1);
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - pad;
+
+  // A thick stroke as wide as the radius, revealed by stroke-dashoffset, uncovers the pie like a clock hand.
+  const sweep = (content: ReactNode) =>
+    animate ? (
+      <>
+        <mask id={maskId}>
+          <circle
+            className="mpp-pie-sweep-mask"
+            cx={cx}
+            cy={cy}
+            r={size / 4}
+            fill="none"
+            stroke="#fff"
+            strokeWidth={size / 2}
+            pathLength={1}
+            transform={`rotate(${slices[0]?.startDeg ?? -90} ${cx} ${cy})`}
+          />
+        </mask>
+        <g className="mpp-pie-sweep" mask={`url(#${maskId})`}>
+          {content}
+        </g>
+      </>
+    ) : (
+      content
+    );
 
   if (slices.length === 0) {
     return (
@@ -182,9 +211,11 @@ export function GradeDistributionChart({
         role="img"
         aria-label="Grade distribution pie chart"
       >
-        <circle cx={cx} cy={cy} r={r} fill={only.color}>
-          <title>{sliceTitle(only)}</title>
-        </circle>
+        {sweep(
+          <circle cx={cx} cy={cy} r={r} fill={only.color}>
+            <title>{sliceTitle(only)}</title>
+          </circle>,
+        )}
       </svg>
     );
   }
@@ -198,18 +229,20 @@ export function GradeDistributionChart({
       role="img"
       aria-label="Grade distribution pie chart"
     >
-      {slices.map((s) => (
-        <path
-          key={s.label}
-          d={pieWedgePath(cx, cy, r, s.startDeg, s.endDeg)}
-          fill={s.color}
-          stroke="var(--popover, #fff)"
-          strokeWidth={strokeW}
-          vectorEffect="non-scaling-stroke"
-        >
-          <title>{sliceTitle(s)}</title>
-        </path>
-      ))}
+      {sweep(
+        slices.map((s) => (
+          <path
+            key={s.label}
+            d={pieWedgePath(cx, cy, r, s.startDeg, s.endDeg)}
+            fill={s.color}
+            stroke="var(--popover, #fff)"
+            strokeWidth={strokeW}
+            vectorEffect="non-scaling-stroke"
+          >
+            <title>{sliceTitle(s)}</title>
+          </path>
+        )),
+      )}
     </svg>
   );
 }

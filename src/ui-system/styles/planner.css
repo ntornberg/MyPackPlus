@@ -16,6 +16,10 @@
     filter: brightness(1.05);
   }
 
+  .planner-floating-trigger:active {
+    scale: 0.97;
+  }
+
   .planner-drawer-container {
     position: fixed;
     inset: auto 20px 20px auto;
@@ -270,6 +274,26 @@
   transition-timing-function: var(--mpp-ease-in);
 }
 
+/* While the first-run hint tooltip is open, the launcher pulses a soft ring twice. */
+.mypack-shell .planner-launcher[data-state="delayed-open"],
+.mypack-shell .planner-launcher[data-state="instant-open"] {
+  animation: mpp-launcher-attention 1.6s var(--mpp-ease-out) 400ms 2;
+}
+
+@keyframes mpp-launcher-attention {
+  0%,
+  100% {
+    box-shadow:
+      0 6px 14px rgb(61 124 255 / 0.28),
+      0 0 0 0 rgb(61 124 255 / 0);
+  }
+  35% {
+    box-shadow:
+      0 6px 14px rgb(61 124 255 / 0.28),
+      0 0 0 7px rgb(61 124 255 / 0.2);
+  }
+}
+
 /* A tab panel fades up each time it is shown (it goes from display:none). */
 .planner-tab-panel {
   animation: mpp-tab-in 140ms var(--mpp-ease-out) backwards;
@@ -299,5 +323,9 @@
 
   .planner-tab-panel {
     animation: mpp-fade-in 100ms linear backwards;
+  }
+
+  .mypack-shell .planner-launcher[data-state] {
+    animation: none;
   }
 }

@@ -80,7 +80,11 @@ export function LoadingProgress({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}
-        className="h-1 overflow-hidden rounded-full bg-muted"
+        className={cn(
+          "h-1 overflow-hidden rounded-full bg-muted transition-shadow duration-500",
+          // A brief glow when the bar completes.
+          justDone && "shadow-[0_0_8px_rgb(16_185_129/0.55)]",
+        )}
       >
         <div
           className={cn(

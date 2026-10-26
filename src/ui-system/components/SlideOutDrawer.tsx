@@ -53,6 +53,7 @@ import {
   persistPlannerSelectedTab,
   schedulePlannerSessionPersist,
 } from "./plannerSessionPersistence";
+import { TabLoadingSkeleton } from "./shared/TabLoadingSkeleton";
 import { PlannerPreviewRail } from "./workbench/PlannerPreviewRail";
 import { useOverlayPortalContainer } from "./workbench/useOverlayPortalContainer";
 import {
@@ -99,11 +100,7 @@ const MemoizedCourseSearchTab = React.memo(
     selectedPreviewId: string | null;
   }) => (
     <React.Suspense
-      fallback={
-        <p role="status" className="p-4 text-sm">
-          Loading course search…
-        </p>
-      }
+      fallback={<TabLoadingSkeleton label="Loading course search…" />}
     >
       <CourseSearch
         setCourseSearchTabData={setCourseSearchTabData}
@@ -133,11 +130,7 @@ const MemoizedGepSearchTab = React.memo(
     isActive: boolean;
   }) => (
     <React.Suspense
-      fallback={
-        <p role="status" className="p-4 text-sm">
-          Loading GEP search…
-        </p>
-      }
+      fallback={<TabLoadingSkeleton label="Loading GEP search…" />}
     >
       <GepSearch
         isActive={isActive}
@@ -166,11 +159,7 @@ const MemoizedMajorPlanSearchTab = React.memo(
     selectedPreviewId: string | null;
   }) => (
     <React.Suspense
-      fallback={
-        <p role="status" className="p-4 text-sm">
-          Loading major plan search…
-        </p>
-      }
+      fallback={<TabLoadingSkeleton label="Loading major plan search…" />}
     >
       <MajorPlanSearch
         setMajorPlanSearchTabData={setMajorPlanSearchTabData}

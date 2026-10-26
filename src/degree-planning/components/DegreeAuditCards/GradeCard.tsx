@@ -31,7 +31,7 @@ export function GradeCard({
       </h4>
 
       <div className="mpp-grade-chart-wrap">
-        <GradeDistributionChart data={data} size={chartSize} />
+        <GradeDistributionChart data={data} size={chartSize} animate />
       </div>
 
       <ul className="mpp-grade-legend">

@@ -275,7 +275,7 @@ const GEPTree: React.FC<GEPTreeProps> = React.memo(
     );
 
     return (
-      <div className="flex w-full flex-col gap-2">
+      <div className="mpp-stagger flex w-full flex-col gap-2">
         {groups.map(({ group, rows, offered, fitting, done }) => {
           const groupKey = `group:${group.courseAbr}`;
           const expanded = !!expandedGroups[groupKey];
@@ -325,7 +325,7 @@ const GEPTree: React.FC<GEPTreeProps> = React.memo(
                 </span>
               </button>
               {expanded ? (
-                <div className="border-t border-border">
+                <div className="mpp-stagger border-t border-border">
                   {rows.map((row) => {
                     const courseId = `course:${row.key}`;
                     const alsoCounts = alsoCountsFor(row.course);

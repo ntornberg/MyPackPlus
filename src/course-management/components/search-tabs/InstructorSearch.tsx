@@ -176,7 +176,10 @@ export default function InstructorSearch() {
         >
           {results.length > 0 ? (
             <ul
-              className={cn("flex flex-col gap-2", loading && "opacity-70")}
+              className={cn(
+                "mpp-stagger flex flex-col gap-2 transition-opacity",
+                loading && "opacity-70",
+              )}
               aria-label="Instructor results"
             >
               {results.map((instructor) => (

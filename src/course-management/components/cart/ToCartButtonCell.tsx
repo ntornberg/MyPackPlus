@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, ShoppingCartIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -27,9 +27,21 @@ function ToastFeedback({
   message: string;
   severity: "success" | "error";
 }) {
-  if (!open) return null;
+  // Stay mounted after `open` turns false so the toast can animate out.
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+
+  if (!mounted) return null;
   return (
-    <div className="pointer-events-none absolute bottom-full left-1/2 z-[1000] mb-2 flex w-max max-w-[min(280px,calc(100vw-2rem))] -translate-x-1/2 animate-in justify-center fade-in slide-in-from-bottom-2">
+    <div
+      data-state={open ? "open" : "closed"}
+      onAnimationEnd={() => {
+        if (!open) setMounted(false);
+      }}
+      className="pointer-events-none absolute bottom-full left-1/2 z-[1000] mb-2 flex w-max max-w-[min(280px,calc(100vw-2rem))] -translate-x-1/2 justify-center data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:slide-out-to-bottom-1 data-[state=closed]:duration-(--mpp-duration-exit)"
+    >
       <Alert
         variant={severity === "error" ? "destructive" : "default"}
         className={cn(
@@ -104,7 +116,11 @@ export const ToCartButtonCell = (
         }}
         className={cartButtonClassName}
       >
-        <ShoppingCartIcon className="size-4 opacity-95" strokeWidth={2.25} />
+        {open && severity === "success" ? (
+          <CheckCircle2 className="mpp-check-pop size-4" strokeWidth={2.25} />
+        ) : (
+          <ShoppingCartIcon className="size-4 opacity-95" strokeWidth={2.25} />
+        )}
         Add to cart
       </Button>
       <ToastFeedback open={open} message={message} severity={severity} />
