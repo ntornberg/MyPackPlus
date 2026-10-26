@@ -11,22 +11,64 @@ export const GRADE_DISTRIBUTION_COLORS = [
   "#b91c1c",
 ] as const;
 
-/** Letter-grade shares (0-100) derived from API averages; total may be 0. */
+const SAT_UNSAT_COLORS = {
+  S: "#15803d",
+  U: "#b91c1c",
+  W: "#94a3b8",
+} as const;
+
+export type GradeDistributionRow = {
+  label: string;
+  pct: number;
+  color: string;
+};
+
+/**
+ * Grade shares (0-100) derived from API averages. Letter-graded history yields A-F rows;
+ * Sat/Unsat-only history falls back to S/U/W rows. Empty when neither has data.
+ */
 export function gradeDistributionPercents(
   data: GradeData,
-): { label: string; pct: number }[] {
+): GradeDistributionRow[] {
   const { a_average, b_average, c_average, d_average, f_average } = data;
   const total = a_average + b_average + c_average + d_average + f_average;
-  if (total <= 0) {
+  if (total > 0) {
+    return [a_average, b_average, c_average, d_average, f_average].map(
+      (value, i) => ({
+        label: "ABCDF"[i]!,
+        pct: (value / total) * 100,
+        color: GRADE_DISTRIBUTION_COLORS[i]!,
+      }),
+    );
+  }
+  const s = Number(data.s_average) || 0;
+  const u = Number(data.u_average) || 0;
+  const w = Number(data.w_average) || 0;
+  const satTotal = s + u + w;
+  if (satTotal <= 0) {
     return [];
   }
-  return [
-    { label: "A", pct: (a_average / total) * 100 },
-    { label: "B", pct: (b_average / total) * 100 },
-    { label: "C", pct: (c_average / total) * 100 },
-    { label: "D", pct: (d_average / total) * 100 },
-    { label: "F", pct: (f_average / total) * 100 },
-  ];
+  return (
+    [
+      ["S", s],
+      ["U", u],
+      ["W", w],
+    ] as const
+  ).map(([label, value]) => ({
+    label,
+    pct: (value / satTotal) * 100,
+    color: SAT_UNSAT_COLORS[label],
+  }));
+}
+
+/** True when there is a letter-grade or Sat/Unsat distribution to chart. */
+export function hasGradeDistribution(data: GradeData | undefined): boolean {
+  return Boolean(data) && gradeDistributionPercents(data!).length > 0;
+}
+
+/** True when the chartable distribution is Sat/Unsat rather than letter grades. */
+export function isSatUnsatDistribution(data: GradeData | undefined): boolean {
+  return Boolean(data) && gradeDistributionPercents(data!)[0]?.label === "S";
 }
 
 type GradePieSlice = {
@@ -41,7 +83,7 @@ function gradePieSlices(data: GradeData): GradePieSlice[] {
   const rows = gradeDistributionPercents(data);
   let cursor = -90;
   const out: GradePieSlice[] = [];
-  rows.forEach((row, i) => {
+  rows.forEach((row) => {
     if (row.pct <= 0) {
       return;
     }
@@ -49,7 +91,7 @@ function gradePieSlices(data: GradeData): GradePieSlice[] {
     out.push({
       label: row.label,
       pct: row.pct,
-      color: GRADE_DISTRIBUTION_COLORS[i]!,
+      color: row.color,
       startDeg: cursor,
       endDeg: cursor + span,
     });

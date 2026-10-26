@@ -1,4 +1,4 @@
-import { ChevronDown, SearchIcon } from "lucide-react";
+import { ChevronDown, Loader2, SearchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -137,10 +137,17 @@ export default function InstructorSearch() {
               Instructor
             </FieldLabel>
             <div className="relative">
-              <SearchIcon
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
+              {loading ? (
+                <Loader2
+                  className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 animate-spin text-primary"
+                  aria-hidden
+                />
+              ) : (
+                <SearchIcon
+                  className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+              )}
               <Input
                 id="instructor-search-input"
                 value={query}

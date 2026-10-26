@@ -13,7 +13,7 @@ import { DEPT_COURSES } from "../../../generated/catalogs/course-search/departme
 import { TermIdByName } from "../../../generated/catalogs/termIds";
 import { SectionSortField } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
-import { CircularProgressWithLabel } from "../../../ui-system/components/shared/CircularProgressWithLabel";
+import { LoadingProgress } from "../../../ui-system/components/shared/LoadingProgress";
 import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
 import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
@@ -231,11 +231,14 @@ export default function CourseSearch({
         </Field>
       </FieldGroup>
 
-      {isLoading ? (
-        <div role="status" className="mt-4 flex w-full justify-center">
-          <CircularProgressWithLabel value={progress} label={progressLabel} />
-        </div>
-      ) : null}
+      <LoadingProgress
+        className="mt-4"
+        active={isLoading}
+        value={progress}
+        label={progressLabel}
+        succeeded={!error && sectionsArray.length > 0}
+        doneLabel={`Loaded ${sectionsArray.length} section${sectionsArray.length === 1 ? "" : "s"}`}
+      />
 
       {error ? (
         <div role="alert" className="mt-4 space-y-2 text-sm text-destructive">

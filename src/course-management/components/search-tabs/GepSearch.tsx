@@ -35,7 +35,7 @@ import {
   SectionSortField,
 } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
-import { CircularProgressWithLabel } from "../../../ui-system/components/shared/CircularProgressWithLabel";
+import { LoadingProgress } from "../../../ui-system/components/shared/LoadingProgress";
 import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
 import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/PlannerWorkbenchLayout";
@@ -717,14 +717,14 @@ export default function GepSearch({
           onCheckedChange={handleHideNoSectionsChange}
         />
       </div>
-      {!isLoaded ? (
-        <div className="mt-4 flex w-full justify-center">
-          <CircularProgressWithLabel
-            value={progress}
-            label={progressLabel || ""}
-          />
-        </div>
-      ) : null}
+      <LoadingProgress
+        className="mt-4"
+        active={!isLoaded}
+        value={progress}
+        label={progressLabel}
+        succeeded={progress === 100}
+        doneLabel={`Found ${courses?.length ?? 0} GEP course${courses?.length === 1 ? "" : "s"}`}
+      />
     </PlannerPanel>
   );
 

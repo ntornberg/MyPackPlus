@@ -8,6 +8,7 @@ import type {
   GradeData,
   SingleCourseDataResponse,
 } from "../../../../../types/api";
+import { hasGradeDistribution } from "../../../../../ui-system/components/shared/GradeDistributionChart";
 import { createShadowHost, injectCssOnce } from "../../../../../utils/dom";
 
 const DEGREE_AUDIT_CARD_STYLE_ID = "mpp-degree-audit-card-styles";
@@ -56,20 +57,13 @@ export function createGradeCard(
     f_average: toNumber(courseData.f_average),
     class_avg_min: toNumber(courseData.class_avg_min),
     class_avg_max: toNumber(courseData.class_avg_max),
+    s_average: toNumber(courseData.s_average),
+    u_average: toNumber(courseData.u_average),
+    w_average: toNumber(courseData.w_average),
   };
 
-  // Check if there's any valid grade data
-  const total =
-    gradeData.a_average +
-    gradeData.b_average +
-    gradeData.c_average +
-    gradeData.d_average +
-    gradeData.f_average;
-  if (!total) {
-    wrapper.textContent =
-      courseData.has_letter_grades === false
-        ? "No letter grades (S/U only)."
-        : "No grade data available.";
+  if (!hasGradeDistribution(gradeData)) {
+    wrapper.textContent = "No grade data available.";
     return wrapper;
   }
 

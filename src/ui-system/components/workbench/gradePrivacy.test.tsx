@@ -60,3 +60,21 @@ it("distinguishes no letter grades from missing history without a count", () => 
   ).toContain("S/U only");
   expect(compareMarkup()).toContain("No grades");
 });
+
+it("charts Sat/Unsat shares when a course has no letter grades", () => {
+  const satUnsat = {
+    ...grade,
+    a_average: 0,
+    b_average: 0,
+    has_letter_grades: false,
+    s_average: 93.4,
+    u_average: 1.8,
+    w_average: 3.1,
+  };
+  const compare = compareMarkup(satUnsat);
+  expect(compare).toContain("Sat/Unsat mix");
+  expect(compare).not.toContain("S/U only");
+  expect(renderToStaticMarkup(<GradeCard data={satUnsat} />)).toContain(
+    "Sat/Unsat",
+  );
+});

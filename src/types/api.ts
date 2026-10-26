@@ -54,6 +54,10 @@ export interface GradeData {
   section_count?: number;
   /** False when the history contains no letter grades; absent when unknown. */
   has_letter_grades?: boolean;
+  /** Sat/Unsat/Withdrawn shares (0-100) of all graded students; absent on legacy responses. */
+  s_average?: number;
+  u_average?: number;
+  w_average?: number;
   terms?: string[];
 }
 
@@ -130,6 +134,9 @@ export interface V2GradeRow {
   link_status: string | null;
   section_count: number | null;
   has_letter_grades: boolean | null;
+  s_average?: number | null;
+  u_average?: number | null;
+  w_average?: number | null;
   terms: string[] | null;
 }
 

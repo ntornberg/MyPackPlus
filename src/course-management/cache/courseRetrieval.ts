@@ -126,7 +126,7 @@ const EXTENSION_CACHE_CATEGORIES = [
  * Prefix for grade/RMP cache keys. Bump when the backend response shape changes so entries
  * written by older builds are never read back.
  */
-export const GRADE_DATA_CACHE_VERSION = "v3";
+export const GRADE_DATA_CACHE_VERSION = "v4";
 
 /** Categories holding grade/RMP responses that a new backend dataset makes stale. */
 const GRADE_DATASET_CATEGORIES = [

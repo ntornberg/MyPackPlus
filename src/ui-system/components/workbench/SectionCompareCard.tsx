@@ -29,6 +29,8 @@ import type { ModifiedSection } from "../../../course-management/types/section";
 import {
   GradeDistributionChart,
   gradeDistributionPercents,
+  hasGradeDistribution,
+  isSatUnsatDistribution,
 } from "../shared/GradeDistributionChart";
 
 import { InstructorPopover } from "./InstructorPopover";
@@ -45,7 +47,6 @@ import {
   gradeDistributionAverageGradePoint,
   gradePercentChipColor,
   gradePointToPercent,
-  gradeDistributionTotal,
 } from "./sectionCompareUtils";
 
 /** Nested controls use stopPropagation; role="group" is for structure only. */
@@ -75,9 +76,9 @@ function SectionGradeDistributionBlock({
   compact?: boolean;
 }) {
   const g = section.grade_distribution;
-  const total = gradeDistributionTotal(g);
   const chartData = g ?? emptyGradeData;
-  const hasSample = Boolean(g) && total > 0;
+  const hasSample = hasGradeDistribution(g);
+  const satUnsat = isSatUnsatDistribution(g);
   const averageGradePoint = gradeDistributionAverageGradePoint(g);
   const averageGradePercent =
     averageGradePoint != null ? gradePointToPercent(averageGradePoint) : null;
@@ -107,8 +108,11 @@ function SectionGradeDistributionBlock({
     if (!hasSample) {
       return null;
     }
+    const satisfactoryPct = satUnsat
+      ? (detailRows.find((r) => r.label === "S")?.pct ?? 0)
+      : null;
     const averageGradeChipColor = gradePercentChipColor(
-      averageGradePercent ?? 0,
+      satisfactoryPct ?? averageGradePercent ?? 0,
     );
     return (
       <Tooltip>
@@ -117,11 +121,13 @@ function SectionGradeDistributionBlock({
             className="max-w-full cursor-help gap-1 truncate rounded-lg border-0 px-2 py-1 text-[11px] font-semibold text-primary-foreground shadow-none"
             style={{ backgroundColor: averageGradeChipColor }}
           >
-            {averageGradePoint != null
-              ? `Typical grade ${averageGradeLetter}`
-              : topGrade
-                ? `Top grade ${topGrade.label} ${topGrade.pct.toFixed(0)}%`
-                : "Typical grade"}
+            {satisfactoryPct != null
+              ? `Sat/Unsat ${satisfactoryPct.toFixed(0)}% S`
+              : averageGradePoint != null
+                ? `Typical grade ${averageGradeLetter}`
+                : topGrade
+                  ? `Top grade ${topGrade.label} ${topGrade.pct.toFixed(0)}%`
+                  : "Typical grade"}
           </Badge>
         </TooltipTrigger>
         <TooltipContent
@@ -137,14 +143,16 @@ function SectionGradeDistributionBlock({
             />
             <div className="min-w-0 space-y-1">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Typical grade
+                {satUnsat ? "Sat/Unsat" : "Typical grade"}
               </div>
               <p className="text-sm font-semibold tabular-nums text-foreground">
-                {averageGradePoint != null
-                  ? averageGradeLetter
-                  : topGrade
-                    ? `${topGrade.label} ${topGrade.pct.toFixed(0)}%`
-                    : "Unavailable"}
+                {satisfactoryPct != null
+                  ? `${satisfactoryPct.toFixed(0)}% satisfactory`
+                  : averageGradePoint != null
+                    ? averageGradeLetter
+                    : topGrade
+                      ? `${topGrade.label} ${topGrade.pct.toFixed(0)}%`
+                      : "Unavailable"}
               </p>
               {averageGradePoint != null ? (
                 <p className="text-[11px] text-muted-foreground">
@@ -173,7 +181,9 @@ function SectionGradeDistributionBlock({
       )}
       title={
         hasSample
-          ? "Historical letter-grade mix and typical class grade range when available"
+          ? satUnsat
+            ? "Historical Sat/Unsat/Withdrawn mix"
+            : "Historical letter-grade mix and typical class grade range when available"
           : "No grade distribution sample for this section"
       }
     >
@@ -199,7 +209,7 @@ function SectionGradeDistributionBlock({
           </div>
           <div className="min-w-0 flex-1 space-y-1">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Letter mix
+              {satUnsat ? "Sat/Unsat mix" : "Letter mix"}
             </div>
             <GradeDistributionPercentList
               rows={detailRows}

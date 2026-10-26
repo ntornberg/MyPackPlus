@@ -18,9 +18,9 @@ import {
 
 import type { GradeData, MatchedRateMyProf } from "../../../types/api";
 import {
-  GRADE_DISTRIBUTION_COLORS,
   GradeDistributionChart,
   gradeDistributionPercents,
+  type GradeDistributionRow,
 } from "../shared/GradeDistributionChart";
 import { StarRating } from "../shared/StarRating";
 
@@ -436,7 +436,7 @@ export function GradeDistributionPercentList({
   variant = "default",
   fractionDigits = 0,
 }: {
-  rows: { label: string; pct: number }[];
+  rows: GradeDistributionRow[];
   className?: string;
   /** `compact` = tighter typography for section compare cards. */
   variant?: "default" | "compact";
@@ -455,7 +455,7 @@ export function GradeDistributionPercentList({
         className,
       )}
     >
-      {rows.map((r, i) => (
+      {rows.map((r) => (
         <li
           key={r.label}
           className="flex min-w-0 items-center justify-between gap-1.5 sm:gap-2"
@@ -466,7 +466,7 @@ export function GradeDistributionPercentList({
                 "shrink-0 rounded-sm",
                 variant === "compact" ? "size-1.5 sm:size-2" : "size-2",
               )}
-              style={{ backgroundColor: GRADE_DISTRIBUTION_COLORS[i] }}
+              style={{ backgroundColor: r.color }}
               aria-hidden
             />
             <span className="font-medium text-foreground">
@@ -509,12 +509,7 @@ export function GradeDistributionPanel({
   className?: string;
 }) {
   const rows = useMemo(() => gradeDistributionPercents(data), [data]);
-  const total =
-    data.a_average +
-    data.b_average +
-    data.c_average +
-    data.d_average +
-    data.f_average;
+  const satUnsat = rows[0]?.label === "S";
 
   const narrowPreview = useNarrowGradePreview(380);
   const previewPieSize = narrowPreview ? 96 : 120;
@@ -531,7 +526,7 @@ export function GradeDistributionPanel({
     [data.course_name, data.instructor_name].filter(Boolean).join(" · ") ||
     null;
 
-  if (total <= 0) {
+  if (rows.length === 0) {
     return (
       <div className={cn("text-sm text-muted-foreground", className)}>
         No grade distribution data for this section.
@@ -542,7 +537,7 @@ export function GradeDistributionPanel({
   return (
     <div className={cn("w-full min-w-0 space-y-2", className)}>
       <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        Grade distribution
+        {satUnsat ? "Sat/Unsat distribution" : "Grade distribution"}
       </div>
       {subtitle ? (
         <p className="text-[10px] leading-snug text-muted-foreground sm:text-[11px]">

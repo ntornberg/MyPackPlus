@@ -153,6 +153,38 @@ export function stagingGrades(requests: V2GradeRequest[]): V2CoursesData {
         grade: null,
       };
     }
+    // Special-topics courses (x97, e.g. CSC 297) are graded Sat/Unsat.
+    if (/97$/.test(request.course.trim())) {
+      const u = Math.round(random() * 40) / 10;
+      const w = Math.round(random() * 40) / 10;
+      return {
+        request,
+        instructor_id: instructor.instructor_id,
+        ambiguous: false,
+        grade: {
+          unique_hash: String(
+            hashString(`${request.course}:${instructor.instructor_name}`),
+          ),
+          subject: request.course.split(" ")[0] ?? null,
+          course_name: request.course,
+          instructor_name: instructor.instructor_name,
+          a_average: 0,
+          b_average: 0,
+          c_average: 0,
+          d_average: 0,
+          f_average: 0,
+          class_avg_min: null,
+          class_avg_max: null,
+          link_status: "linked",
+          section_count: 2 + Math.floor(random() * 6),
+          has_letter_grades: false,
+          s_average: Math.round((100 - u - w) * 10) / 10,
+          u_average: u,
+          w_average: w,
+          terms: ["Fall '24", "Spring '25", "Fall '25", "Spring '26"],
+        },
+      };
+    }
     const a = 25 + random() * 45;
     const b = (100 - a) * (0.45 + random() * 0.25);
     const c = (100 - a - b) * (0.5 + random() * 0.3);

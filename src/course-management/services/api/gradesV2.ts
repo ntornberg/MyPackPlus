@@ -178,6 +178,9 @@ export function v2GradeToGradeData(
     unity_id: request.unity_id ?? null,
     section_count: grade.section_count ?? undefined,
     has_letter_grades: grade.has_letter_grades ?? undefined,
+    s_average: grade.s_average ?? undefined,
+    u_average: grade.u_average ?? undefined,
+    w_average: grade.w_average ?? undefined,
     terms: grade.terms ?? undefined,
   };
 }

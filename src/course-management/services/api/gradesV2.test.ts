@@ -77,6 +77,28 @@ describe("v2ToBatchResponse", () => {
       }
     },
   );
+  it("maps Sat/Unsat/Withdrawn shares", () => {
+    const grade = {
+      a_average: 0,
+      b_average: 0,
+      c_average: 0,
+      d_average: 0,
+      f_average: 0,
+      class_avg_min: null,
+      class_avg_max: null,
+      has_letter_grades: false,
+      s_average: 93.4,
+      u_average: 1.8,
+      w_average: null,
+    } as unknown as V2GradeRow;
+    const result = v2GradeToGradeData(grade, {
+      course: "CSC 297",
+      instructor_name: "Carter,Samuel William",
+    });
+    expect(result).toMatchObject({ s_average: 93.4, u_average: 1.8 });
+    expect(result.w_average).toBeUndefined();
+  });
+
   it("keys rows by the caller's request, not the server's names", () => {
     const data: V2CoursesData = {
       results: [

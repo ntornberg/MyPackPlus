@@ -44,7 +44,7 @@ import {
   SearchSubmitButton,
 } from "../../../ui-system/components/planner/PlannerControls";
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
-import { CircularProgressWithLabel } from "../../../ui-system/components/shared/CircularProgressWithLabel";
+import { LoadingProgress } from "../../../ui-system/components/shared/LoadingProgress";
 import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
 import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/PlannerWorkbenchLayout";
@@ -171,7 +171,10 @@ export default function MajorPlanSearch({
     courses: Record<string, MergedCourseData>;
   } | null>(null);
   const [personalBusy, setPersonalBusy] = useState(false);
-  const [personalProgress, setPersonalProgress] = useState("");
+  const [personalProgress, setPersonalProgress] = useState({
+    value: 0,
+    label: "",
+  });
   const [personalError, setPersonalError] = useState<string | null>(null);
   const personalRequest = useRef(0);
   const mounted = useRef(true);
@@ -192,6 +195,9 @@ export default function MajorPlanSearch({
       ? personalResult.courses
       : EMPTY_COURSES
     : majorPlanSearchData.openCourses;
+  const personalCourseCount = personalSearched
+    ? Object.keys(personalResult.courses).length
+    : 0;
   const storedChoices = selectedAuditKey
     ? planningData.choices[selectedAuditKey]
     : undefined;
@@ -319,7 +325,10 @@ export default function MajorPlanSearch({
       const request = ++personalRequest.current;
       setPersonalBusy(true);
       setPersonalError(null);
-      setPersonalProgress("Loading approved choices from MyPack…");
+      setPersonalProgress({
+        value: 5,
+        label: "Loading approved choices from MyPack…",
+      });
       // An automatic search keeps the preview restored with the tab.
       if (!auto) onPreviewSectionChange(null);
       try {
@@ -350,13 +359,12 @@ export default function MajorPlanSearch({
                 },
               ],
               majorPlanSearchData.selectedTerm,
-              (_progress, message) => {
-                if (
-                  mounted.current &&
-                  request === personalRequest.current &&
-                  message
-                )
-                  setPersonalProgress(message);
+              (progress, message) => {
+                if (mounted.current && request === personalRequest.current)
+                  setPersonalProgress((previous) => ({
+                    value: 10 + progress * 0.9,
+                    label: message || previous.label,
+                  }));
               },
               (message) => {
                 if (mounted.current && request === personalRequest.current)
@@ -372,7 +380,6 @@ export default function MajorPlanSearch({
       } finally {
         if (mounted.current && request === personalRequest.current) {
           setPersonalBusy(false);
-          setPersonalProgress("");
         }
       }
       return;
@@ -786,24 +793,27 @@ export default function MajorPlanSearch({
           }
         />
       </FieldGroup>
-      {personal && personalProgress ? (
-        <p role="status" className="mt-3 text-sm text-muted-foreground">
-          {personalProgress}
-        </p>
-      ) : null}
+      <LoadingProgress
+        className="mt-3"
+        active={personal && personalBusy}
+        value={personalProgress.value}
+        label={personalProgress.label}
+        succeeded={personal && !personalError}
+        doneLabel={`Found sections for ${personalCourseCount} course${personalCourseCount === 1 ? "" : "s"}`}
+      />
       {personalError ? (
         <p role="alert" className="mt-3 text-sm text-destructive">
           {personalError}
         </p>
       ) : null}
-      {!personal && !majorPlanSearchData.isLoaded ? (
-        <div className="mt-4 flex w-full justify-center">
-          <CircularProgressWithLabel
-            value={majorPlanSearchData.progress}
-            label={majorPlanSearchData.progressLabel || ""}
-          />
-        </div>
-      ) : null}
+      <LoadingProgress
+        className="mt-4"
+        active={!personal && !majorPlanSearchData.isLoaded}
+        value={majorPlanSearchData.progress}
+        label={majorPlanSearchData.progressLabel}
+        succeeded={!personal && majorPlanSearchData.progress === 100}
+        doneLabel="Plan requirements loaded"
+      />
     </PlannerPanel>
   );
 

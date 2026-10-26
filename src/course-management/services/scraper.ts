@@ -60,6 +60,21 @@ function extractCourseInfoFromRow(rowElement: HTMLElement): Course | null {
 }
 
 /**
+ * Reads the instructor name from a planner INSTRUCTOR cell. Search results
+ * render a "View Instructors" tooltip trigger plus a hidden
+ * `ul.instructor_list`, so the cell's raw textContent is unusable there.
+ *
+ * @param cell The `[data-label="INSTRUCTOR"]` cell, if found
+ * @returns "Last,First" for the first listed instructor, "" for an unassigned
+ *   (empty) cell, or "Staff" when the cell is missing
+ */
+function readInstructorName(cell: Element | null): string {
+  if (!cell) return "Staff";
+  const listed = cell.querySelector("li.instructor_list");
+  return (listed ?? cell).textContent?.trim() ?? "";
+}
+
+/**
  * Extracts planner course header and instructor from a planner table detail row.
  *
  * @param classDetailRow Element for a planner class details row
@@ -75,10 +90,9 @@ function extractPlannerCourseInfo(classDetailRow: Element): Course {
     const innerTableBodyRow =
       searchResultsInnerTable.querySelector("tbody > tr");
     if (innerTableBodyRow) {
-      courseInstructor =
-        innerTableBodyRow
-          .querySelector('[data-label="INSTRUCTOR"]')
-          ?.textContent?.trim() ?? "Staff";
+      courseInstructor = readInstructorName(
+        innerTableBodyRow.querySelector('[data-label="INSTRUCTOR"]'),
+      );
     }
   }
   const courseHeaderRow = classDetailRow.previousElementSibling;

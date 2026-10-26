@@ -81,6 +81,9 @@ export function mergeData(
           f_average: parseFloat(String(batchCourse.f_average ?? "0")),
           class_avg_min: parseFloat(String(batchCourse.class_avg_min ?? "0")),
           class_avg_max: parseFloat(String(batchCourse.class_avg_max ?? "0")),
+          s_average: parseFloat(String(batchCourse.s_average ?? "0")),
+          u_average: parseFloat(String(batchCourse.u_average ?? "0")),
+          w_average: parseFloat(String(batchCourse.w_average ?? "0")),
         };
       }
       // Add cart functionality fields to section

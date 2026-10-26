@@ -220,6 +220,38 @@ export function CalendarHoverLayer({
     };
   }, [active, resolveEvent, cancelClose, scheduleClose]);
 
+  // Leave events never fire when the hovered node (the native tooltip or a
+  // re-rendered calendar event) is removed under the pointer, so also track
+  // where the pointer actually is.
+  useEffect(() => {
+    if (!active) return;
+    const doc = active.anchor.ownerDocument;
+    let outside = false;
+    const move = (event: PointerEvent) => {
+      const path = event.composedPath();
+      const inside = [
+        active.anchor,
+        content.current,
+        nativePopup?.element,
+      ].some((node) => node && path.includes(node));
+      if (inside === !outside) return;
+      outside = !inside;
+      if (outside) scheduleClose();
+      else cancelClose();
+    };
+    const exit = (event: PointerEvent) => {
+      if (event.relatedTarget) return;
+      outside = true;
+      scheduleClose();
+    };
+    doc.addEventListener("pointermove", move, true);
+    doc.addEventListener("pointerout", exit, true);
+    return () => {
+      doc.removeEventListener("pointermove", move, true);
+      doc.removeEventListener("pointerout", exit, true);
+    };
+  }, [active, nativePopup, cancelClose, scheduleClose]);
+
   const visible = Boolean(
     active && (!resolveEvent || nativePopup || active.keyboard),
   );
