@@ -140,6 +140,58 @@ describe("addSectionToCart calendar updates", () => {
     expect(url.searchParams.get("relate_class_nbr_1")).toBe("12346");
   });
 
+  it("sends sections that come with every lab as further related classes", async () => {
+    const lab = { ...lecture, classNumber: "12346", component: "LAB" };
+    const problem = {
+      ...lecture,
+      classNumber: "12347",
+      component: "PRO",
+      dayTime: "TH 8:30 AM - 9:20 AM",
+    };
+    await addSectionToCart(lab, lecture, { extras: [problem] });
+
+    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string);
+    expect(url.searchParams.get("class_nbr")).toBe("12345");
+    expect(url.searchParams.get("relate_class_nbr_1")).toBe("12346");
+    expect(url.searchParams.get("relate_class_nbr_2")).toBe("12347");
+    expect((await loadCartScheduleEvents()).map(({ subj }) => subj)).toContain(
+      "CSC 316 PRO",
+    );
+  });
+
+  it("relates a lone extra to a lecture without labs", async () => {
+    const problem = { ...lecture, classNumber: "12347", component: "PRO" };
+    await addSectionToCart(lecture, undefined, { extras: [problem] });
+
+    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string);
+    expect(url.searchParams.get("class_nbr")).toBe("12345");
+    expect(url.searchParams.get("relate_class_nbr_1")).toBe("12347");
+  });
+
+  it("sends MyPack's own payload unchanged", async () => {
+    const lab = { ...lecture, classNumber: "12346", component: "LAB" };
+    const payload = {
+      course_career: "UGRD",
+      session_code: "1",
+      crse_id: "018981",
+      class_nbr: "12345",
+      catalog_nbr: "205",
+      relate_class_nbr_1: "12346",
+      unt_taken: "4",
+      grading_basis: "GRD",
+      rqmnt_designtn: "HONR",
+      wait_list_okay: "N",
+    };
+    await addSectionToCart(
+      { ...lab, course_id: undefined },
+      { ...lecture, course_id: undefined },
+      { payload },
+    );
+
+    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string);
+    expect(Object.fromEntries(url.searchParams)).toEqual(payload);
+  });
+
   it.each([
     Response.json({ status: "error", message: "Cart rejected." }),
     new Response(null, { status: 500 }),

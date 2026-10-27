@@ -4,6 +4,8 @@ import type {
   CourseSection,
 } from "../../utils/course-search/parseRegistrarUtil";
 
+import type { ToCartPayload } from "./cart";
+
 /** Additional meeting rows for the same enrollment (e.g. lab with lecture). */
 export type SectionLinkedMeeting = {
   instructor_name?: string[];
@@ -30,11 +32,21 @@ export type ModifiedSection = CourseSection & {
   term?: string;
   /** Parsed from grouped sections: lab/recitation meetings paired with this row. */
   linkedMeetings?: SectionLinkedMeeting[];
+  /** Meetings that come with every lab choice (e.g. a single problem session). */
+  requiredMeetings?: SectionLinkedMeeting[];
 };
 
 export type GroupedSections = {
   lecture: ModifiedSection | null;
+  /** Choices; the student picks one. */
   labs: ModifiedSection[] | null;
+  /** Related sections added with every choice (MyPack's relate_class_nbr_2+). */
+  extras?: ModifiedSection[];
+  /**
+   * Exact add-to-cart payloads from MyPack's offerings, keyed by the picked
+   * lab's class number ("" when there is no lab). Only set from MyPack data.
+   */
+  cartPayloads?: Record<string, ToCartPayload>;
 };
 
 export type MergedCourseData = Omit<CourseData, "sections"> & {

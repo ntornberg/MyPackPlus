@@ -48,7 +48,10 @@ import { LoadingProgress } from "../../../ui-system/components/shared/LoadingPro
 import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
 import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/PlannerWorkbenchLayout";
-import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
+import {
+  buildInstructorFilterOptions,
+  groupRowSections,
+} from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import {
   CartCoursesContext,
@@ -254,9 +257,7 @@ export default function MajorPlanSearch({
         continue;
       }
       for (const g of Object.values(c.sections)) {
-        if (g.lecture) {
-          lectures.push(g.lecture);
-        }
+        lectures.push(...groupRowSections(g));
       }
     }
     return buildInstructorFilterOptions(lectures);

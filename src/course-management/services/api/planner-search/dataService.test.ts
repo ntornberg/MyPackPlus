@@ -316,6 +316,28 @@ describe("dataService v2 grade/RMP requests", () => {
     );
   });
 
+  it("caches grade data for instructors of non-lecture sections", async () => {
+    // HESF activity classes have no lecture; their grades used to be cached empty.
+    mocks.getGenericCache.mockResolvedValue(null);
+    mocks.searchOpenCoursesByParams.mockResolvedValueOnce({
+      ...courseData,
+      sections: [{ ...courseData.sections[0]!, component: "Phy" }],
+    });
+
+    await fetchPlannerCourseSections("MA", "241", "id-1", "Spring 2027");
+
+    const gradeWrite = mocks.setGenericCache.mock.calls.find(
+      ([category]) => category === "gradeProfData",
+    );
+    const entries = Object.values(gradeWrite![1]) as {
+      courses: { course_name: string }[];
+      profs: { unity_id: string }[];
+    }[];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.courses.map((c) => c.course_name)).toEqual(["MA 241"]);
+    expect(entries[0]!.profs.map((p) => p.unity_id)).toEqual(["jrgriggs"]);
+  });
+
   describe("sharing between single-course and batch searches", () => {
     const twoInstructorCourse = {
       ...courseData,

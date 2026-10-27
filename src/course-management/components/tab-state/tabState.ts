@@ -54,7 +54,7 @@ export const CourseSearchDataInitialState: CourseSearchData = {
   selectedCourseInfo: { code: null, catalogNum: null, title: null, id: "" },
   instructorFilter: null,
   sortMode: "recommended",
-  compactSections: false,
+  compactSections: true,
 };
 /** Which requirements the plan tree shows. */
 export type RequirementFilter = "needed" | "fits" | "all";
@@ -96,7 +96,7 @@ export const MajorPlanSearchDataInitialState: MajorPlanSearchData = {
   hideNoSections: true,
   instructorFilter: null,
   sortMode: "recommended",
-  compactSections: false,
+  compactSections: true,
   requirementFilter: "needed",
 };
 
@@ -124,5 +124,5 @@ export const GepSearchDataInitialState: GepSearchData = {
   hideNoSections: true,
   instructorFilter: null,
   sortMode: "recommended",
-  compactSections: false,
+  compactSections: true,
 };

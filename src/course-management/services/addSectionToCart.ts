@@ -14,20 +14,30 @@ export type AddSectionToCartResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
 
+export type AddSectionToCartOptions = {
+  /** Sections that come with every choice (e.g. a problem session). */
+  extras?: ModifiedSection[];
+  /** MyPack's own payload for this combination; sent unchanged when given. */
+  payload?: ToCartPayload;
+};
+
 /**
  * POSTs MyPack’s add-to-shop-cart script. With `parent` (lecture), sends
- * `class_nbr` = lecture class # and `relate_class_nbr_1` = selected lab/recitation class #.
+ * `class_nbr` = lecture class # and `relate_class_nbr_1` = selected lab/recitation class #;
+ * `extras` follow as `relate_class_nbr_2`, `_3`, …
  */
 export function addSectionToCart(
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
+  options: AddSectionToCartOptions = {},
 ): Promise<AddSectionToCartResult> {
-  return trackWork(() => addSectionToCartNow(selectedSection, parent));
+  return trackWork(() => addSectionToCartNow(selectedSection, parent, options));
 }
 
 async function addSectionToCartNow(
   selectedSection: ModifiedSection,
-  parent?: ModifiedSection,
+  parent: ModifiedSection | undefined,
+  { extras = [], payload: exactPayload }: AddSectionToCartOptions,
 ): Promise<AddSectionToCartResult> {
   const {
     course_id,
@@ -43,7 +53,10 @@ async function addSectionToCartNow(
 
   const unt_taken = courseData?.units || "3";
 
-  if (!course_id || !classNumber || !catalog_nbr || !courseData) {
+  if (
+    !courseData ||
+    (!exactPayload && (!course_id || !classNumber || !catalog_nbr))
+  ) {
     return {
       ok: false,
       message: "Missing required data to add this section to the cart.",
@@ -57,22 +70,26 @@ async function addSectionToCartNow(
     script: "IScript_addClassToShopCart",
   });
 
-  const payload: ToCartPayload = {
-    course_career,
-    session_code,
-    crse_id: course_id,
-    class_nbr: classNumber,
-    catalog_nbr,
-    unt_taken,
-    grading_basis,
-    rqmnt_designtn,
-    wait_list_okay,
-  };
-
-  if (parent) {
-    (payload as FullToCartPayload).class_nbr = parent.classNumber;
-    (payload as FullToCartPayload).relate_class_nbr_1 =
-      selectedSection.classNumber;
+  let payload: ToCartPayload;
+  if (exactPayload) {
+    payload = exactPayload;
+  } else {
+    payload = {
+      course_career,
+      session_code,
+      crse_id: course_id!,
+      class_nbr: (parent ?? selectedSection).classNumber,
+      catalog_nbr: catalog_nbr!,
+      unt_taken,
+      grading_basis,
+      rqmnt_designtn,
+      wait_list_okay,
+    };
+    const related = [...(parent ? [selectedSection] : []), ...extras];
+    related.forEach((section, index) => {
+      (payload as FullToCartPayload)[`relate_class_nbr_${index + 1}`] =
+        section.classNumber;
+    });
   }
 
   const fullURL = `${url}?${new URLSearchParams(payload)}`;
@@ -98,11 +115,15 @@ async function addSectionToCartNow(
   if (data.status === "success") {
     try {
       const lecture = parent ?? selectedSection;
-      const sections = parent ? [parent, selectedSection] : [selectedSection];
-      const key = await generateCacheKey(`${course_id}|${lecture.classNumber}`);
+      const sections = [
+        ...(parent ? [parent, selectedSection] : [selectedSection]),
+        ...extras,
+      ];
+      const crseId = payload.crse_id;
+      const key = await generateCacheKey(`${crseId}|${lecture.classNumber}`);
       await setGenericCache("shopCartTableData", {
         [key]: {
-          crse_id: course_id,
+          crse_id: crseId,
           class_nbr: lecture.classNumber,
           classs: courseData.code,
           [TERM_TAG_FIELD]: selectedSection.term,

@@ -1,6 +1,8 @@
 import type {
+  GroupedSections,
   MergedCourseData,
   ModifiedSection,
+  SectionLinkedMeeting,
 } from "../../course-management/types/section";
 import type { RequiredCourse } from "../../degree-planning/types/Plans";
 import type { BatchDataRequestResponse, GradeData } from "../../types/api";
@@ -8,6 +10,43 @@ import { AppLogger } from "../logger";
 
 import { groupSections } from "./groupSections";
 import type { CourseData } from "./parseRegistrarUtil";
+
+export function toLinkedMeeting(
+  section: ModifiedSection,
+): SectionLinkedMeeting {
+  return {
+    dayTime: section.dayTime,
+    location: section.location,
+    component: section.component,
+    classNumber: section.classNumber,
+    section: section.section,
+    instructor_name: section.instructor_name,
+    instructor_unity_ids: section.instructor_unity_ids,
+  };
+}
+
+/**
+ * Copies a group's lab choices onto the lecture as `linkedMeetings` (the
+ * card's picker) and its always-included sections as `requiredMeetings`.
+ */
+export function linkGroupMeetings(group: GroupedSections): void {
+  const { lecture } = group;
+  if (!lecture) {
+    return;
+  }
+  const labs = (group.labs ?? []).filter(Boolean) as ModifiedSection[];
+  const extras = group.extras ?? [];
+  if (labs.length > 0) {
+    lecture.linkedMeetings = labs.map(toLinkedMeeting);
+  } else {
+    delete lecture.linkedMeetings;
+  }
+  if (extras.length > 0) {
+    lecture.requiredMeetings = extras.map(toLinkedMeeting);
+  } else {
+    delete lecture.requiredMeetings;
+  }
+}
 
 /**
  * Merges open course sections with grade distributions and professor ratings.
@@ -106,19 +145,7 @@ export function mergeData(
     }
     const groupedSections = groupSections(course.sections, modifiedSections);
     for (const group of Object.values(groupedSections)) {
-      const { lecture, labs } = group;
-      const cleanLabs = (labs ?? []).filter(Boolean) as ModifiedSection[];
-      if (lecture && cleanLabs.length > 0) {
-        lecture.linkedMeetings = cleanLabs.map((lab) => ({
-          dayTime: lab.dayTime,
-          location: lab.location,
-          component: lab.component,
-          classNumber: lab.classNumber,
-          section: lab.section,
-          instructor_name: lab.instructor_name,
-          instructor_unity_ids: lab.instructor_unity_ids,
-        }));
-      }
+      linkGroupMeetings(group);
     }
     mergedCourse.sections = groupedSections;
     mergedData[cacheKey] = mergedCourse;

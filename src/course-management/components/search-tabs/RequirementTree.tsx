@@ -232,8 +232,7 @@ function AvailabilityChips({ row }: { row: CourseRowModel }) {
   return (
     <>
       <Badge variant="outline" className="font-normal">
-        {row.sectionCount} {row.sectionCount === 1 ? "section" : "sections"}
-        {row.openCount > 0 ? ` · ${row.openCount} open` : ""}
+        {row.openCount}/{row.sectionCount} open
       </Badge>
       {row.scheduleKnown ? (
         row.fitCount > 0 ? (
@@ -306,7 +305,8 @@ export function CourseRow({
   );
 
   return (
-    <div className="border-t border-border first:border-t-0">
+    // data-course-row: paging this course's sections scrolls back to its title.
+    <div data-course-row className="border-t border-border first:border-t-0">
       {expandable ? (
         <button
           type="button"

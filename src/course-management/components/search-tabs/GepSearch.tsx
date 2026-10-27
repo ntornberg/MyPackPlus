@@ -39,7 +39,10 @@ import { LoadingProgress } from "../../../ui-system/components/shared/LoadingPro
 import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
 import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/PlannerWorkbenchLayout";
-import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
+import {
+  buildInstructorFilterOptions,
+  groupRowSections,
+} from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import {
   CartCoursesContext,
@@ -283,12 +286,8 @@ const GEPTree: React.FC<GEPTreeProps> = React.memo(
         {groups.map(({ group, rows, offered, fitting, done }) => {
           const groupKey = `group:${group.courseAbr}`;
           const expanded = !!expandedGroups[groupKey];
-          const summary = [
-            `${rows.length} ${rows.length === 1 ? "course" : "courses"}`,
-            done ? `${done} already counted` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ");
+          const scheduleKnown = scheduleBackground !== null;
+          const summary = done ? `${done} already counted` : null;
           return (
             <div
               key={groupKey}
@@ -311,21 +310,36 @@ const GEPTree: React.FC<GEPTreeProps> = React.memo(
                   <span className="truncate text-base font-semibold text-foreground">
                     {group.displayTitle}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {summary}
-                  </span>
+                  {summary ? (
+                    <span className="text-xs text-muted-foreground">
+                      {summary}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                  {offered > 0 ? (
+                  {offered === 0 ? (
+                    <Badge
+                      variant="outline"
+                      className="font-normal text-muted-foreground"
+                    >
+                      Not offered this term
+                    </Badge>
+                  ) : !scheduleKnown ? (
                     <Badge variant="outline" className="font-normal">
                       {offered} offered
                     </Badge>
-                  ) : null}
-                  {fitting > 0 ? (
+                  ) : fitting > 0 ? (
                     <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
-                      {fitting} fit
+                      {fitting} fit your schedule
                     </Badge>
-                  ) : null}
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="font-normal text-muted-foreground"
+                    >
+                      None fit your schedule
+                    </Badge>
+                  )}
                 </span>
               </button>
               {expanded ? (
@@ -413,9 +427,7 @@ export default function GepSearch({
         continue;
       }
       for (const g of Object.values(c.sections)) {
-        if (g.lecture) {
-          lectures.push(g.lecture);
-        }
+        lectures.push(...groupRowSections(g));
       }
     }
     return buildInstructorFilterOptions(lectures);
@@ -736,6 +748,39 @@ export default function GepSearch({
   const showResults =
     !!selectedTerm && isLoaded && groupedAndFilteredCourses.length > 0;
 
+  // Counts courses still needed for the category, not every listed course.
+  const fittingNeeded = useMemo(() => {
+    if (!showResults || scheduleBackground === null) return null;
+    const data = courseData as Record<string, MergedCourseData>;
+    let count = 0;
+    for (const group of groupedAndFilteredCourses) {
+      for (const course of group.courses) {
+        const row = buildCourseRow(
+          courseKeyOf(course),
+          course,
+          courseState(course),
+          data,
+          scheduleBackground,
+          true,
+        );
+        if (isNeeded(row) && row.fitCount > 0) count++;
+      }
+    }
+    return count;
+  }, [
+    showResults,
+    scheduleBackground,
+    courseData,
+    groupedAndFilteredCourses,
+    courseState,
+  ]);
+  const resultsDescription =
+    fittingNeeded === null
+      ? undefined
+      : fittingNeeded === 0
+        ? "None of the courses you still need have a section that fits your schedule."
+        : `${fittingNeeded} ${fittingNeeded === 1 ? "course you still need has" : "courses you still need have"} a section that fits your schedule.`;
+
   let emptyMessage = "Choose a GEP category to see its courses.";
   if (!selectedTerm) {
     emptyMessage = "Select a term to search for courses.";
@@ -811,11 +856,7 @@ export default function GepSearch({
               ? `Courses for ${selectedSubjectLabel}`
               : "Courses"
           }
-          description={
-            showResults
-              ? `${filteredCourses.length} courses in ${groupedAndFilteredCourses.length} departments${selectedTerm ? ` · ${selectedTerm}` : ""}. Open a department to see its courses and sections.`
-              : undefined
-          }
+          description={resultsDescription}
         />
         {resultsBody}
       </section>

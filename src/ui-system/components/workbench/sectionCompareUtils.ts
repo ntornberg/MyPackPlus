@@ -29,7 +29,8 @@ function linkedMeetingFromLab(lab: ModifiedSection): SectionLinkedMeeting {
 }
 
 /**
- * Lecture + optional lab pick for preview/calendar (single linked meeting when multiple labs exist).
+ * Lecture + optional lab pick for preview/calendar: the picked lab (first when
+ * none is picked) plus the sections that come with every pick.
  */
 export function groupedSectionForPreview(
   group: GroupedSections,
@@ -39,30 +40,30 @@ export function groupedSectionForPreview(
   if (!lecture) {
     return null;
   }
-  const labs = (group.labs ?? []).filter(Boolean) as ModifiedSection[];
-  if (labs.length === 0) {
+  const required = (group.extras ?? []).map(linkedMeetingFromLab);
+  const chosen = selectedLabForGroup(group, selectedLabClassNumber);
+  const meetings = chosen
+    ? [linkedMeetingFromLab(chosen), ...required]
+    : required;
+  if (meetings.length === 0) {
     return lecture;
   }
-  if (labs.length === 1) {
-    if (lecture.linkedMeetings && lecture.linkedMeetings.length > 0) {
-      return lecture;
-    }
-    return {
-      ...lecture,
-      linkedMeetings: [linkedMeetingFromLab(labs[0]!)],
-    };
-  }
+  return { ...lecture, linkedMeetings: meetings };
+}
+
+/** The picked lab, or the first one when nothing (or something stale) is picked. */
+export function selectedLabForGroup(
+  group: GroupedSections,
+  selectedLabClassNumber?: string | null,
+): ModifiedSection | undefined {
+  const labs = (group.labs ?? []).filter(Boolean) as ModifiedSection[];
   const pick =
     selectedLabClassNumber != null && selectedLabClassNumber !== ""
       ? labs.find(
           (l) => String(l.classNumber) === String(selectedLabClassNumber),
         )
       : undefined;
-  const chosen = pick ?? labs[0]!;
-  return {
-    ...lecture,
-    linkedMeetings: [linkedMeetingFromLab(chosen)],
-  };
+  return pick ?? labs[0];
 }
 
 export function defaultLabClassForGroup(
@@ -107,6 +108,14 @@ export type InstructorFilterOptions = {
   /** Average RMP rating per registrar name, when one is known. */
   ratings: Map<string, number>;
 };
+
+/** The sections a group shows as cards: its lecture, or each lab when it has none. */
+export function groupRowSections(group: GroupedSections): ModifiedSection[] {
+  if (group.lecture) {
+    return [group.lecture];
+  }
+  return (group.labs ?? []).filter(Boolean) as ModifiedSection[];
+}
 
 /** One option per instructor across the given lecture rows, with any known RMP rating. */
 export function buildInstructorFilterOptions(

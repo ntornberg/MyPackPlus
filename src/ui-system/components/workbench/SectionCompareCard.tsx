@@ -25,7 +25,10 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import type { ModifiedSection } from "../../../course-management/types/section";
+import type {
+  ModifiedSection,
+  SectionLinkedMeeting,
+} from "../../../course-management/types/section";
 import {
   formatGradeAverage,
   GradeDistributionChart,
@@ -278,6 +281,61 @@ function linkedMeetingsPanelTitle(linked: { component?: string }[]): string {
   return "Linked sections";
 }
 
+/** One lab, recitation or problem-session meeting shown under the lecture. */
+function LinkedMeetingRow({
+  meeting: m,
+  compact,
+}: {
+  meeting: SectionLinkedMeeting;
+  compact: boolean;
+}) {
+  return (
+    <div
+      className={cn("border-t border-border/50", compact ? "pt-1.5" : "pt-2")}
+    >
+      {compact ? (
+        <div className="flex items-start gap-2 text-muted-foreground">
+          <Clock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+          <span className="leading-snug">
+            {m.component}
+            {m.section ? ` · Sec ${m.section}` : ""}
+            {m.classNumber ? ` · #${m.classNumber}` : ""}
+            {m.dayTime ? ` · ${m.dayTime}` : ""}
+            {m.location ? ` · ${m.location}` : ""}
+          </span>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 text-foreground">
+            <BookMarkedIcon
+              className="size-4 shrink-0 text-primary"
+              aria-hidden
+            />
+            <span>
+              {m.component}
+              {m.classNumber ? (
+                <>
+                  {" "}
+                  ·{" "}
+                  <span className="text-muted-foreground">{m.classNumber}</span>
+                </>
+              ) : null}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
+            <MapPinIcon className="size-4 shrink-0 text-primary" aria-hidden />
+            <span>{m.location}</span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
+            <Clock className="size-4 shrink-0 text-primary" aria-hidden />
+            <span>{m.dayTime}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export type SectionCompareCardProps = {
   section: ModifiedSection;
   isSelected: boolean;
@@ -358,6 +416,10 @@ export const SectionCompareCard = memo(function SectionCompareCard({
     [section.linkedMeetings],
   );
   const multiLab = linkedLabs.length > 1;
+  const requiredMeetings = useMemo(
+    () => section.requiredMeetings ?? [],
+    [section.requiredMeetings],
+  );
   const linkedPanelTitle = useMemo(
     () => linkedMeetingsPanelTitle(linkedLabs),
     [linkedLabs],
@@ -542,7 +604,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
         <SectionGradeDistributionBlock section={section} compact={compact} />
       </div>
 
-      {linkedLabs.length > 0 ? (
+      {linkedLabs.length > 0 || requiredMeetings.length > 0 ? (
         <div
           className={cn(
             "flex flex-col text-sm",
@@ -647,66 +709,21 @@ export const SectionCompareCard = memo(function SectionCompareCard({
             </div>
           ) : (
             linkedLabs.map((m, i) => (
-              <div
+              <LinkedMeetingRow
                 key={`${m.classNumber ?? m.component}-${i}`}
-                className={cn(
-                  "border-t border-border/50",
-                  compact ? "pt-1.5" : "pt-2",
-                )}
-              >
-                {compact ? (
-                  <div className="flex items-start gap-2 text-muted-foreground">
-                    <Clock
-                      className="mt-0.5 size-4 shrink-0 text-primary"
-                      aria-hidden
-                    />
-                    <span className="leading-snug">
-                      {m.component}
-                      {m.section ? ` · Sec ${m.section}` : ""}
-                      {m.classNumber ? ` · #${m.classNumber}` : ""}
-                      {m.dayTime ? ` · ${m.dayTime}` : ""}
-                      {m.location ? ` · ${m.location}` : ""}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2 text-foreground">
-                      <BookMarkedIcon
-                        className="size-4 shrink-0 text-primary"
-                        aria-hidden
-                      />
-                      <span>
-                        {m.component}
-                        {m.classNumber ? (
-                          <>
-                            {" "}
-                            ·{" "}
-                            <span className="text-muted-foreground">
-                              {m.classNumber}
-                            </span>
-                          </>
-                        ) : null}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
-                      <MapPinIcon
-                        className="size-4 shrink-0 text-primary"
-                        aria-hidden
-                      />
-                      <span>{m.location}</span>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
-                      <Clock
-                        className="size-4 shrink-0 text-primary"
-                        aria-hidden
-                      />
-                      <span>{m.dayTime}</span>
-                    </div>
-                  </>
-                )}
-              </div>
+                meeting={m}
+                compact={compact}
+              />
             ))
           )}
+          {/* Come with every lab choice, e.g. a single problem session. */}
+          {requiredMeetings.map((m, i) => (
+            <LinkedMeetingRow
+              key={`required-${m.classNumber ?? m.component}-${i}`}
+              meeting={m}
+              compact={compact}
+            />
+          ))}
         </div>
       ) : null}
 

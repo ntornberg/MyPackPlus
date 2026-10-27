@@ -18,7 +18,10 @@ import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel
 import { LoadingProgress } from "../../../ui-system/components/shared/LoadingProgress";
 import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
-import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
+import {
+  buildInstructorFilterOptions,
+  groupRowSections,
+} from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import {
   CartCoursesContext,
@@ -135,9 +138,7 @@ export default function CourseSearch({
 
   const instructorOptions = useMemo(() => {
     return buildInstructorFilterOptions(
-      sectionsArray.flatMap((section) =>
-        section.lecture ? [section.lecture] : [],
-      ),
+      sectionsArray.flatMap(groupRowSections),
     );
   }, [sectionsArray]);
 

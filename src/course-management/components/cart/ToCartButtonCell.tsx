@@ -18,7 +18,10 @@ import {
 import { cn } from "@/lib/utils";
 
 import { AppLogger } from "../../../utils/logger";
-import { addSectionToCart } from "../../services/addSectionToCart";
+import {
+  addSectionToCart,
+  type AddSectionToCartOptions,
+} from "../../services/addSectionToCart";
 import { removeSectionFromCart } from "../../services/removeSectionFromCart";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
 
@@ -88,6 +91,7 @@ export const ToCartButtonCell = (
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
   inCart = false,
+  cartOptions: AddSectionToCartOptions = {},
 ) => {
   const { course_id, classNumber, catalog_nbr, courseData } = selectedSection;
 
@@ -97,7 +101,10 @@ export const ToCartButtonCell = (
   const [removing, setRemoving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  if (!course_id || !classNumber || !catalog_nbr || !courseData) {
+  // MyPack's own payload carries everything the cart needs.
+  const hasCartData =
+    cartOptions.payload != null || (course_id && classNumber && catalog_nbr);
+  if (!hasCartData || !courseData) {
     AppLogger.warn("Missing required data for section: ", selectedSection);
     return (
       <Button
@@ -114,7 +121,7 @@ export const ToCartButtonCell = (
   }
 
   const handleAddToCart = async () => {
-    const data = await addSectionToCart(selectedSection, parent);
+    const data = await addSectionToCart(selectedSection, parent, cartOptions);
     if (data.ok) {
       AppLogger.info("Added to cart! " + data.message);
       setMessage(data.message);
@@ -295,13 +302,17 @@ export type ToCartGroupedSectionCellProps = GroupedSections & {
 
 /**
  * Main course row: adds lecture alone if there are no labs, else adds the currently
- * selected lab paired with its lecture. The lab selection is driven by the parent
- * card's lab picker (via {@link ToCartGroupedSectionCellProps.selectedLabClassNumber}),
- * so this cell never renders its own lab dropdown.
+ * selected lab paired with its lecture, plus any sections that come with every lab.
+ * Uses MyPack's own payload for the combination when the grouping came from MyPack.
+ * The lab selection is driven by the parent card's lab picker (via
+ * {@link ToCartGroupedSectionCellProps.selectedLabClassNumber}), so this cell
+ * never renders its own lab dropdown.
  */
 export function ToCartGroupedSectionCell({
   lecture,
   labs: rawLabs,
+  extras = [],
+  cartPayloads,
   selectedLabClassNumber,
   inCart = false,
 }: ToCartGroupedSectionCellProps) {
@@ -310,8 +321,14 @@ export function ToCartGroupedSectionCell({
   }
   const labs = (rawLabs ?? []).filter(Boolean) as ModifiedSection[];
   if (labs.length === 0) {
-    return ToCartButtonCell(lecture, undefined, inCart);
+    return ToCartButtonCell(lecture, undefined, inCart, {
+      extras,
+      payload: cartPayloads?.[""],
+    });
   }
   const selectedLab = resolveSelectedLab(labs, selectedLabClassNumber);
-  return ToCartButtonCell(selectedLab, lecture, inCart);
+  return ToCartButtonCell(selectedLab, lecture, inCart, {
+    extras,
+    payload: cartPayloads?.[String(selectedLab.classNumber)],
+  });
 }

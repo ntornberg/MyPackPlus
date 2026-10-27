@@ -120,13 +120,15 @@ const EXTENSION_CACHE_CATEGORIES = [
   "scheduleCalEventsData",
   "instructorUpcoming",
   "instructorSearch",
+  "myPackOfferings",
 ];
 
 /**
  * Prefix for grade/RMP cache keys. Bump when the backend response shape changes so entries
  * written by older builds are never read back.
  */
-export const GRADE_DATA_CACHE_VERSION = "v4";
+// v5: v4 grade entries for instructors with no lecture section were cached empty.
+export const GRADE_DATA_CACHE_VERSION = "v5";
 
 /** Categories holding grade/RMP responses that a new backend dataset makes stale. */
 const GRADE_DATASET_CATEGORIES = [

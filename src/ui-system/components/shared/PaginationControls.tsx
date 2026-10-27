@@ -77,7 +77,7 @@ export function PaginationControls({
   }
 
   return (
-    <Pagination className={cn("justify-end", className)}>
+    <Pagination className={cn("justify-center", className)}>
       <PaginationContent>
         <PaginationItem>
           <PaginationPrevious

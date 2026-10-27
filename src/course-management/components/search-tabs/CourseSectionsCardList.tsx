@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   PaginationControls,
@@ -33,6 +33,8 @@ import {
   findScheduleConflicts,
 } from "../../utils/scheduleFitFilter";
 import { ToCartGroupedSectionCell } from "../cart/ToCartButtonCell";
+
+import { useMyPackPairings } from "./useMyPackPairings";
 
 type GroupedRow = GroupedSections & { uniqueRowId: string };
 
@@ -128,6 +130,34 @@ export type CourseSectionsCardListProps = {
   compact?: boolean;
 };
 
+/**
+ * Scrolls the nearest scrolling ancestor up so `element` starts at its top,
+ * or all the way up with `toTop`.
+ * Not scrollIntoView: that also scrolls overflow-hidden ancestors, which
+ * shifts the whole planner dialog off screen.
+ */
+function scrollUpTo(element: HTMLElement, toTop: boolean): void {
+  let scroller = element.parentElement;
+  while (
+    scroller &&
+    !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
+  ) {
+    scroller = scroller.parentElement;
+  }
+  if (!scroller) {
+    return;
+  }
+  if (toTop) {
+    scroller.scrollTop = 0;
+    return;
+  }
+  const offset =
+    element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  if (offset < 0) {
+    scroller.scrollTop += offset;
+  }
+}
+
 /** Cart/enrolled classes the row's meetings overlap, for one lab choice. */
 function conflictsFor(
   row: GroupedSections,
@@ -181,8 +211,9 @@ export function CourseSectionsCardList({
   >({});
   const cart = useCartCoursesContext();
 
+  const pairedSections = useMyPackPairings(sections);
   const processedRows = useMemo((): GroupedRow[] => {
-    return sections.flatMap((section, index) => {
+    return pairedSections.flatMap<GroupedRow>((section, index) => {
       if (section.lecture) {
         const id = section.lecture.classNumber || `grouped-${index}`;
         return [{ ...section, uniqueRowId: `${rowKeyPrefix}${id}` }];
@@ -199,7 +230,7 @@ export function CourseSectionsCardList({
       }
       return [];
     });
-  }, [sections, rowKeyPrefix]);
+  }, [pairedSections, rowKeyPrefix]);
 
   useEffect(() => {
     setLabClassByRowId({});
@@ -289,8 +320,23 @@ export function CourseSectionsCardList({
     [handleRowPreviewById],
   );
 
+  const listTopRef = useRef<HTMLDivElement>(null);
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      setPage(nextPage);
+      const list = listTopRef.current;
+      if (list) {
+        // Course Search shows one list under its search options, so go back to
+        // them; GEP and Major tabs stack a list per course, so go back to its title.
+        const courseRow = list.closest<HTMLElement>("[data-course-row]");
+        scrollUpTo(courseRow ?? list, tab === "course_search");
+      }
+    },
+    [setPage, tab],
+  );
+
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={listTopRef} className="flex flex-col gap-3">
       <SectionCompareList
         isEmpty={filteredRows.length === 0}
         emptyMessage="No sections match the current filters for this course."
@@ -310,12 +356,10 @@ export function CourseSectionsCardList({
                 ),
               ]
             : null;
-          const pickedLab = row.labs?.find(
-            (lab) => lab && String(lab.classNumber) === pick,
-          );
+          // Labs and problem sessions can be shared by several lectures, so only
+          // the enrollment section (always in its cart row) says which one is added.
           const inCart =
-            (row.lecture != null && isSectionInCart(cart, row.lecture)) ||
-            (pickedLab != null && isSectionInCart(cart, pickedLab));
+            row.lecture != null && isSectionInCart(cart, row.lecture);
 
           return (
             <CourseSectionCardRow
@@ -335,7 +379,7 @@ export function CourseSectionsCardList({
       <PaginationControls
         page={page}
         pageCount={pageCount}
-        onPageChange={setPage}
+        onPageChange={handlePageChange}
       />
     </div>
   );
