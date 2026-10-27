@@ -27,6 +27,7 @@ import {
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
 import { useScheduleBackgroundEvents } from "../../../ui-system/components/workbench/useScheduleBackgroundEvents";
 import { type PlannerSectionPreview } from "../../../ui-system/components/workbench/workbenchTypes";
+import { isExtensionContextInvalidated } from "../../../utils/extensionContext";
 import { fetchPlannerCourseSections } from "../../services/api/planner-search/dataService";
 import type { GroupedSections } from "../../types/section";
 import {
@@ -140,15 +141,21 @@ export default function CourseSearch({
     );
   }, [sectionsArray]);
 
-  const emptyStateMessage = error
-    ? "Could not load sections. Please retry."
-    : !courseSearchData.selectedTerm
-      ? "Choose a term to load sections."
-      : isLoading
-        ? "Loading sections…"
-        : selectedCourse
-          ? "No sections found for this course and term."
-          : "Find a course by code, title, or topic to see its sections.";
+  // A reloaded or updated extension cuts this page off; only a page reload recovers.
+  const extensionReloaded = error
+    ? isExtensionContextInvalidated(error)
+    : false;
+  const emptyStateMessage = extensionReloaded
+    ? "The extension was updated. Reload the page to load sections."
+    : error
+      ? "Could not load sections. Please retry."
+      : !courseSearchData.selectedTerm
+        ? "Choose a term to load sections."
+        : isLoading
+          ? "Loading sections…"
+          : selectedCourse
+            ? "No sections found for this course and term."
+            : "Find a course by code, title, or topic to see its sections.";
   const controlsPanel = (
     <PlannerPanel
       title="Course search"
@@ -245,8 +252,21 @@ export default function CourseSearch({
 
       {error ? (
         <div role="alert" className="mt-4 space-y-2 text-sm text-destructive">
-          <p>Error: {error.message}</p>
-          <Button onClick={retry}>Retry</Button>
+          {extensionReloaded ? (
+            <>
+              <p>
+                The extension was updated. Reload the page to keep searching.
+              </p>
+              <Button onClick={() => window.location.reload()}>
+                Reload page
+              </Button>
+            </>
+          ) : (
+            <>
+              <p>Error: {error.message}</p>
+              <Button onClick={retry}>Retry</Button>
+            </>
+          )}
         </div>
       ) : null}
     </PlannerPanel>

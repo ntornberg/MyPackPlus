@@ -6,6 +6,11 @@ import {
 import type { CourseData } from "../../../../utils/course-search/parseRegistrarUtil";
 import { AppLogger } from "../../../../utils/logger";
 
+const REGISTRAR_SEARCH_URL =
+  "https://webappprd.acs.ncsu.edu/php/coursecat/search.php";
+const SEARCH_WORKER_URL =
+  "https://cloudflareworker.nicktornberg12.workers.dev/";
+
 /**
  * Sends a registrar search through the background worker and returns the raw
  * response. Throws on transport or HTTP failures so callers can tell them
@@ -60,10 +65,7 @@ export async function searchOpenCoursesByParams(
     );
   }
 
-  const response = await fetchViaBackground(
-    "https://webappprd.acs.ncsu.edu/php/coursecat/search.php",
-    formData,
-  );
+  const response = await fetchViaBackground(REGISTRAR_SEARCH_URL, formData);
   const parsed = parseHTMLContent(response);
   if (Array.isArray(parsed)) {
     return parsed[0] ?? null;
@@ -87,10 +89,19 @@ export async function batchSearchOpenCourses(
     throw new Error(`Invalid search parameters: ${subject} ${term}`);
   }
 
-  const response = await fetchViaBackground(
-    "https://cloudflareworker.nicktornberg12.workers.dev/",
-    formData,
-  );
+  let response: any;
+  try {
+    response = await fetchViaBackground(SEARCH_WORKER_URL, formData);
+  } catch (error) {
+    // The worker passes the search through unchanged, so the registrar
+    // answers the same form directly when the worker is down.
+    AppLogger.warn(
+      "Search worker failed; searching the registrar directly",
+      { term, subject },
+      error,
+    );
+    response = await fetchViaBackground(REGISTRAR_SEARCH_URL, formData);
+  }
   const parsed = parseHTMLContent(response);
   if (!parsed) {
     return [];

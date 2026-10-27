@@ -210,6 +210,40 @@ test("native calendar supplements the original popup and handles redraw and term
   await course.hover();
   const card = page.getByRole("dialog", { name: "CSC 316 class information" });
   await expect(card).toContainText("Data Structures");
+  // Moving between the event's children must not close and reopen the card,
+  // which restarts its animation. Both flips land in one task, so read them
+  // from the mutation records rather than the current attribute.
+  await card.evaluate((element) => {
+    const root = element.getRootNode() as Document | ShadowRoot;
+    new MutationObserver((records) => {
+      if (
+        !element.isConnected ||
+        records.some((record) => record.oldValue === "closed")
+      )
+        document.body.dataset.cardBlinked = "yes";
+    }).observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeOldValue: true,
+      attributeFilter: ["data-state"],
+    });
+  });
+  const eventBox = (await course.boundingBox())!;
+  const titleBox = (await course.locator(".fc-event-title").boundingBox())!;
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.move(titleBox.x + 2, titleBox.y + titleBox.height / 2);
+    await page.mouse.move(
+      eventBox.x + eventBox.width - 4,
+      eventBox.y + eventBox.height / 2,
+    );
+  }
+  await page.waitForTimeout(100);
+  await expect(card).toBeVisible();
+  await expect(page.locator("body")).not.toHaveAttribute(
+    "data-card-blinked",
+    "yes",
+  );
   await expect(page.locator(".tooltipster-content")).toHaveText(
     "CSC 316 (601)Original MyPack action",
   );

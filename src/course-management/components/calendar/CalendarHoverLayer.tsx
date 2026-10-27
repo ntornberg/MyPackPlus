@@ -53,6 +53,7 @@ export function CalendarHoverLayer({
   // While a card is open (or just closed), moving to another event swaps it
   // in immediately instead of waiting out the hover-intent delay again.
   const open = useRef(false);
+  const shownAnchor = useRef<HTMLElement | null>(null);
   const closedAt = useRef(-Infinity);
   const id = useId();
   const cancelClose = useCallback(() => clearTimeout(closeTimer.current), []);
@@ -91,6 +92,12 @@ export function CalendarHoverLayer({
       doc.dispatchEvent(
         new CustomEvent("mypack-calendar-card", { detail: id }),
       );
+      // Re-showing the open card must keep its native popup, or the card
+      // closes for a frame and replays its animation.
+      if (shownAnchor.current === element) {
+        if (keyboard) setActive((a) => a && { ...a, keyboard: true });
+        return;
+      }
       setNativePopup(null);
       setActive({ anchor: element, event: { ...event, course }, keyboard });
     };
@@ -98,6 +105,9 @@ export function CalendarHoverLayer({
       const element = find(event.target);
       if (!element) return;
       cancelClose();
+      // pointerover bubbles from every child of the event; don't restart the
+      // hover-intent delay for each one.
+      if (element === hovered && event.type !== "focusin") return;
       clearTimeout(opening);
       hovered = element;
       const warm = open.current || performance.now() - closedAt.current < 300;
@@ -120,6 +130,7 @@ export function CalendarHoverLayer({
     };
     const dismiss = () => {
       clearTimeout(opening);
+      hovered = null;
       dismissNow();
     };
     const keydown = (event: KeyboardEvent) => {
@@ -163,7 +174,9 @@ export function CalendarHoverLayer({
     const anchor = active.anchor;
     const previous = anchor.getAttribute("aria-details");
     anchor.setAttribute("aria-details", id);
+    shownAnchor.current = anchor;
     return () => {
+      shownAnchor.current = null;
       if (previous === null) anchor.removeAttribute("aria-details");
       else anchor.setAttribute("aria-details", previous);
     };

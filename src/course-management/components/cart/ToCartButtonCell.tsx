@@ -2,24 +2,36 @@ import {
   AlertCircle,
   Check,
   CheckCircle2,
+  Loader2,
   ShoppingCartIcon,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 import { AppLogger } from "../../../utils/logger";
 import { addSectionToCart } from "../../services/addSectionToCart";
+import { removeSectionFromCart } from "../../services/removeSectionFromCart";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
 
 const cartButtonClassName =
   "pointer-events-auto shrink-0 gap-2 rounded-lg border border-primary/35 bg-gradient-to-b from-primary via-primary to-primary/88 px-3.5 font-semibold text-primary-foreground shadow-sm transition-[transform,filter,box-shadow,border-color] duration-150 hover:border-primary/55 hover:brightness-[1.03] hover:shadow-md active:scale-[1.03]";
 
-// Quiet on purpose: the section is already added, so there's nothing to do here.
+// Quiet on purpose: the section is already added. Hover/focus (or the open
+// confirmation) reveals the remove action.
 const inCartButtonClassName =
-  "pointer-events-auto shrink-0 gap-1.5 rounded-lg border border-border bg-transparent px-3.5 font-semibold text-muted-foreground shadow-none disabled:opacity-100";
+  "group/remove pointer-events-auto shrink-0 gap-1.5 rounded-lg border border-border bg-transparent px-3.5 font-semibold text-muted-foreground shadow-none transition-[color,border-color,background-color] duration-150 hover:border-destructive/40 hover:bg-destructive/8 hover:text-destructive focus-visible:border-destructive/40 focus-visible:text-destructive aria-expanded:border-destructive/40 aria-expanded:bg-destructive/8 aria-expanded:text-destructive disabled:opacity-60";
+
+const confirmRemoveButtonClassName =
+  "gap-1.5 rounded-lg bg-destructive px-3 font-semibold text-white shadow-sm hover:bg-destructive/90 focus-visible:ring-destructive/30 disabled:opacity-70";
 
 const disabledCartButtonClassName =
   "pointer-events-auto shrink-0 gap-2 rounded-lg border border-primary/20 bg-primary/50 px-3.5 font-semibold text-primary-foreground opacity-50";
@@ -70,6 +82,7 @@ function ToastFeedback({
 
 /**
  * Renders an Add to Cart button for a section and invokes the MyPack add-to-cart endpoint.
+ * Once the section is in the cart, the button removes it instead.
  */
 export const ToCartButtonCell = (
   selectedSection: ModifiedSection,
@@ -81,6 +94,8 @@ export const ToCartButtonCell = (
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [severity, setSeverity] = useState<"success" | "error">("success");
+  const [removing, setRemoving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (!course_id || !classNumber || !catalog_nbr || !courseData) {
     AppLogger.warn("Missing required data for section: ", selectedSection);
@@ -114,20 +129,113 @@ export const ToCartButtonCell = (
     setTimeout(() => setOpen(false), 3000);
   };
 
+  const handleRemoveFromCart = async () => {
+    setRemoving(true);
+    const data = await removeSectionFromCart(selectedSection, parent);
+    setRemoving(false);
+    setConfirmOpen(false);
+    if (data.ok) {
+      AppLogger.info("Removed from cart! " + data.message);
+      setSeverity("success");
+    } else {
+      AppLogger.warn("Remove from cart failed:", data.message);
+      setSeverity("error");
+    }
+    setMessage(data.message);
+    setOpen(true);
+    setTimeout(() => setOpen(false), 3000);
+  };
+
+  const sectionLabel = parent
+    ? `${courseData.code} (${parent.section}) with ${selectedSection.component ?? "lab"} ${selectedSection.section}`
+    : `${courseData.code} (${selectedSection.section})`;
+
   return (
     <div className="relative inline-block text-right">
       {inCart ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled
-          title="This section is already in your MyPack cart"
-          className={inCartButtonClassName}
+        <Popover
+          open={confirmOpen}
+          onOpenChange={(next) => {
+            // Stay open while the request is in flight so the result lands in context.
+            if (!removing) setConfirmOpen(next);
+          }}
         >
-          <Check className="size-4" strokeWidth={2.5} />
-          In cart
-        </Button>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="In cart. Remove from cart"
+              title="Remove this section from your MyPack cart"
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              className={inCartButtonClassName}
+            >
+              {/* Both labels share one grid cell so the button keeps its width. */}
+              <span className="grid">
+                <span className="col-start-1 row-start-1 flex items-center gap-1.5 group-hover/remove:invisible group-focus-visible/remove:invisible group-aria-expanded/remove:invisible">
+                  <Check className="size-4" strokeWidth={2.5} />
+                  In cart
+                </span>
+                <span className="invisible col-start-1 row-start-1 flex items-center justify-center gap-1.5 group-hover/remove:visible group-focus-visible/remove:visible group-aria-expanded/remove:visible">
+                  <X className="size-4" strokeWidth={2.5} />
+                  Remove
+                </span>
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="end"
+            role="alertdialog"
+            aria-labelledby={`remove-cart-title-${classNumber}`}
+            aria-describedby={`remove-cart-desc-${classNumber}`}
+            className="w-72 p-3.5 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              id={`remove-cart-title-${classNumber}`}
+              className="text-sm font-semibold text-foreground"
+            >
+              Remove from cart?
+            </p>
+            <p
+              id={`remove-cart-desc-${classNumber}`}
+              className="mt-1 text-xs leading-relaxed text-muted-foreground"
+            >
+              <span className="font-medium text-foreground">
+                {sectionLabel}
+              </span>{" "}
+              will be removed from your MyPack shopping cart. You can add it
+              back anytime.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={removing}
+                onClick={() => setConfirmOpen(false)}
+                className="rounded-lg px-3 font-medium"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={removing}
+                onClick={() => void handleRemoveFromCart()}
+                className={confirmRemoveButtonClassName}
+              >
+                {removing ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <X className="size-3.5" strokeWidth={2.5} />
+                )}
+                {removing ? "Removing…" : "Remove"}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
       ) : (
         <Button
           type="button"
@@ -181,7 +289,7 @@ export type ToCartGroupedSectionCellProps = GroupedSections & {
    * When provided, the cart submission uses this lab; otherwise the first lab is used.
    */
   selectedLabClassNumber?: string;
-  /** The section (with the selected lab) is already in the cart. */
+  /** The section (with the selected lab) is already in the cart; the button then removes it. */
   inCart?: boolean;
 };
 
