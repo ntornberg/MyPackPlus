@@ -43,7 +43,7 @@ describe("syncPlanningData", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   const respond = (body: string, ok = true) =>
-    Promise.resolve({ ok, status: ok ? 200 : 500, text: async () => body });
+    Promise.resolve(new Response(body, { status: ok ? 200 : 500 }));
 
   beforeEach(() => {
     storage = {};
@@ -97,7 +97,7 @@ describe("syncPlanningData", () => {
     expect(result).toEqual({ status: "synced", programs: 1, terms: 1 });
     expect(fetchMock).toHaveBeenCalledWith(
       "/psc/CS92PRD/EMPLOYEE/NCSIS/s/WEBLIB_DEGAUDIT.ISCRIPT1.FieldFormula.IScript_getDegreeDetails?includePlanner=Y&isSaved=Y&acad_career=UGRD&acad_prog=ABC&acad_plan=99TSTBS&acad_sub_plan=NOSUBPLAN&req_term=2238&acad_plan_type=MAJ&prog_status=AC",
-      { credentials: "include" },
+      expect.objectContaining({ credentials: "include" }),
     );
     expect(Object.keys(storage[DEGREE_AUDITS_STORAGE_KEY] as object)).toEqual([
       "99TSTBS|NOSUBPLAN|2238",
@@ -154,6 +154,21 @@ describe("syncPlanningData", () => {
     });
     expect(storage[DEGREE_AUDITS_STORAGE_KEY]).toBeDefined();
     expect(storage[PACK_PLANNER_STORAGE_KEY]).toBeUndefined();
+    expect(storage[PLANNING_SYNCED_AT_KEY]).toBeUndefined();
+  });
+
+  it("says the session expired when MyPack sends its sign-in page", async () => {
+    fetchMock.mockImplementation(() =>
+      respond('<form action="?cmd=login"><input name="pwd"></form>'),
+    );
+
+    const result = await syncPlanningData({ location: portal });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      summary:
+        "Your MyPack session expired. Refresh the page to sign in again.",
+    });
     expect(storage[PLANNING_SYNCED_AT_KEY]).toBeUndefined();
   });
 

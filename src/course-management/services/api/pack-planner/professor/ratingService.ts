@@ -8,6 +8,7 @@ import type {
   MatchedRateMyProf,
   SingleCourseDataResponse,
 } from "../../../../../types/api";
+import { ErrorBoundary } from "../../../../../ui-system/components/shared/ErrorBoundary";
 import { createShadowHost, injectCssOnce } from "../../../../../utils/dom";
 
 const DEGREE_AUDIT_CARD_STYLE_ID = "mpp-degree-audit-card-styles";
@@ -56,7 +57,13 @@ export function createProfessorCard(
 
   // Render the professor rating card component
   const root = createRoot(container);
-  root.render(React.createElement(ProfRatingCard, { data: profData }));
+  root.render(
+    React.createElement(
+      ErrorBoundary,
+      { name: "rating card", fallback: null },
+      React.createElement(ProfRatingCard, { data: profData }),
+    ),
+  );
 
   return wrapper;
 }

@@ -12,6 +12,7 @@ import {
   previewIdForGroupedRow,
   sectionMatchesInstructorFilter,
 } from "../../../ui-system/components/workbench/sectionCompareUtils";
+import { useCartCoursesContext } from "../../../ui-system/components/workbench/useCartCourses";
 import {
   createSectionPreview,
   type PlannerSectionPreview,
@@ -25,6 +26,7 @@ import {
   type ScheduleFit,
   type SectionSortMode,
 } from "../../types/sectionSorting";
+import { isSectionInCart } from "../../utils/cartCourses";
 import { modifiedSectionToScheduleEvents } from "../../utils/modifiedSectionToScheduleEvents";
 import {
   courseCodeOf,
@@ -41,6 +43,7 @@ type CourseSectionCardRowProps = {
   selectedLabClassNumber?: string;
   /** Names of cart/enrolled classes this section overlaps; [] when it fits; null when unknown. */
   conflictsWith: string[] | null;
+  inCart: boolean;
   onSelect: (rowId: string) => void;
   onLabClassChange: (rowId: string, classNbr: string) => void;
 };
@@ -52,6 +55,7 @@ const CourseSectionCardRow = memo(
     compact,
     selectedLabClassNumber,
     conflictsWith,
+    inCart,
     onSelect,
     onLabClassChange,
   }: CourseSectionCardRowProps) {
@@ -94,6 +98,7 @@ const CourseSectionCardRow = memo(
         onLabClassChange={multiLab ? handleLabClassChange : undefined}
         addToCartSlot={addToCartSlot}
         conflictsWith={conflictsWith}
+        inCart={inCart}
       />
     );
   },
@@ -104,6 +109,7 @@ const CourseSectionCardRow = memo(
     prev.selectedLabClassNumber === next.selectedLabClassNumber &&
     String(prev.conflictsWith) === String(next.conflictsWith) &&
     (prev.conflictsWith === null) === (next.conflictsWith === null) &&
+    prev.inCart === next.inCart &&
     prev.onSelect === next.onSelect &&
     prev.onLabClassChange === next.onLabClassChange,
 );
@@ -172,6 +178,7 @@ export function CourseSectionsCardList({
   const [labClassByRowId, setLabClassByRowId] = useState<
     Record<string, string>
   >({});
+  const cart = useCartCoursesContext();
 
   const processedRows = useMemo((): GroupedRow[] => {
     return sections.flatMap((section, index) => {
@@ -302,6 +309,12 @@ export function CourseSectionsCardList({
                 ),
               ]
             : null;
+          const pickedLab = row.labs?.find(
+            (lab) => lab && String(lab.classNumber) === pick,
+          );
+          const inCart =
+            (row.lecture != null && isSectionInCart(cart, row.lecture)) ||
+            (pickedLab != null && isSectionInCart(cart, pickedLab));
 
           return (
             <CourseSectionCardRow
@@ -311,6 +324,7 @@ export function CourseSectionsCardList({
               onSelect={handleCardSelect}
               compact={compact}
               conflictsWith={conflictsWith}
+              inCart={inCart}
               selectedLabClassNumber={pick}
               onLabClassChange={handleCardLabClassChange}
             />

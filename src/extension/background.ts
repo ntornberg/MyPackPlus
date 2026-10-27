@@ -3,6 +3,7 @@ import {
   fetchStatusWorkerStatusDirect,
   isStatusWorkerFetchMessage,
 } from "../user-experience/status/statusWorker";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { AppLogger } from "../utils/logger";
 
 import {
@@ -44,7 +45,7 @@ function setupMessageListener() {
         message.formData,
       );
 
-      fetch(message.url, {
+      fetchWithTimeout(message.url, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

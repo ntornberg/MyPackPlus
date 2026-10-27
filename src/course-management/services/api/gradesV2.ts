@@ -11,6 +11,7 @@ import type {
   V2SearchData,
   V2UpcomingData,
 } from "../../../types/api";
+import { fetchWithTimeout } from "../../../utils/fetchWithTimeout";
 import {
   GRADE_DATA_CACHE_VERSION,
   generateCacheKey,
@@ -29,14 +30,17 @@ const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000;
  * backend dataset version so stale cached grade data can be dropped.
  */
 async function postV2<T>(slug: string, body: unknown): Promise<T> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/${slug}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  const response = await fetchWithTimeout(
+    `${SUPABASE_URL}/functions/v1/${slug}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
   if (!response.ok) {
     throw new Error(
       `API error (${slug}): ${response.status} ${response.statusText}`,

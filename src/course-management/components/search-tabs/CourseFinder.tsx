@@ -10,6 +10,9 @@ import {
 } from "@/components/ui/combobox";
 
 import { loadPlannerTerms } from "../../../degree-planning/services/packPlanner";
+import { InCartBadge } from "../../../ui-system/components/workbench/InCartBadge";
+import { useCartCoursesContext } from "../../../ui-system/components/workbench/useCartCourses";
+import { isCourseInCart } from "../../utils/cartCourses";
 import {
   descriptionExcerpt,
   findCourses,
@@ -42,6 +45,7 @@ export function CourseFinder({
   const [query, setQuery] = useState(value?.label ?? "");
   const [open, setOpen] = useState(false);
   const typed = useRef(false);
+  const cart = useCartCoursesContext();
   const highlighted = useRef<SearchCourse | undefined>(undefined);
   useEffect(() => {
     setQuery(value?.label ?? "");
@@ -190,7 +194,12 @@ export function CourseFinder({
             <ComboboxItem key={course.code} value={course}>
               <span className="grid min-w-0 w-full grid-cols-[5rem_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 whitespace-normal py-2">
                 <strong>{course.code}</strong>
-                <span className="min-w-0 break-words">{course.title}</span>
+                <span className="min-w-0 break-words">
+                  {course.title}
+                  {isCourseInCart(cart, course.code) ? (
+                    <InCartBadge className="ml-2 align-middle" />
+                  ) : null}
+                </span>
                 {suggesting ? (
                   <span className="col-start-2 text-xs text-muted-foreground">
                     {reasons.get(course.code)}

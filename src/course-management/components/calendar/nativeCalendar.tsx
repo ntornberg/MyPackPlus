@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import { ErrorBoundary } from "../../../ui-system/components/shared/ErrorBoundary";
 import {
   ensureOverlayContainer,
   extensionCssForShadowRoot,
@@ -80,9 +81,11 @@ export function watchNativeCalendar(css: string): void {
     overlay.appendChild(host);
     const root = createRoot(host);
     root.render(
-      <NativeCalendar
-        container={getExtensionOverlayPortalContainer() ?? overlay}
-      />,
+      <ErrorBoundary name="calendar hover cards" fallback={null}>
+        <NativeCalendar
+          container={getExtensionOverlayPortalContainer() ?? overlay}
+        />
+      </ErrorBoundary>,
     );
     cleanup = () => {
       root.unmount();

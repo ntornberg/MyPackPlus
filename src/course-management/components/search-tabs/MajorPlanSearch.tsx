@@ -50,6 +50,10 @@ import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/P
 import { PlannerWorkbenchLayout } from "../../../ui-system/components/workbench/PlannerWorkbenchLayout";
 import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
+import {
+  CartCoursesContext,
+  useCartCourses,
+} from "../../../ui-system/components/workbench/useCartCourses";
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
 import { usePlanningData } from "../../../ui-system/components/workbench/usePlanningData";
 import { useScheduleBackgroundEvents } from "../../../ui-system/components/workbench/useScheduleBackgroundEvents";
@@ -240,6 +244,7 @@ export default function MajorPlanSearch({
   const scheduleBackground = useScheduleBackgroundEvents(
     majorPlanSearchData.selectedTerm,
   );
+  const cart = useCartCourses(majorPlanSearchData.selectedTerm);
 
   const planInstructorOptions = useMemo(() => {
     const lectures: ModifiedSection[] = [];
@@ -902,10 +907,12 @@ export default function MajorPlanSearch({
   );
 
   return (
-    <PlannerWorkbenchLayout
-      controls={controlsPanel}
-      results={resultsPanel}
-      preview={previewContent}
-    />
+    <CartCoursesContext.Provider value={cart}>
+      <PlannerWorkbenchLayout
+        controls={controlsPanel}
+        results={resultsPanel}
+        preview={previewContent}
+      />
+    </CartCoursesContext.Provider>
   );
 }

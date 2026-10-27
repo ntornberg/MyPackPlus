@@ -32,17 +32,20 @@ describe("approved requirement choices", () => {
         },
       },
     });
-    fetchMock.mockReset().mockImplementation(async (url: string) => ({
-      ok: true,
-      text: async () =>
-        JSON.stringify(
-          requirementFixture(
-            new URL(url, "https://portalsp.acs.ncsu.edu").searchParams.get(
-              "requirement",
-            )!,
+    fetchMock
+      .mockReset()
+      .mockImplementation(
+        async (url: string) =>
+          new Response(
+            JSON.stringify(
+              requirementFixture(
+                new URL(url, "https://portalsp.acs.ncsu.edu").searchParams.get(
+                  "requirement",
+                )!,
+              ),
+            ),
           ),
-        ),
-    }));
+      );
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -93,7 +96,9 @@ describe("approved requirement choices", () => {
       loadRequirementChoices(audit, options),
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0][1]).toEqual({ credentials: "include" });
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      credentials: "include",
+    });
     await loadRequirementChoices(audit, options);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     await loadRequirementChoices(audit, { ...options, force: true });
@@ -132,13 +137,14 @@ describe("approved requirement choices", () => {
     for (const line of exceptional.groups[1].lines) {
       if (line.requirementId === "000001") line.isExceptionRequirement = "RAW";
     }
-    fetchMock.mockImplementation(async (url: string) => ({
-      ok: true,
-      text: async () =>
-        url.includes("requirement=000002")
-          ? "<html>Sign in</html>"
-          : JSON.stringify(requirementFixture()),
-    }));
+    fetchMock.mockImplementation(
+      async (url: string) =>
+        new Response(
+          url.includes("requirement=000002")
+            ? "<html>Sign in</html>"
+            : JSON.stringify(requirementFixture()),
+        ),
+    );
     const result = await loadRequirementChoices(exceptional, {
       location: portal,
       now: () => 2000,

@@ -263,12 +263,7 @@ describe("dataService v2 grade/RMP requests", () => {
     vi.clearAllMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        statusText: "OK",
-        json: async () => v2Response,
-      })),
+      vi.fn(async () => Response.json(v2Response)),
     );
   });
 

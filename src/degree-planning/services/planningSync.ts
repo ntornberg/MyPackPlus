@@ -12,6 +12,7 @@ import {
   PLANNING_SYNC_MAX_AGE,
   peopleSoftScriptBase,
   fetchMyPackText as fetchText,
+  MyPackSessionExpiredError,
 } from "./myPackClient";
 import {
   parsePlannerTermDetails,
@@ -240,11 +241,17 @@ export function syncPlanningData({
     }
     if (failures.length > 0) {
       AppLogger.warn("Planning data sync incomplete:", failures);
+      const sessionExpired = [audits, terms].some(
+        (result) =>
+          result.status === "rejected" &&
+          result.reason instanceof MyPackSessionExpiredError,
+      );
       return {
         status: "failed",
         message: failures.join("; "),
-        summary:
-          audits.status === "fulfilled"
+        summary: sessionExpired
+          ? new MyPackSessionExpiredError().message
+          : audits.status === "fulfilled"
             ? terms.status === "fulfilled"
               ? "Degree audit and Pack Planner synced; some course choices couldn't refresh."
               : "Degree audit synced; Pack Planner couldn't refresh."

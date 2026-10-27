@@ -44,9 +44,12 @@ import {
   type RequirementStatus,
 } from "../../../degree-planning/services/requirementProgress";
 import type { RequiredCourse } from "../../../degree-planning/types/Plans";
+import { InCartBadge } from "../../../ui-system/components/workbench/InCartBadge";
+import { useCartCoursesContext } from "../../../ui-system/components/workbench/useCartCourses";
 import type { PlanningSyncState } from "../../../ui-system/components/workbench/usePlanningData";
 import type { ScheduleEvent } from "../../types/calendar";
 import type { MergedCourseData } from "../../types/section";
+import { isCourseInCart } from "../../utils/cartCourses";
 import type { RequirementFilter } from "../tab-state/tabState";
 
 import { groupedSectionFit } from "./CourseSectionsCardList";
@@ -263,6 +266,11 @@ export function CourseRow({
 }) {
   const expandable = row.sectionCount > 0;
   const done = row.audit?.status === "completed";
+  const cart = useCartCoursesContext();
+  const inCart = isCourseInCart(
+    cart,
+    `${row.course.course_abr} ${row.course.catalog_num}`,
+  );
   const label = (
     <>
       <ChevronRight
@@ -290,6 +298,7 @@ export function CourseRow({
         </span>
       )}
       <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        {inCart ? <InCartBadge /> : null}
         {row.audit && !isNeeded(row) ? <AuditChip state={row.audit} /> : null}
         {wantsSections(row) ? <AvailabilityChips row={row} /> : null}
       </span>

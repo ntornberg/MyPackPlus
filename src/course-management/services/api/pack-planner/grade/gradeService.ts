@@ -8,6 +8,7 @@ import type {
   GradeData,
   SingleCourseDataResponse,
 } from "../../../../../types/api";
+import { ErrorBoundary } from "../../../../../ui-system/components/shared/ErrorBoundary";
 import { hasGradeDistribution } from "../../../../../ui-system/components/shared/GradeDistributionChart";
 import { createShadowHost, injectCssOnce } from "../../../../../utils/dom";
 
@@ -69,7 +70,13 @@ export function createGradeCard(
 
   // Render the grade card component
   const root = createRoot(container);
-  root.render(React.createElement(GradeCard, { data: gradeData }));
+  root.render(
+    React.createElement(
+      ErrorBoundary,
+      { name: "grade card", fallback: null },
+      React.createElement(GradeCard, { data: gradeData }),
+    ),
+  );
 
   return wrapper;
 }

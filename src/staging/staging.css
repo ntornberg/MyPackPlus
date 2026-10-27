@@ -1,0 +1,13 @@
+/*
+ * The extension mounts the drawer in a shadow root, so Tailwind's `:root, :host`
+ * theme block resolves on the host, where `--radius` is defined. Staging has no
+ * shadow root: `:root` is <html>, which has no `--radius`, so radius tokens that
+ * derive from it come out invalid (square buttons). Resolve them on the stand-in
+ * host instead, mirroring `@theme inline` in index.css.
+ */
+#extension-overlay-root {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}

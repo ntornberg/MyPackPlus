@@ -34,6 +34,7 @@ import {
   isSatUnsatDistribution,
 } from "../shared/GradeDistributionChart";
 
+import { InCartBadge } from "./InCartBadge";
 import { InstructorPopover } from "./InstructorPopover";
 import {
   emptyGradeData,
@@ -292,6 +293,8 @@ export type SectionCompareCardProps = {
    * there's no schedule to compare against (no indicator shown).
    */
   conflictsWith?: string[] | null;
+  /** This section is already in the shopping cart. */
+  inCart?: boolean;
 };
 
 function ScheduleFitIndicator({
@@ -334,7 +337,8 @@ function areSectionCompareCardPropsEqual(
     prev.onLabClassChange === next.onLabClassChange &&
     prev.addToCartSlot === next.addToCartSlot &&
     String(prev.conflictsWith) === String(next.conflictsWith) &&
-    (prev.conflictsWith == null) === (next.conflictsWith == null)
+    (prev.conflictsWith == null) === (next.conflictsWith == null) &&
+    prev.inCart === next.inCart
   );
 }
 
@@ -347,6 +351,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
   onLabClassChange,
   addToCartSlot,
   conflictsWith = null,
+  inCart = false,
 }: SectionCompareCardProps) {
   const linkedLabs = useMemo(
     () => section.linkedMeetings ?? [],
@@ -441,6 +446,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
             >
               Seats {section.enrollment || "—"}
             </Badge>
+            {inCart ? <InCartBadge /> : null}
           </div>
           {!compact && title ? (
             <p className="text-sm text-muted-foreground">{title}</p>

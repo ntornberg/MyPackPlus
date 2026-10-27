@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { watchScheduleCacheChanges } from "../course-management/cache/scheduleCacheSignal";
 import { watchPlannerFrame } from "../course-management/services/plannerWatcher";
 import { scrapeScheduleTable } from "../course-management/services/scraper";
+import { ErrorBoundary } from "../ui-system/components/shared/ErrorBoundary";
 import SlideOutDrawer from "../ui-system/components/SlideOutDrawer";
 import WhatsNewDialog from "../user-experience/components/UserGuide/WhatsNewDialog";
 import {
@@ -50,6 +51,10 @@ export async function startTopFrame(extensionCssRaw: string): Promise<void> {
   const root = createRoot(overlayElement);
   scrapeScheduleTable(scheduleElement);
 
-  root.render(<RootOverlayDialogs />);
+  root.render(
+    <ErrorBoundary name="planner drawer">
+      <RootOverlayDialogs />
+    </ErrorBoundary>,
+  );
   watchPlannerFrame();
 }

@@ -19,6 +19,10 @@ import { InstructorFilterCombobox } from "../../../ui-system/components/workbenc
 import { PlannerFilterCombobox } from "../../../ui-system/components/workbench/PlannerFilterCombobox";
 import { buildInstructorFilterOptions } from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
+import {
+  CartCoursesContext,
+  useCartCourses,
+} from "../../../ui-system/components/workbench/useCartCourses";
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
 import { useScheduleBackgroundEvents } from "../../../ui-system/components/workbench/useScheduleBackgroundEvents";
 import { type PlannerSectionPreview } from "../../../ui-system/components/workbench/workbenchTypes";
@@ -60,6 +64,7 @@ export default function CourseSearch({
   const scheduleBackground = useScheduleBackgroundEvents(
     courseSearchData.selectedTerm,
   );
+  const cart = useCartCourses(courseSearchData.selectedTerm);
   const selectedCourse =
     getCourseSearchIndex().find(
       (course) => course.code === courseSearchData.selectedCourseInfo?.code,
@@ -334,16 +339,18 @@ export default function CourseSearch({
   );
 
   return (
-    <div className="@container min-w-0 w-full p-3 @min-[640px]:p-4">
-      <div className="grid min-w-0 gap-4 @min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="min-w-0 space-y-4">
-          {controlsPanel}
-          {resultsPanel}
-        </div>
-        <div className="min-w-0 @min-[1100px]:sticky @min-[1100px]:top-0 @min-[1100px]:self-start">
-          {previewContent}
+    <CartCoursesContext.Provider value={cart}>
+      <div className="@container min-w-0 w-full p-3 @min-[640px]:p-4">
+        <div className="grid min-w-0 gap-4 @min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-4">
+            {controlsPanel}
+            {resultsPanel}
+          </div>
+          <div className="min-w-0 @min-[1100px]:sticky @min-[1100px]:top-0 @min-[1100px]:self-start">
+            {previewContent}
+          </div>
         </div>
       </div>
-    </div>
+    </CartCoursesContext.Provider>
   );
 }

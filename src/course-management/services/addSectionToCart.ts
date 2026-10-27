@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from "../../utils/fetchWithTimeout";
 import { AppLogger } from "../../utils/logger";
 import { generateCacheKey, setGenericCache } from "../cache/courseRetrieval";
 import { notifyScheduleDataChanged } from "../cache/scheduleCacheSignal";
@@ -69,7 +70,7 @@ export async function addSectionToCart(
   const fullURL = `${url}?${new URLSearchParams(payload)}`;
   let data: { status?: string; title?: string; message?: string };
   try {
-    const res = await fetch(fullURL, { credentials: "include" });
+    const res = await fetchWithTimeout(fullURL, { credentials: "include" });
     if (!res.ok) {
       return {
         ok: false,
