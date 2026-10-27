@@ -79,9 +79,10 @@ const CourseSectionCardRow = memo(
         <ToCartGroupedSectionCell
           {...row}
           selectedLabClassNumber={selectedLabClassNumber}
+          inCart={inCart}
         />
       ),
-      [row, selectedLabClassNumber],
+      [row, selectedLabClassNumber, inCart],
     );
 
     if (!lecture) {

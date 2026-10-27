@@ -1,4 +1,9 @@
-import { GraduationCapIcon, MoonStarIcon, SunMediumIcon } from "lucide-react";
+import {
+  GraduationCapIcon,
+  MoonStarIcon,
+  SunMediumIcon,
+  XIcon,
+} from "lucide-react";
 import React, {
   startTransition,
   useCallback,
@@ -17,7 +22,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import InstructorSearch from "../../course-management/components/search-tabs/InstructorSearch";
@@ -659,17 +669,24 @@ export default function SlideOutDrawer({
                         <MoonStarIcon />
                       )}
                     </Button>
-                    <DialogClose asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        className={plannerActionButtonClassName}
-                        aria-label="Close planner"
-                      >
-                        <span className="text-base leading-none">x</span>
-                      </Button>
-                    </DialogClose>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DialogClose asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            className={plannerActionButtonClassName}
+                            aria-label="Close planner"
+                          >
+                            <XIcon strokeWidth={2.25} />
+                          </Button>
+                        </DialogClose>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Close planner
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
 

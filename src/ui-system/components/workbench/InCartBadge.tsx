@@ -14,7 +14,7 @@ export function InCartBadge({
   return (
     <Badge
       className={cn(
-        "bg-blue-600/10 text-blue-700 dark:bg-blue-400/15 dark:text-blue-300",
+        "border-blue-700/40 bg-blue-600 font-semibold text-white shadow-sm dark:border-blue-300/40 dark:bg-blue-500",
         className,
       )}
     >

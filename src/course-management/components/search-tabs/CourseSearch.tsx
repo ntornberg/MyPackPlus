@@ -8,6 +8,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 import { DEPT_COURSES } from "../../../generated/catalogs/course-search/departmentCourses.typed";
@@ -152,28 +153,24 @@ export default function CourseSearch({
     <PlannerPanel
       title="Course search"
       actions={
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
+        <ToggleGroup
+          type="single"
+          size="sm"
           aria-label="Course search mode"
+          value={browse ? "browse" : "find"}
+          onValueChange={(mode) => {
+            if (mode === "find" || mode === "browse") {
+              setBrowse(mode === "browse");
+            }
+          }}
         >
-          <Button
-            variant={browse ? "outline" : "default"}
-            size="sm"
-            aria-pressed={!browse}
-            onClick={() => setBrowse(false)}
-          >
+          <ToggleGroupItem value="find" size="sm" className="px-3">
             Find a course
-          </Button>
-          <Button
-            variant={browse ? "default" : "outline"}
-            size="sm"
-            aria-pressed={browse}
-            onClick={() => setBrowse(true)}
-          >
+          </ToggleGroupItem>
+          <ToggleGroupItem value="browse" size="sm" className="px-3">
             Browse by subject
-          </Button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       }
     >
       {/* Wrapping row: the term keeps its width and drops below the course fields when space runs out. */}

@@ -1,4 +1,9 @@
-import { AlertCircle, CheckCircle2, ShoppingCartIcon } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  ShoppingCartIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -11,6 +16,10 @@ import type { GroupedSections, ModifiedSection } from "../../types/section";
 
 const cartButtonClassName =
   "pointer-events-auto shrink-0 gap-2 rounded-lg border border-primary/35 bg-gradient-to-b from-primary via-primary to-primary/88 px-3.5 font-semibold text-primary-foreground shadow-sm transition-[transform,filter,box-shadow,border-color] duration-150 hover:border-primary/55 hover:brightness-[1.03] hover:shadow-md active:scale-[1.03]";
+
+// Quiet on purpose: the section is already added, so there's nothing to do here.
+const inCartButtonClassName =
+  "pointer-events-auto shrink-0 gap-1.5 rounded-lg border border-border bg-transparent px-3.5 font-semibold text-muted-foreground shadow-none disabled:opacity-100";
 
 const disabledCartButtonClassName =
   "pointer-events-auto shrink-0 gap-2 rounded-lg border border-primary/20 bg-primary/50 px-3.5 font-semibold text-primary-foreground opacity-50";
@@ -65,6 +74,7 @@ function ToastFeedback({
 export const ToCartButtonCell = (
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
+  inCart = false,
 ) => {
   const { course_id, classNumber, catalog_nbr, courseData } = selectedSection;
 
@@ -106,23 +116,40 @@ export const ToCartButtonCell = (
 
   return (
     <div className="relative inline-block text-right">
-      <Button
-        type="button"
-        variant="default"
-        size="sm"
-        onClick={(e: React.MouseEvent) => {
-          e.stopPropagation();
-          void handleAddToCart();
-        }}
-        className={cartButtonClassName}
-      >
-        {open && severity === "success" ? (
-          <CheckCircle2 className="mpp-check-pop size-4" strokeWidth={2.25} />
-        ) : (
-          <ShoppingCartIcon className="size-4 opacity-95" strokeWidth={2.25} />
-        )}
-        Add to cart
-      </Button>
+      {inCart ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled
+          title="This section is already in your MyPack cart"
+          className={inCartButtonClassName}
+        >
+          <Check className="size-4" strokeWidth={2.5} />
+          In cart
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            void handleAddToCart();
+          }}
+          className={cartButtonClassName}
+        >
+          {open && severity === "success" ? (
+            <CheckCircle2 className="mpp-check-pop size-4" strokeWidth={2.25} />
+          ) : (
+            <ShoppingCartIcon
+              className="size-4 opacity-95"
+              strokeWidth={2.25}
+            />
+          )}
+          Add to cart
+        </Button>
+      )}
       <ToastFeedback open={open} message={message} severity={severity} />
     </div>
   );
@@ -154,6 +181,8 @@ export type ToCartGroupedSectionCellProps = GroupedSections & {
    * When provided, the cart submission uses this lab; otherwise the first lab is used.
    */
   selectedLabClassNumber?: string;
+  /** The section (with the selected lab) is already in the cart. */
+  inCart?: boolean;
 };
 
 /**
@@ -166,14 +195,15 @@ export function ToCartGroupedSectionCell({
   lecture,
   labs: rawLabs,
   selectedLabClassNumber,
+  inCart = false,
 }: ToCartGroupedSectionCellProps) {
   if (!lecture) {
     return null;
   }
   const labs = (rawLabs ?? []).filter(Boolean) as ModifiedSection[];
   if (labs.length === 0) {
-    return ToCartButtonCell(lecture);
+    return ToCartButtonCell(lecture, undefined, inCart);
   }
   const selectedLab = resolveSelectedLab(labs, selectedLabClassNumber);
-  return ToCartButtonCell(selectedLab, lecture);
+  return ToCartButtonCell(selectedLab, lecture, inCart);
 }
