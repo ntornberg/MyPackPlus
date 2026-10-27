@@ -4,6 +4,21 @@ const mocks = vi.hoisted(() => ({
   initialize: vi.fn(async () => ({ revision: 1, migrated: true })),
   refresh: vi.fn(async () => undefined),
   trackInstall: vi.fn(async () => undefined),
+  takeReload: vi.fn(async () => false),
+  finishUpdate: vi.fn(async () => undefined),
+  applyIfIdle: vi.fn(async () => undefined),
+  applyUpdate: vi.fn(async () => undefined),
+  updateAvailable: vi.fn(async () => undefined),
+  check: vi.fn(async () => undefined),
+}));
+vi.mock("./updates", () => ({
+  APPLY_UPDATE_MESSAGE: "mypack-apply-update",
+  applyIfNoMyPackTabs: mocks.applyIfIdle,
+  applyPendingUpdate: mocks.applyUpdate,
+  finishUpdate: mocks.finishUpdate,
+  handleUpdateAvailable: mocks.updateAvailable,
+  maybeCheckForUpdate: mocks.check,
+  takeUpdateReloadRequest: mocks.takeReload,
 }));
 vi.mock("./storageMigration", () => ({
   initializeBackgroundStorage: mocks.initialize,
@@ -15,6 +30,8 @@ vi.mock("../analytics/gaBackground", () => ({
 }));
 
 let installed: (details: { reason: string }) => void;
+let updateAvailable: (details: { version: string }) => void;
+let tabRemoved: () => void;
 let message: (
   request: unknown,
   sender: unknown,
@@ -24,6 +41,7 @@ beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
   mocks.initialize.mockResolvedValue({ revision: 1, migrated: true });
+  mocks.takeReload.mockResolvedValue(false);
   vi.stubGlobal("chrome", {
     runtime: {
       onInstalled: {
@@ -37,11 +55,53 @@ beforeEach(async () => {
         },
       },
       onStartup: { addListener: vi.fn() },
+      onUpdateAvailable: {
+        addListener: (listener: typeof updateAvailable) => {
+          updateAvailable = listener;
+        },
+      },
+    },
+    tabs: {
+      onRemoved: {
+        addListener: (listener: typeof tabRemoved) => {
+          tabRemoved = listener;
+        },
+      },
     },
   });
   await import("./background");
 });
 afterEach(() => vi.unstubAllGlobals());
+
+describe("update wiring", () => {
+  it("records available updates and applies them when MyPack closes", async () => {
+    updateAvailable({ version: "9.9.9" });
+    expect(mocks.updateAvailable).toHaveBeenCalledWith({ version: "9.9.9" });
+    // Once at worker start, once for the closed tab.
+    tabRemoved();
+    expect(mocks.applyIfIdle).toHaveBeenCalledTimes(2);
+  });
+
+  it("applies on request and checks for updates as pages load", () => {
+    expect(message({ type: "mypack-apply-update" }, {}, vi.fn())).toBe(false);
+    expect(mocks.applyUpdate).toHaveBeenCalledTimes(1);
+    message({ type: "mypack-storage-ready" }, {}, vi.fn());
+    expect(mocks.check).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes tabs after a user-applied update unless migration already did", async () => {
+    mocks.takeReload.mockResolvedValue(true);
+    mocks.initialize.mockResolvedValue({ revision: 1, migrated: false });
+    installed({ reason: "update" });
+    await vi.waitFor(() =>
+      expect(mocks.finishUpdate).toHaveBeenCalledWith(true),
+    );
+    mocks.initialize.mockResolvedValue({ revision: 1, migrated: true });
+    installed({ reason: "update" });
+    await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
+    expect(mocks.finishUpdate).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("storage startup wiring", () => {
   it("does not refresh tabs on fresh installation", async () => {

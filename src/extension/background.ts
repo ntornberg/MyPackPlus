@@ -11,6 +11,15 @@ import {
   refreshMigratedTabs,
   STORAGE_READY_MESSAGE,
 } from "./storageMigration";
+import {
+  APPLY_UPDATE_MESSAGE,
+  applyIfNoMyPackTabs,
+  applyPendingUpdate,
+  finishUpdate,
+  handleUpdateAvailable,
+  maybeCheckForUpdate,
+  takeUpdateReloadRequest,
+} from "./updates";
 
 let isListenerRegistered = false;
 
@@ -26,6 +35,7 @@ function setupMessageListener() {
     AppLogger.info("[Background] Received message:", message);
 
     if (message?.type === STORAGE_READY_MESSAGE) {
+      void maybeCheckForUpdate();
       void (async () => {
         try {
           const { revision } = await initializeBackgroundStorage();
@@ -91,6 +101,13 @@ function setupMessageListener() {
       return true;
     }
 
+    if (message?.type === APPLY_UPDATE_MESSAGE) {
+      void applyPendingUpdate().catch((error) => {
+        AppLogger.error("[Updates] Could not apply update", error);
+      });
+      return false;
+    }
+
     if (message.type === "ping") {
       sendResponse({ type: "pong", timestamp: Date.now() });
       return false;
@@ -111,15 +128,31 @@ async function handleInstalled(
   details: chrome.runtime.InstalledDetails,
 ): Promise<void> {
   AppLogger.info("[Background] Extension installed/updated:", details.reason);
+  const reloadTabs =
+    details.reason === "update" && (await takeUpdateReloadRequest());
   const { migrated } = await initializeBackgroundStorage();
   if (details.reason === "install") {
     void trackExtensionInstalled();
   }
   if (details.reason === "update" && migrated) {
     await refreshMigratedTabs();
+  } else if (details.reason === "update") {
+    await finishUpdate(reloadTabs);
   }
   initializeServiceWorker();
 }
+
+function logUpdateError(error: unknown) {
+  AppLogger.error("[Updates] Update handling failed", error);
+}
+
+chrome.runtime.onUpdateAvailable.addListener((details) => {
+  void handleUpdateAvailable(details).catch(logUpdateError);
+});
+
+chrome.tabs.onRemoved.addListener(() => {
+  void applyIfNoMyPackTabs().catch(logUpdateError);
+});
 
 chrome.runtime.onInstalled.addListener((details) => {
   void handleInstalled(details).catch((error) => {
@@ -130,6 +163,8 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onStartup.addListener(() => {
   AppLogger.info("[Background] Service worker startup event");
   initializeServiceWorker();
+  void maybeCheckForUpdate();
 });
 
 initializeServiceWorker();
+void applyIfNoMyPackTabs().catch(logUpdateError);

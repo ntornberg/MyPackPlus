@@ -7,6 +7,7 @@ import { scrapeScheduleTable } from "../course-management/services/scraper";
 import { ErrorBoundary } from "../ui-system/components/shared/ErrorBoundary";
 import SlideOutDrawer from "../ui-system/components/SlideOutDrawer";
 import WhatsNewDialog from "../user-experience/components/UserGuide/WhatsNewDialog";
+import { UpdateReadyNotice } from "../user-experience/update/UpdateReadyNotice";
 import {
   attachExtensionShadowTailwindStyleOrderObserver,
   ensureOverlayContainer,
@@ -22,6 +23,7 @@ function RootOverlayDialogs() {
   return (
     <>
       <WhatsNewDialog onResolved={() => setShowLauncherHint(true)} />
+      <UpdateReadyNotice />
       <SlideOutDrawer showLauncherHint={showLauncherHint} />
     </>
   );

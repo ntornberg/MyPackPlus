@@ -48,6 +48,7 @@ import {
 } from "../../degree-planning/services/planningSync";
 import PlannerLauncherHint from "../../user-experience/components/UserGuide/PlannerLauncherHint";
 import { StatusBanner } from "../../user-experience/status/StatusBanner";
+import { UpdateReadyPill } from "../../user-experience/update/UpdateReadyNotice";
 
 import {
   plannerActionButtonClassName,
@@ -638,6 +639,7 @@ export default function SlideOutDrawer({
                   </div>
 
                   <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+                    <UpdateReadyPill className="shrink-0" />
                     <StatusBanner className="shrink-0" />
                     <Button
                       asChild

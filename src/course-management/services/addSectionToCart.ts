@@ -1,3 +1,4 @@
+import { trackWork } from "../../extension/pendingWork";
 import { fetchWithTimeout } from "../../utils/fetchWithTimeout";
 import { AppLogger } from "../../utils/logger";
 import { generateCacheKey, setGenericCache } from "../cache/courseRetrieval";
@@ -17,7 +18,14 @@ export type AddSectionToCartResult =
  * POSTs MyPack’s add-to-shop-cart script. With `parent` (lecture), sends
  * `class_nbr` = lecture class # and `relate_class_nbr_1` = selected lab/recitation class #.
  */
-export async function addSectionToCart(
+export function addSectionToCart(
+  selectedSection: ModifiedSection,
+  parent?: ModifiedSection,
+): Promise<AddSectionToCartResult> {
+  return trackWork(() => addSectionToCartNow(selectedSection, parent));
+}
+
+async function addSectionToCartNow(
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
 ): Promise<AddSectionToCartResult> {

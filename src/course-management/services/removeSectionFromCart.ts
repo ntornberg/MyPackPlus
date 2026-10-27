@@ -1,3 +1,4 @@
+import { trackWork } from "../../extension/pendingWork";
 import { fetchWithTimeout } from "../../utils/fetchWithTimeout";
 import { AppLogger } from "../../utils/logger";
 import {
@@ -105,7 +106,14 @@ async function forgetCartRow(
  * table's delete button sends. With `parent` (lecture), removes the lecture's
  * row, which takes the paired lab with it.
  */
-export async function removeSectionFromCart(
+export function removeSectionFromCart(
+  selectedSection: ModifiedSection,
+  parent?: ModifiedSection,
+): Promise<RemoveSectionFromCartResult> {
+  return trackWork(() => removeSectionFromCartNow(selectedSection, parent));
+}
+
+async function removeSectionFromCartNow(
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
 ): Promise<RemoveSectionFromCartResult> {

@@ -46,6 +46,25 @@ export function initializeBackgroundStorage() {
   return initialization;
 }
 
+const MYPACK_TAB_URLS = [
+  "https://portalsp.acs.ncsu.edu/*",
+  "https://webappprd.acs.ncsu.edu/*",
+];
+
+export function queryMyPackTabs(): Promise<chrome.tabs.Tab[]> {
+  return chrome.tabs.query({ url: MYPACK_TAB_URLS });
+}
+
+export async function reloadMyPackTabs(
+  tabs?: chrome.tabs.Tab[],
+): Promise<void> {
+  const targets = tabs ?? (await queryMyPackTabs());
+  // A closed or inaccessible tab must not prevent the remaining tabs refreshing.
+  await Promise.allSettled(
+    targets.filter((tab) => tab.id !== undefined).map((tab) => chrome.tabs.reload(tab.id!)),
+  );
+}
+
 let refresh: Promise<void> | undefined;
 
 /** Claim the refresh before reloading so repeated update events cannot loop. */
@@ -53,17 +72,9 @@ export function refreshMigratedTabs(): Promise<void> {
   refresh ??= (async () => {
     const stored = await chrome.storage.local.get(REFRESH_KEY);
     if (stored[REFRESH_KEY] >= STORAGE_REVISION) return;
-    const tabs = await chrome.tabs.query({
-      url: [
-        "https://portalsp.acs.ncsu.edu/*",
-        "https://webappprd.acs.ncsu.edu/*",
-      ],
-    });
+    const tabs = await queryMyPackTabs();
     await chrome.storage.local.set({ [REFRESH_KEY]: STORAGE_REVISION });
-    // A closed or inaccessible tab must not prevent the remaining tabs refreshing.
-    await Promise.allSettled(
-      tabs.filter((tab) => tab.id !== undefined).map((tab) => chrome.tabs.reload(tab.id!)),
-    );
+    await reloadMyPackTabs(tabs);
   })().catch((error) => {
     refresh = undefined;
     throw error;
