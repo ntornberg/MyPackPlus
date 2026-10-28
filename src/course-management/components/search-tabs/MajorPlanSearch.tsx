@@ -974,6 +974,7 @@ export default function MajorPlanSearch({
                 (majorPlanSearchData.hideNoSections ?? false)
               }
               sectionsSearched={personalSearched}
+              sectionsLoading={personalBusy}
               deferredRequirements={
                 personalSearched ? personalResult.deferred : undefined
               }

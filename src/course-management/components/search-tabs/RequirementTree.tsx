@@ -26,7 +26,10 @@ import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
-import type { RequirementNeed } from "../../../degree-planning/services/auditRequirements";
+import type {
+  NeedCourse,
+  RequirementNeed,
+} from "../../../degree-planning/services/auditRequirements";
 import {
   stripLeadingZeros,
   type DegreeAuditGroup,
@@ -82,6 +85,8 @@ export type CourseRowModel = {
   scheduleKnown: boolean;
   /** False until sections were searched; availability is unknown before. */
   searched: boolean;
+  /** True while this row's sections are being searched. */
+  loading?: boolean;
 };
 
 type RequirementModel = {
@@ -290,6 +295,14 @@ export function AuditChip({ state }: { state: CourseAuditState }) {
 }
 
 function AvailabilityChips({ row }: { row: CourseRowModel }) {
+  if (row.loading) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" aria-hidden />
+        Searching…
+      </span>
+    );
+  }
   if (!row.searched) {
     return null;
   }
@@ -300,24 +313,66 @@ function AvailabilityChips({ row }: { row: CourseRowModel }) {
       </span>
     );
   }
+  const status = availabilityStatus(row);
+  const sections = `${row.sectionCount} ${row.sectionCount === 1 ? "section" : "sections"}`;
+  const detail = [
+    `${row.openCount} of ${sections} open`,
+    row.scheduleKnown ? `${row.fitCount} fit your schedule` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <>
-      <Badge variant="outline" className="font-normal">
-        {row.openCount}/{row.sectionCount} open
-      </Badge>
-      {row.scheduleKnown ? (
-        row.fitCount > 0 ? (
-          <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
-            {row.fitCount} fit
-          </Badge>
-        ) : (
-          <Badge className="bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
-            Conflicts
-          </Badge>
-        )
-      ) : null}
-    </>
+    <span
+      className={cn(
+        "flex w-20 items-center gap-1.5 text-xs font-medium whitespace-nowrap",
+        status.className,
+      )}
+      title={detail}
+    >
+      <span
+        className={cn("size-1.5 shrink-0 rounded-full", status.dot)}
+        aria-hidden
+      />
+      {status.label}
+    </span>
   );
+}
+
+/**
+ * One word for whether the course is worth opening; the counts behind it
+ * live in the tooltip and the expanded sections.
+ */
+function availabilityStatus(row: CourseRowModel): {
+  label: string;
+  className: string;
+  dot: string;
+} {
+  if (row.openCount === 0) {
+    return {
+      label: "Full",
+      className: "text-red-700 dark:text-red-400",
+      dot: "bg-red-500",
+    };
+  }
+  if (!row.scheduleKnown) {
+    return {
+      label: "Open",
+      className: "text-foreground",
+      dot: "bg-primary",
+    };
+  }
+  if (row.fitCount === 0) {
+    return {
+      label: "Conflicts",
+      className: "text-amber-700 dark:text-amber-300",
+      dot: "bg-amber-500",
+    };
+  }
+  return {
+    label: "Fits",
+    className: "text-emerald-700 dark:text-emerald-300",
+    dot: "bg-emerald-500",
+  };
 }
 
 export function CourseRow({
@@ -326,6 +381,7 @@ export function CourseRow({
   onToggle,
   renderSections,
   detail,
+  units,
 }: {
   row: CourseRowModel;
   expanded: boolean;
@@ -333,6 +389,8 @@ export function CourseRow({
   renderSections: (course: RequiredCourse) => ReactNode;
   /** Optional muted line under the title. */
   detail?: string;
+  /** Credit hours the course counts toward the requirement, e.g. "3 cr hrs". */
+  units?: string;
 }) {
   const expandable = row.sectionCount > 0;
   const done = row.audit?.status === "completed";
@@ -366,6 +424,14 @@ export function CourseRow({
           {row.course.course_descrip}
         </span>
       )}
+      {units ? (
+        <span
+          className="w-12 shrink-0 text-right text-sm font-medium whitespace-nowrap tabular-nums"
+          title={`${units.replace(/ cr$/, "")} credit hours`}
+        >
+          {units}
+        </span>
+      ) : null}
       <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
         {inCart ? <InCartBadge /> : null}
         {row.audit && !isNeeded(row) ? <AuditChip state={row.audit} /> : null}
@@ -462,41 +528,44 @@ function requirementSummary(model: RequirementModel): string {
   return parts.length ? parts.join(" · ") : "Nothing applied yet";
 }
 
-/** "3 more credit hrs toward Ethics", or that it isn't met yet. */
+/** "Ethics · 3 more credit hrs needed", or that it isn't met yet. */
 function NeedLabel({ need }: { need: RequirementNeed }) {
   const amount = amountLeft(need, true);
   return (
-    <span className="min-w-0 flex-1 text-foreground">
-      {amount ? (
-        <>
-          <span className="font-medium">{amount}</span> toward {need.name}
-        </>
-      ) : (
-        `${need.name} (not met yet)`
-      )}
+    <span className="min-w-0 flex-1">
+      <span className="font-medium text-foreground">{need.name}</span>
+      <span className="text-muted-foreground">
+        {" · "}
+        {amount ? `${amount} needed` : "not met yet"}
+      </span>
     </span>
   );
 }
 
-/** "N offered" and "N fit" for one requirement's options. */
-function OptionCounts({ rows }: { rows: readonly CourseRowModel[] }) {
-  const wanted = rows.filter(wantsSections);
-  const offered = wanted.filter((row) => row.sectionCount > 0).length;
-  const fitting = wanted.filter((row) => row.fitCount > 0).length;
-  return (
-    <span className="flex shrink-0 items-center gap-1">
-      {offered > 0 ? (
-        <Badge variant="outline" className="font-normal">
-          {offered} offered
-        </Badge>
-      ) : null}
-      {fitting > 0 ? (
-        <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
-          {fitting} fit
-        </Badge>
-      ) : null}
-    </span>
-  );
+/** "3 cr" or "1–3 cr" a choice counts, when its list says. */
+function choiceUnitsLabel(course: NeedCourse): string | null {
+  const { takeUnits, minUnits, maxUnits } = course;
+  if (takeUnits) return `${takeUnits} cr`;
+  if (!minUnits && !maxUnits) return null;
+  if (!maxUnits || minUnits === maxUnits) {
+    return `${minUnits || maxUnits} cr`;
+  }
+  return `${minUnits}–${maxUnits} cr`;
+}
+
+/** Credit-hour labels by course code for one need's approved choices. */
+function choiceUnits(need: RequirementNeed | null): Map<string, string> {
+  const labels = new Map<string, string>();
+  for (const course of need?.courses ?? []) {
+    const label = choiceUnitsLabel(course);
+    if (label) {
+      labels.set(
+        plannerCourseCode(course.course_abr, course.catalog_num),
+        label,
+      );
+    }
+  }
+  return labels;
 }
 
 /** Course rows with a search box and "Show more" once the options run long. */
@@ -504,6 +573,7 @@ function OptionList({
   rows,
   label,
   idPrefix,
+  units,
   expandedCourses,
   onToggleCourse,
   renderSections,
@@ -512,6 +582,8 @@ function OptionList({
   label: string;
   /** Keeps expanded state apart when a course shows under two needs. */
   idPrefix: string;
+  /** Credit-hour labels by course code. */
+  units?: ReadonlyMap<string, string>;
   expandedCourses: Set<string>;
   onToggleCourse: (id: string) => void;
   renderSections: (course: RequiredCourse) => ReactNode;
@@ -580,6 +652,7 @@ function OptionList({
               expanded={expandedCourses.has(id)}
               onToggle={() => onToggleCourse(id)}
               renderSections={renderSections}
+              units={units?.get(rowCode(row))}
             />
             {showMore}
           </Fragment>
@@ -619,7 +692,16 @@ function RequirementRow({
     }
   }, [model.deferred, model.loading, onOpen, entry.requirementId]);
   const sections = needSections(courses, needs);
-  const countsKnown = !model.deferred && !model.loading;
+  // Each need starts folded except the first, which shows how they open.
+  const [openNeeds, setOpenNeeds] = useState<Set<number>>(() => new Set([0]));
+  const toggleNeed = (index: number) =>
+    setOpenNeeds((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(index)) {
+        next.add(index);
+      }
+      return next;
+    });
 
   return (
     <details
@@ -666,59 +748,63 @@ function RequirementRow({
             <Badge variant="outline" className="font-normal">
               Open to load sections
             </Badge>
-          ) : (
-            <>
-              {model.offered > 0 ? (
-                <Badge variant="outline" className="font-normal">
-                  {model.offered} offered
-                </Badge>
-              ) : null}
-              {model.fitting > 0 ? (
-                <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
-                  {model.fitting} fit
-                </Badge>
-              ) : null}
-            </>
-          )}
+          ) : null}
         </span>
       </summary>
       <div className="border-t border-border">
         {sections ? (
-          sections.map(({ need, rows }, index) => (
-            <Fragment key={`${need?.name ?? "other"}:${index}`}>
-              <div className="flex items-center gap-2 border-t border-border bg-amber-500/5 px-4 py-2 text-xs first:border-t-0">
-                {need ? (
-                  <>
-                    <Circle
-                      className="size-3 shrink-0 text-amber-600 dark:text-amber-400"
-                      aria-hidden
-                    />
-                    <NeedLabel need={need} />
-                    {countsKnown ? <OptionCounts rows={rows} /> : null}
-                  </>
-                ) : (
-                  <span className="min-w-0 flex-1 text-muted-foreground">
-                    Other courses in this group
-                  </span>
-                )}
-              </div>
-              {need && rows.length === 0 ? (
-                <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-                  {need.courses.length > 0
-                    ? "No options match the current filters."
-                    : "MyPack didn't list options for this one."}
-                </p>
-              ) : null}
-              <OptionList
-                rows={rows}
-                label={need?.name ?? entry.requirementKey}
-                idPrefix={`${entry.requirementKey}|${index}`}
-                expandedCourses={expandedCourses}
-                onToggleCourse={onToggleCourse}
-                renderSections={renderSections}
-              />
-            </Fragment>
-          ))
+          sections.map(({ need, rows }, index) => {
+            const open = openNeeds.has(index);
+            return (
+              <Fragment key={`${need?.name ?? "other"}:${index}`}>
+                <button
+                  type="button"
+                  onClick={() => toggleNeed(index)}
+                  aria-expanded={open}
+                  className="flex w-full items-center gap-2 border-t border-border bg-amber-500/5 px-4 py-2 text-left text-xs transition-colors first:border-t-0 hover:bg-amber-500/10"
+                >
+                  <ChevronRight
+                    className={cn(
+                      "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+                      open && "rotate-90",
+                    )}
+                    aria-hidden
+                  />
+                  {need ? (
+                    <>
+                      <Circle
+                        className="size-3 shrink-0 text-amber-600 dark:text-amber-400"
+                        aria-hidden
+                      />
+                      <NeedLabel need={need} />
+                    </>
+                  ) : (
+                    <span className="min-w-0 flex-1 text-muted-foreground">
+                      Other courses in this group
+                    </span>
+                  )}
+                </button>
+                {open && need && rows.length === 0 ? (
+                  <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+                    {need.courses.length > 0
+                      ? "No options match the current filters."
+                      : "MyPack didn't list options for this one."}
+                  </p>
+                ) : null}
+                {open ? (
+                  <OptionList
+                    rows={rows}
+                    label={need?.name ?? entry.requirementKey}
+                    idPrefix={`${entry.requirementKey}|${index}`}
+                    units={choiceUnits(need)}
+                    expandedCourses={expandedCourses}
+                    onToggleCourse={onToggleCourse}
+                    renderSections={renderSections}
+                  />
+                ) : null}
+              </Fragment>
+            );
+          })
         ) : (
           <>
             {needs.length > 0 ? (
@@ -1052,6 +1138,7 @@ export function RequirementTree({
   scheduleBackground,
   hideNoSections,
   sectionsSearched = true,
+  sectionsLoading = false,
   filter,
   onFilterChange,
   renderSections,
@@ -1072,6 +1159,8 @@ export function RequirementTree({
   hideNoSections: boolean;
   /** Whether sections were searched for this term; defaults to true. */
   sectionsSearched?: boolean;
+  /** Whether a term-wide section search is running. */
+  sectionsLoading?: boolean;
   filter: RequirementFilter;
   onFilterChange: (filter: RequirementFilter) => void;
   renderSections: (course: RequiredCourse) => ReactNode;
@@ -1099,6 +1188,9 @@ export function RequirementTree({
       entries.map((entry): RequirementModel => {
         const deferred = !!deferredRequirements?.has(entry.requirementId);
         const searched = sectionsSearched && !deferred;
+        const loading =
+          !!loadingRequirements?.has(entry.requirementId) ||
+          (sectionsLoading && !deferred);
         const progress = requirementProgress(
           entry.requirementId,
           entry.courses,
@@ -1132,7 +1224,9 @@ export function RequirementTree({
               searched,
             ),
           ),
-        ].sort((a, b) => courseRowRank(a) - courseRowRank(b));
+        ]
+          .map((row) => (loading ? { ...row, loading } : row))
+          .sort((a, b) => courseRowRank(a) - courseRowRank(b));
         const wanted = courses.filter(wantsSections);
         return {
           entry,
@@ -1152,6 +1246,7 @@ export function RequirementTree({
       openCourses,
       scheduleBackground,
       sectionsSearched,
+      sectionsLoading,
       deferredRequirements,
       loadingRequirements,
     ],

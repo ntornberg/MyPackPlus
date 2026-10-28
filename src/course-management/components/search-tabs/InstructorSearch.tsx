@@ -1,12 +1,10 @@
 import { ChevronDown, Loader2, SearchIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 import type { V2Instructor } from "../../../types/api";
-import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
 import {
   displayInstructorName,
   InstructorDetails,
@@ -32,10 +30,10 @@ function InstructorResult({
 }) {
   const prof = instructorToProf(instructor, instructor.instructor_name);
   return (
-    <li className="rounded-xl border border-border/60 bg-card ring-1 ring-foreground/5">
+    <li>
       <button
         type="button"
-        className="flex w-full items-start justify-between gap-3 p-3 text-left"
+        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50"
         onClick={onToggle}
         aria-expanded={expanded}
       >
@@ -64,7 +62,7 @@ function InstructorResult({
         />
       </button>
       {expanded ? (
-        <div className="border-t border-border/60 p-3">
+        <div className="px-4 pb-4">
           <InstructorDetails instructor={instructor} />
         </div>
       ) : null}
@@ -126,88 +124,75 @@ export default function InstructorSearch() {
         : `No instructors found for “${trimmed}”.`;
 
   return (
-    <div className="@container min-w-0 w-full p-3 @min-[640px]:p-4">
-      <div className="min-w-0 space-y-4">
-        <PlannerPanel
-          title="Find an instructor"
-          description={`Ratings, NC State grade history, and ${UPCOMING_TERM_LABEL} sections.`}
-        >
-          <Field>
-            <FieldLabel htmlFor="instructor-search-input">
-              Instructor
-            </FieldLabel>
-            <div className="relative">
-              {loading ? (
-                <Loader2
-                  className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 animate-spin text-primary"
-                  aria-hidden
-                />
-              ) : (
-                <SearchIcon
-                  className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-              )}
-              <Input
-                id="instructor-search-input"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Name, Unity ID, or subject (e.g. Griggs, jrgriggs, MA)"
-                className="pl-8"
-                autoComplete="off"
-              />
-            </div>
-          </Field>
-          {error ? (
-            <p role="alert" className="mt-4 text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-        </PlannerPanel>
-
-        <PlannerPanel
-          title="Instructors"
-          description={
-            results.length > 0
-              ? `${results.length} match${results.length === 1 ? "" : "es"} for “${trimmed}”.`
-              : undefined
-          }
-          contentClassName="min-w-0"
-        >
-          {results.length > 0 ? (
-            <ul
-              className={cn(
-                "mpp-stagger flex flex-col gap-2 transition-opacity",
-                loading && "opacity-70",
-              )}
-              aria-label="Instructor results"
-            >
-              {results.map((instructor) => (
-                <InstructorResult
-                  key={instructor.instructor_id}
-                  instructor={instructor}
-                  expanded={expandedId === instructor.instructor_id}
-                  onToggle={() =>
-                    setExpandedId((current) =>
-                      current === instructor.instructor_id
-                        ? null
-                        : instructor.instructor_id,
-                    )
-                  }
-                />
-              ))}
-            </ul>
+    <div className="flex min-w-0 w-full flex-col">
+      <div className="space-y-3 p-4 pb-3">
+        <div className="pr-8">
+          <h2 className="text-base font-medium text-foreground">
+            Find an instructor
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Ratings, NC State grade history, and {UPCOMING_TERM_LABEL} sections.
+          </p>
+        </div>
+        <div className="relative">
+          {loading ? (
+            <Loader2
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 animate-spin text-primary"
+              aria-hidden
+            />
           ) : (
-            <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <div className="rounded-full bg-primary/10 p-4 text-primary">
-                <SearchIcon />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {error ? "Try again in a moment." : emptyStateMessage}
-              </p>
-            </div>
+            <SearchIcon
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
           )}
-        </PlannerPanel>
+          <Input
+            id="instructor-search-input"
+            aria-label="Search instructors"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name, Unity ID, or subject (e.g. Griggs, jrgriggs, MA)"
+            className="pl-8"
+            autoComplete="off"
+          />
+        </div>
+      </div>
+
+      <div className="min-w-0 border-t border-border/60">
+        {results.length > 0 ? (
+          <ul
+            className={cn(
+              "mpp-stagger divide-y divide-border/60 transition-opacity",
+              loading && "opacity-70",
+            )}
+            aria-label="Instructor results"
+          >
+            {results.map((instructor) => (
+              <InstructorResult
+                key={instructor.instructor_id}
+                instructor={instructor}
+                expanded={expandedId === instructor.instructor_id}
+                onToggle={() =>
+                  setExpandedId((current) =>
+                    current === instructor.instructor_id
+                      ? null
+                      : instructor.instructor_id,
+                  )
+                }
+              />
+            ))}
+          </ul>
+        ) : (
+          <p
+            role={error ? "alert" : undefined}
+            className={cn(
+              "px-4 py-10 text-center text-sm",
+              error ? "text-destructive" : "text-muted-foreground",
+            )}
+          >
+            {error ?? emptyStateMessage}
+          </p>
+        )}
       </div>
     </div>
   );

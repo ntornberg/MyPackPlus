@@ -1,5 +1,6 @@
 import {
   BookMarkedIcon,
+  Check,
   ChevronDown,
   CircleCheck,
   Clock,
@@ -29,6 +30,10 @@ import type {
   ModifiedSection,
   SectionLinkedMeeting,
 } from "../../../course-management/types/section";
+import {
+  componentDisplayName,
+  componentPluralTitle,
+} from "../../../utils/course-search/componentNames";
 import {
   formatGradeAverage,
   GradeDistributionChart,
@@ -278,13 +283,71 @@ function linkedMeetingsPanelTitle(linked: { component?: string }[]): string {
   const comps = new Set(
     linked.map((m) => (m.component ?? "").trim().toLowerCase()),
   );
-  if (comps.size === 1 && comps.has("rec")) {
-    return "Recitation sections";
-  }
-  if (comps.size === 1 && comps.has("lab")) {
-    return "Lab sections";
+  if (comps.size === 1) {
+    return componentPluralTitle(linked[0]!.component);
   }
   return "Linked sections";
+}
+
+/** A pickable lab / recitation / problem session; also shows the pick while collapsed. */
+function LinkedMeetingOption({
+  meeting: m,
+  selected,
+  compact,
+  onClick,
+  title,
+}: {
+  meeting: SectionLinkedMeeting;
+  selected: boolean;
+  compact: boolean;
+  onClick: () => void;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      title={title}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-md border text-left transition-[color,background-color,border-color,box-shadow]",
+        compact ? "px-2 py-1.5" : "px-3 py-2",
+        selected
+          ? "border-primary/60 bg-primary/[0.14] shadow-[inset_0_0_0_1px_rgba(59,130,246,0.3)] dark:border-primary/60 dark:bg-primary/20"
+          : "border-transparent bg-transparent hover:border-border hover:bg-primary/[0.06]",
+      )}
+    >
+      <span className="flex min-w-0 flex-1 flex-col items-start">
+        <span
+          className={cn(
+            "max-w-full text-sm font-medium text-foreground",
+            compact && "truncate",
+          )}
+        >
+          {componentDisplayName(m.component)} · Sec {m.section ?? "—"} · #
+          {m.classNumber}
+        </span>
+        <span
+          className={cn(
+            "max-w-full text-xs text-muted-foreground",
+            compact && "truncate",
+          )}
+        >
+          {m.dayTime} · {m.location}
+        </span>
+      </span>
+      {selected ? (
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+          <Check className="size-3" aria-hidden />
+          Selected
+        </span>
+      ) : null}
+    </button>
+  );
 }
 
 /** One lab, recitation or problem-session meeting shown under the lecture. */
@@ -303,7 +366,7 @@ function LinkedMeetingRow({
         <div className="flex items-start gap-2 text-muted-foreground">
           <Clock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
           <span className="leading-snug">
-            {m.component}
+            {componentDisplayName(m.component)}
             {m.section ? ` · Sec ${m.section}` : ""}
             {m.classNumber ? ` · #${m.classNumber}` : ""}
             {m.dayTime ? ` · ${m.dayTime}` : ""}
@@ -318,7 +381,7 @@ function LinkedMeetingRow({
               aria-hidden
             />
             <span>
-              {m.component}
+              {componentDisplayName(m.component)}
               {m.classNumber ? (
                 <>
                   {" "}
@@ -629,9 +692,9 @@ export const SectionCompareCard = memo(function SectionCompareCard({
               onKeyDown={(e) => e.stopPropagation()}
             >
               <Label className="sr-only">
-                {linkedPanelTitle} for this lecture meeting; choose one for add
-                to cart and schedule preview. List can be collapsed to save
-                space.
+                {linkedPanelTitle} for this lecture meeting; the selected one is
+                used for add to cart and schedule preview. Expand the list to
+                choose a different one.
               </Label>
               <button
                 type="button"
@@ -657,20 +720,19 @@ export const SectionCompareCard = memo(function SectionCompareCard({
                     ({linkedLabs.length})
                   </span>
                 </span>
-                <span className="ml-auto truncate text-xs font-normal tabular-nums text-muted-foreground">
-                  #{activeLab?.classNumber}
+                <span className="ml-auto text-xs font-normal text-muted-foreground">
+                  {labPanelOpen ? "Hide" : "Change"}
                 </span>
               </button>
-              <p
-                className={cn(
-                  "pl-1 text-[11px] leading-snug text-primary/90 dark:text-primary/80",
-                  compact && "line-clamp-2",
-                )}
-              >
-                For cart & preview: {activeLab?.component} · Sec{" "}
-                {activeLab?.section ?? "—"} · #{activeLab?.classNumber} ·{" "}
-                {activeLab?.dayTime} · {activeLab?.location}
-              </p>
+              {!labPanelOpen && activeLab ? (
+                <LinkedMeetingOption
+                  meeting={activeLab}
+                  selected
+                  compact={compact}
+                  title="Used for cart and schedule preview. Click to change."
+                  onClick={() => setLabPanelOpen(true)}
+                />
+              ) : null}
               {labPanelOpen ? (
                 <div
                   className={cn(
@@ -678,38 +740,21 @@ export const SectionCompareCard = memo(function SectionCompareCard({
                     compact ? "p-1" : "p-1.5",
                   )}
                 >
-                  {linkedLabs.map((m) => {
-                    const selected =
-                      String(m.classNumber) === String(activeLabClass);
-                    return (
-                      <button
-                        key={m.classNumber ?? m.component}
-                        type="button"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (m.classNumber != null) {
-                            onLabClassChange?.(String(m.classNumber));
-                          }
-                        }}
-                        className={cn(
-                          "flex flex-col items-start rounded-md border text-left transition-[color,background-color,border-color,box-shadow]",
-                          compact ? "px-2 py-1.5" : "px-3 py-2",
-                          "border-transparent bg-transparent hover:border-border hover:bg-primary/[0.06]",
-                          selected &&
-                            "border-primary/40 bg-primary/[0.12] shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)] dark:border-primary/50 dark:bg-primary/15",
-                        )}
-                      >
-                        <span className="text-sm font-medium text-foreground">
-                          {m.component} · Sec {m.section ?? "—"} · #
-                          {m.classNumber}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {m.dayTime} · {m.location}
-                        </span>
-                      </button>
-                    );
-                  })}
+                  {linkedLabs.map((m) => (
+                    <LinkedMeetingOption
+                      key={m.classNumber ?? m.component}
+                      meeting={m}
+                      selected={
+                        String(m.classNumber) === String(activeLabClass)
+                      }
+                      compact={compact}
+                      onClick={() => {
+                        if (m.classNumber != null) {
+                          onLabClassChange?.(String(m.classNumber));
+                        }
+                      }}
+                    />
+                  ))}
                 </div>
               ) : null}
             </div>

@@ -10,6 +10,7 @@ import {
 import { plannerCourseCode } from "./packPlanner";
 import {
   requirementChoiceKey,
+  type ApprovedCourse,
   type RequirementChoices,
 } from "./requirementChoices";
 
@@ -29,14 +30,18 @@ export type RequirementNeed = {
   unitsLeft: number | null;
   coursesLeft: number | null;
   /** Approved choices that count toward this requirement; empty without a list. */
-  courses: RequiredCourse[];
+  courses: NeedCourse[];
 };
+
+/** An approved choice, with the credit hours it counts when the list gives them. */
+export type NeedCourse = RequiredCourse &
+  Partial<Pick<ApprovedCourse, "minUnits" | "maxUnits" | "takeUnits">>;
 
 /** A choice list's courses, once each, in list order. */
 function listCourses(
-  list: { groups: { courses: RequiredCourse[] }[] } | undefined,
-): RequiredCourse[] {
-  const courses = new Map<string, RequiredCourse>();
+  list: { groups: { courses: ApprovedCourse[] }[] } | undefined,
+): ApprovedCourse[] {
+  const courses = new Map<string, ApprovedCourse>();
   for (const group of list?.groups ?? []) {
     for (const course of group.courses) {
       const code = plannerCourseCode(course.course_abr, course.catalog_num);
