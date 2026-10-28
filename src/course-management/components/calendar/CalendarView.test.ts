@@ -6,6 +6,7 @@ import {
   loadCartScheduleEvents,
   loadScheduleEvents,
   markOverlaps,
+  mergePinnedDayTimeWithEvents,
 } from "./CalendarView";
 
 const { categories } = vi.hoisted(() => ({
@@ -166,6 +167,51 @@ describe.each([
     ]);
     expect(events.every((event) => event.allDay)).toBe(true);
   });
+});
+
+it("does not flag a pinned section as conflicting with its own cart copy", async () => {
+  categories.shopCartTableData = cached([
+    {
+      classs: "CSC 316",
+      section_details: [
+        {
+          section: "001",
+          meet_days: "Mon/Wed",
+          time: "12:00 PM - 1:15 PM",
+          type: "Lecture",
+        },
+      ],
+    },
+    {
+      classs: "MA 305",
+      section_details: [
+        {
+          section: "002",
+          meet_days: "Mon",
+          time: "12:30 PM - 1:45 PM",
+          type: "Lecture",
+        },
+      ],
+    },
+  ]);
+  const events = markOverlaps(
+    mergePinnedDayTimeWithEvents(
+      "MW 12:00 PM - 1:15 PM",
+      "CSC 316",
+      await loadCartScheduleEvents(),
+    ),
+  );
+  expect(events.map(({ subj }) => subj)).toEqual([
+    "CSC 316",
+    "MA 305 Lecture",
+  ]);
+  // The real overlap with a different class is still reported.
+  expect(events[0].days.find((d) => d.day === "Mon")?.conflictsWith).toEqual([
+    "MA 305 Lecture",
+  ]);
+  expect(events[0].days.find((d) => d.day === "Wed")?.isOverlapping).toBe(
+    false,
+  );
 });
 
 it("does not mark all-day placeholder hours as a conflict", () => {

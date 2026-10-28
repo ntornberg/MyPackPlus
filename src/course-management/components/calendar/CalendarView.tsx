@@ -100,7 +100,7 @@ function meetingCalendarLabel(
 }
 
 /** Prepends lecture + linked meetings (labs, etc.); overlap flags come from `markOverlaps`. */
-const mergePinnedDayTimeWithEvents = (
+export const mergePinnedDayTimeWithEvents = (
   dayTime: string | undefined,
   courseCode: string | undefined,
   cachedEvents: ScheduleEvent[],
@@ -150,7 +150,12 @@ const mergePinnedDayTimeWithEvents = (
   if (pins.length === 0) {
     return cachedEvents;
   }
-  return [...pins, ...cachedEvents];
+  // A section already in the cart (or enrolled) shows up in the background
+  // too; drop that copy so it doesn't read as a conflict with itself.
+  const background = cachedEvents.filter(
+    (event) => !pins.some((pin) => eventCoversCandidate(pin, event)),
+  );
+  return [...pins, ...background];
 };
 
 let cachedScheduleEvents: ScheduleEvent[] | null = null;

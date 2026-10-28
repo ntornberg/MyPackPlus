@@ -48,7 +48,7 @@ test("code/topic suggestions, keyboard selection, browsing, local filters and ca
   });
   await page.goto("/planner-staging.html?network=real&theme=dark");
   await expect(
-    page.getByRole("dialog", { name: "Pack Planner" }),
+    page.getByRole("dialog", { name: "MyPack+ Planner" }),
   ).toBeVisible();
   await finder(page).fill("chem 101");
   await expect(suggestions(page).first()).toContainText("CH-101");

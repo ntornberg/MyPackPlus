@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEGREE_AUDIT_VERSION,
   DEGREE_AUDITS_STORAGE_KEY,
+  auditDisplayName,
+  auditProgramKind,
+  auditProgramRank,
   degreeDetailsQuery,
   parseDegreePrograms,
   degreeAuditKey,
@@ -248,5 +251,41 @@ describe("parseDegreePrograms", () => {
 
   it("returns nothing for pages without the program list", () => {
     expect(parseDegreePrograms("<div>Sign in</div>")).toEqual([]);
+  });
+});
+
+describe("program labels", () => {
+  const program = (overrides: Partial<DegreeAudit>): DegreeAudit => ({
+    version: DEGREE_AUDIT_VERSION,
+    plan: "99TSTBS",
+    subplan: "NOSUBPLAN",
+    planType: "MAJ",
+    programStatus: "AC",
+    reqTerm: "2238",
+    name: "Testing-BS",
+    capturedAt: 0,
+    groups: [],
+    ...overrides,
+  });
+
+  it("ranks declared majors before intended majors before minors", () => {
+    const minor = program({ planType: "MIN", name: "[ Minor ] Testing" });
+    const intended = program({
+      programStatus: "IN",
+      name: "[ Intended Major ] Other-BS",
+    });
+    const major = program({});
+    expect(
+      [minor, intended, major]
+        .sort((a, b) => auditProgramRank(a) - auditProgramRank(b))
+        .map(auditProgramKind),
+    ).toEqual(["Major", "Intended major", "Minor"]);
+  });
+
+  it("drops MyPack's bracketed prefix from the name", () => {
+    expect(auditDisplayName(program({ name: "[ Minor ] Testing" }))).toBe(
+      "Testing",
+    );
+    expect(auditDisplayName(program({ name: "" }))).toBe("99TSTBS");
   });
 });

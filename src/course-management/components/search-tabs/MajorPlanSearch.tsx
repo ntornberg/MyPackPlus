@@ -16,7 +16,10 @@ import {
   plannedAuditCourses,
 } from "../../../degree-planning/services/auditRequirements";
 import {
+  auditDisplayName,
   auditKey,
+  auditProgramKind,
+  auditProgramRank,
   findDegreeAudit,
   isOpenGroup,
   requisiteTermLabel,
@@ -160,15 +163,34 @@ export default function MajorPlanSearch({
     (majorPlanSearchData.planSource ?? "personal") === "personal";
   const auditOptions = useMemo(
     () =>
-      Object.values(planningData.audits).map((audit) => ({
-        audit,
-        key: auditKey(audit),
-        label: `${audit.name || audit.plan} · ${audit.subplan} · ${requisiteTermLabel(audit.reqTerm)}`,
-      })),
+      Object.values(planningData.audits)
+        .sort((a, b) => auditProgramRank(a) - auditProgramRank(b))
+        .map((audit) => ({
+          audit,
+          key: auditKey(audit),
+          label: auditDisplayName(audit),
+          detail: [
+            auditProgramKind(audit),
+            audit.subplan && audit.subplan !== "NOSUBPLAN"
+              ? audit.subplan
+              : null,
+            `${requisiteTermLabel(audit.reqTerm)} catalog`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        })),
     [planningData.audits],
   );
+  const auditOptionByKey = useMemo(
+    () => new Map(auditOptions.map((option) => [option.key, option])),
+    [auditOptions],
+  );
+  // A stored pick from a program that's since dropped off falls back to the major.
   const selectedAuditKey =
-    majorPlanSearchData.selectedAudit || auditOptions[0]?.key;
+    majorPlanSearchData.selectedAudit &&
+    auditOptionByKey.has(majorPlanSearchData.selectedAudit)
+      ? majorPlanSearchData.selectedAudit
+      : auditOptions[0]?.key;
   const selectedAudit = auditOptions.find(
     (option) => option.key === selectedAuditKey,
   )?.audit;
@@ -680,16 +702,25 @@ export default function MajorPlanSearch({
           <Field>
             <FieldLabel>My program</FieldLabel>
             <PlannerFilterCombobox
-              items={auditOptions.map((option) => option.label)}
-              value={
-                auditOptions.find((option) => option.key === selectedAuditKey)
-                  ?.label ?? null
-              }
+              items={auditOptions.map((option) => option.key)}
+              value={selectedAuditKey ?? null}
+              itemLabel={(key) => auditOptionByKey.get(key)?.label ?? key}
+              renderItem={(key) => {
+                const option = auditOptionByKey.get(key);
+                return (
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="break-words leading-snug">
+                      {option?.label ?? key}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {option?.detail}
+                    </span>
+                  </span>
+                );
+              }}
               onValueChange={(value) => {
                 setMajorPlanSearchTabData({
-                  selectedAudit:
-                    auditOptions.find((option) => option.label === value)
-                      ?.key ?? null,
+                  selectedAudit: value,
                   instructorFilter: null,
                 });
                 onPreviewSectionChange(null);
@@ -839,7 +870,7 @@ export default function MajorPlanSearch({
         selectedAudit ? (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-muted-foreground">
-              {selectedAudit.name || selectedAudit.plan} ·{" "}
+              {auditDisplayName(selectedAudit)} ·{" "}
               {requisiteTermLabel(selectedAudit.reqTerm)} catalog · from your
               MyPack degree audit
             </p>

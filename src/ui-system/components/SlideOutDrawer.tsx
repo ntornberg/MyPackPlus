@@ -553,7 +553,7 @@ export default function SlideOutDrawer({
           onPointerEnter={warmUp}
           onFocus={warmUp}
           size="sm"
-          aria-label="Open Pack Planner"
+          aria-label="Open MyPack+ Planner"
           data-hidden={drawerOpen || undefined}
           inert={drawerOpen}
           className={cn(
@@ -561,8 +561,8 @@ export default function SlideOutDrawer({
             plannerLauncherClassName,
           )}
         >
-          <GraduationCapIcon className="size-4" strokeWidth={2.25} />
-          Pack Planner
+          <GraduationCapIcon className="size-5" strokeWidth={2.25} />
+          MyPack+ Planner
         </Button>
       </PlannerLauncherHint>
 
@@ -606,7 +606,7 @@ export default function SlideOutDrawer({
           )}
         >
           <TooltipProvider delayDuration={150}>
-            <DialogTitle className="sr-only">Pack Planner</DialogTitle>
+            <DialogTitle className="sr-only">MyPack+ Planner</DialogTitle>
             <DialogDescription className="sr-only">
               Use Search to filter sections, pick a row to pin the preview, and
               compare options with schedule context.
@@ -630,7 +630,7 @@ export default function SlideOutDrawer({
                 <div className="mb-3 flex min-h-7 flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                      Pack Planner
+                      MyPack+ Planner
                     </div>
                     <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                       Use Search to filter, then pick a row to pin the preview

@@ -75,6 +75,27 @@ export function auditKey(audit: DegreeAudit): string {
   return degreeAuditKey(audit.plan, audit.subplan, audit.reqTerm);
 }
 
+/** Sort rank for picking a default program: declared majors, then intended majors, then the rest. */
+export function auditProgramRank(audit: DegreeAudit): number {
+  if (audit.planType !== "MAJ") return 2;
+  return audit.programStatus === "IN" ? 1 : 0;
+}
+
+/** "Major", "Intended major", "Minor", ... for a program's audit. */
+export function auditProgramKind(audit: DegreeAudit): string {
+  if (audit.planType === "MAJ") {
+    return audit.programStatus === "IN" ? "Intended major" : "Major";
+  }
+  if (audit.planType === "MIN") return "Minor";
+  return audit.planType || "Program";
+}
+
+/** The program's name without MyPack's "[ Minor ] " style prefix. */
+export function auditDisplayName(audit: DegreeAudit): string {
+  const name = audit.name || audit.plan;
+  return name.replace(/^\s*\[[^\]]*\]\s*/, "") || name;
+}
+
 export function requisiteTermLabel(term: string): string {
   if (!/^2\d{2}[168]$/.test(term)) return term || "Unknown";
   const season = { "1": "Spring", "6": "Summer", "8": "Fall" }[term[3]];

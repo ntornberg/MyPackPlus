@@ -19,7 +19,7 @@ test("launcher hint disappears and stays dismissed without a guide dialog", asyn
   await expect(hint).toHaveCount(0);
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "Open Pack Planner" }),
+    page.getByRole("button", { name: "Open MyPack+ Planner" }),
   ).toBeVisible();
   await expect(hint).toHaveCount(0);
 });
@@ -28,10 +28,10 @@ test("opening the planner dismisses the hint immediately", async ({ page }) => {
   await page.route("https://**/*", (route) => route.fulfill({ json: {} }));
   await page.goto("/planner-staging.html?launcher");
   await expect(page.getByRole("tooltip")).toBeVisible();
-  await page.getByRole("button", { name: "Open Pack Planner" }).click();
+  await page.getByRole("button", { name: "Open MyPack+ Planner" }).click();
   await expect(page.getByRole("tooltip")).toHaveCount(0);
   await expect(
-    page.getByRole("dialog", { name: "Pack Planner", exact: true }),
+    page.getByRole("dialog", { name: "MyPack+ Planner", exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => localStorage.getItem("firstStartDismissed")),

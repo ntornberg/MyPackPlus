@@ -30,7 +30,7 @@ test("opens the real planner with every tab", async ({ page }) => {
 
   await expect(page).toHaveTitle("Pack Planner Staging");
   await expect(
-    page.getByRole("dialog", { name: "Pack Planner" }),
+    page.getByRole("dialog", { name: "MyPack+ Planner" }),
   ).toBeVisible();
   await expect(
     page.getByRole("tablist", { name: "Planner search tabs" }),
