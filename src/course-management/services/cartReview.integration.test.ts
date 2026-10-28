@@ -380,6 +380,8 @@ describe("cart review: options and recovery", () => {
     );
   });
   it("reports failed recovery as partial failure", async () => {
+    // A lab change needs the original row to put back; see the refusal tests.
+    await setGenericCache("shopCartTableData", { old: row("11111") });
     const original = respond;
     respond = async (url) =>
       url.pathname.endsWith("IScript_addClassToShopCart")
@@ -394,6 +396,8 @@ describe("cart review: options and recovery", () => {
 describe("cart review: races and multi-component offerings", () => {
   it("does not let an older refresh erase a completed lab change", async () => {
     await setupListener();
+    // A lab change needs the original row to put back; see the refusal tests.
+    await setGenericCache("shopCartTableData", { old: row("11111") });
     const refresh = deferred<void>();
     let staleResponse!: Promise<void>;
     onRefresh = () => {
@@ -435,6 +439,8 @@ describe("cart review: races and multi-component offerings", () => {
   it.each(["remove", "replace"])(
     "does not start %s while a lab change owns the course",
     async (action) => {
+      // A lab change needs the original row to put back; see the refusal tests.
+      await setGenericCache("shopCartTableData", { old: row("11111") });
       const entered = deferred<void>();
       const gate = deferred<void>();
       const original = respond;

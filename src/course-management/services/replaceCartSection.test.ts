@@ -4,11 +4,26 @@ import type { ToCartPayload } from "../types/cart";
 import type { ModifiedSection } from "../types/section";
 
 import { addSectionToCart } from "./addSectionToCart";
+import { cartRowFor, cartSettingsOf, payloadForCartRow } from "./cartRows";
 import { removeSectionFromCart } from "./removeSectionFromCart";
 import { changeCartLab, replaceCartSection } from "./replaceCartSection";
 
 vi.mock("./addSectionToCart", () => ({ addSectionToCart: vi.fn() }));
 vi.mock("./removeSectionFromCart", () => ({ removeSectionFromCart: vi.fn() }));
+vi.mock("./cartRows", () => ({
+  cartRowFor: vi.fn(),
+  cartSettingsOf: vi.fn(),
+  payloadForCartRow: vi.fn(),
+}));
+
+const settings = { wait_list_okay: "Y", grading_basis: "SUS" };
+const rowPayload = { class_nbr: "200", relate_class_nbr_1: "201" } as never;
+/** The lecture's cart row is cached, with the student's own settings. */
+function cacheCartRow() {
+  vi.mocked(cartRowFor).mockResolvedValue({ enroll_class_nbr: "200" });
+  vi.mocked(cartSettingsOf).mockReturnValue(settings);
+  vi.mocked(payloadForCartRow).mockReturnValue(rowPayload);
+}
 
 const section = (classNumber: string, sectionNumber: string) =>
   ({
@@ -44,11 +59,27 @@ describe("replaceCartSection", () => {
       message: "Swapped CSC 316 (001) for CSC 316 (002).",
     });
     expect(calls).toEqual(["add", "remove"]);
-    expect(addSectionToCart).toHaveBeenCalledWith(lab, lecture, { payload });
+    expect(addSectionToCart).toHaveBeenCalledWith(lab, lecture, {
+      payload,
+      settings: undefined,
+    });
     expect(removeSectionFromCart).toHaveBeenCalledWith(
       current.section,
       undefined,
     );
+  });
+
+  it("keeps the old section's settings on the new one", async () => {
+    cacheCartRow();
+    vi.mocked(addSectionToCart).mockResolvedValue({ ok: true, message: "" });
+    vi.mocked(removeSectionFromCart).mockResolvedValue({
+      ok: true,
+      message: "",
+    });
+
+    await replaceCartSection(current, next);
+    expect(cartRowFor).toHaveBeenCalledWith(current.section);
+    expect(addSectionToCart).toHaveBeenCalledWith(lab, lecture, { settings });
   });
 
   it("leaves the cart alone when the add fails", async () => {
@@ -82,7 +113,10 @@ describe("replaceCartSection", () => {
 });
 
 describe("changeCartLab", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    cacheCartRow();
+  });
 
   const fromLab = section("201", "202");
   const toLab = section("203", "203");
@@ -102,7 +136,33 @@ describe("changeCartLab", () => {
     expect(result.ok).toBe(true);
     expect(calls).toEqual(["remove", "add"]);
     expect(removeSectionFromCart).toHaveBeenCalledWith(fromLab, lecture);
-    expect(addSectionToCart).toHaveBeenCalledWith(toLab, lecture, {});
+    expect(addSectionToCart).toHaveBeenCalledWith(toLab, lecture, {
+      settings,
+    });
+  });
+
+  it("changes nothing when it can't put the original back", async () => {
+    vi.mocked(cartRowFor).mockResolvedValue(null);
+
+    const result = await changeCartLab(lecture, fromLab, toLab);
+    expect(result).toMatchObject({ ok: false, partial: false });
+    expect(result.message).toContain("nothing was changed");
+    expect(removeSectionFromCart).not.toHaveBeenCalled();
+    expect(addSectionToCart).not.toHaveBeenCalled();
+  });
+
+  it("swaps without a cached row when MyPack's original payload is known", async () => {
+    vi.mocked(cartRowFor).mockResolvedValue(null);
+    vi.mocked(removeSectionFromCart).mockResolvedValue({
+      ok: true,
+      message: "",
+    });
+    vi.mocked(addSectionToCart).mockResolvedValue({ ok: true, message: "" });
+
+    const original = { payload: { class_nbr: "200" } as never };
+    expect(
+      (await changeCartLab(lecture, fromLab, toLab, {}, original)).ok,
+    ).toBe(true);
   });
 
   it("puts the old lab back when the new one can't be added", async () => {
@@ -121,6 +181,8 @@ describe("changeCartLab", () => {
     });
     expect(addSectionToCart).toHaveBeenLastCalledWith(fromLab, lecture, {
       extras: undefined,
+      payload: rowPayload,
+      settings,
     });
   });
 
@@ -156,18 +218,14 @@ describe("changeCartLab", () => {
 
     await changeCartLab(lecture, fromLab, toLab, replacement, original);
 
-    expect(addSectionToCart).toHaveBeenNthCalledWith(
-      1,
-      toLab,
-      lecture,
-      replacement,
-    );
-    expect(addSectionToCart).toHaveBeenNthCalledWith(
-      2,
-      fromLab,
-      lecture,
-      original,
-    );
+    expect(addSectionToCart).toHaveBeenNthCalledWith(1, toLab, lecture, {
+      ...replacement,
+      settings,
+    });
+    expect(addSectionToCart).toHaveBeenNthCalledWith(2, fromLab, lecture, {
+      ...original,
+      settings,
+    });
   });
 
   it("preserves extras without reusing the replacement payload when no original payload is available", async () => {
@@ -188,6 +246,8 @@ describe("changeCartLab", () => {
 
     expect(addSectionToCart).toHaveBeenLastCalledWith(fromLab, lecture, {
       extras,
+      payload: rowPayload,
+      settings,
     });
   });
 

@@ -32,8 +32,19 @@ async function pauseLabChange(page: Page) {
   await page.evaluate(async () => {
     const fixturePath = "/tests/fixtures/cartReviewHarness.tsx";
     const cartPath = "/src/course-management/services/replaceCartSection.ts";
+    const cachePath = "/src/course-management/cache/courseRetrieval.ts";
     const { section } = await import(fixturePath);
     const { changeCartLab } = await import(cartPath);
+    const { setGenericCache } = await import(cachePath);
+    // A lab change needs the original cart row to put back.
+    await setGenericCache("shopCartTableData", {
+      original: {
+        classs: "PY 205",
+        enroll_class_nbr: "11111",
+        crse_id: "test-course",
+        section_details: [{ class_nbr: "11111" }, { class_nbr: "33333" }],
+      },
+    });
     const original = window.fetch;
     const state = {
       entered: false,

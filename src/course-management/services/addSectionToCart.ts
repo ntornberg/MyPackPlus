@@ -8,6 +8,7 @@ import type { FullToCartPayload, ToCartPayload } from "../types/cart";
 import type { ModifiedSection } from "../types/section";
 import { TERM_TAG_FIELD } from "../utils/semester";
 
+import type { CartSettings } from "./cartRows";
 import { generateMyPackScriptContentUrl } from "./mypackScriptUrl";
 import { inCartTerm, UNKNOWN_TERM_MESSAGE } from "./myPackSession";
 
@@ -20,6 +21,8 @@ export type AddSectionToCartOptions = {
   extras?: ModifiedSection[];
   /** MyPack's own payload for this combination; sent unchanged when given. */
   payload?: ToCartPayload;
+  /** The student's waitlist, grading and credit choices, over either payload. */
+  settings?: CartSettings;
 };
 
 /**
@@ -38,7 +41,7 @@ export function addSectionToCart(
 async function addSectionToCartNow(
   selectedSection: ModifiedSection,
   parent: ModifiedSection | undefined,
-  { extras = [], payload: exactPayload }: AddSectionToCartOptions,
+  { extras = [], payload: exactPayload, settings }: AddSectionToCartOptions,
 ): Promise<AddSectionToCartResult> {
   const {
     course_id,
@@ -93,6 +96,8 @@ async function addSectionToCartNow(
     });
   }
 
+  payload = { ...payload, ...settings };
+
   const fullURL = `${url}?${new URLSearchParams(payload)}`;
   let data: { status?: string; title?: string; message?: string };
   try {
@@ -135,6 +140,10 @@ async function addSectionToCartNow(
           class_nbr: lecture.classNumber,
           classs: courseData.code,
           [TERM_TAG_FIELD]: selectedSection.term,
+          // What was sent, so a later swap keeps the same choices.
+          wait_list_okay: payload.wait_list_okay,
+          grading_basis: payload.grading_basis,
+          unt_taken: payload.unt_taken,
           // Only the submitted lab belongs in the cart, not every linked option.
           // One row per meeting, as MyPack's own cart lists them.
           section_details: sections.flatMap((section) =>

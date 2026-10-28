@@ -9,6 +9,14 @@ import { notifyScheduleDataChanged } from "../cache/scheduleCacheSignal";
 import type { ModifiedSection } from "../types/section";
 import { TERM_TAG_FIELD } from "../utils/semester";
 
+import {
+  enrollNumberOf,
+  resolveCartRow,
+  rowClassNumbers,
+  text,
+  type CachedRow,
+  type CartRow,
+} from "./cartRows";
 import { generateMyPackScriptContentUrl } from "./mypackScriptUrl";
 import { inCartTerm, UNKNOWN_TERM_MESSAGE } from "./myPackSession";
 import { refreshCart } from "./refreshCart";
@@ -16,88 +24,6 @@ import { refreshCart } from "./refreshCart";
 export type RemoveSectionFromCartResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
-
-type CartRow = {
-  [TERM_TAG_FIELD]?: unknown;
-  class_nbr?: unknown;
-  enroll_class_nbr?: unknown;
-  eventid?: unknown;
-  section_details?: unknown;
-};
-
-const text = (value: unknown): string | null =>
-  value == null || String(value).trim() === "" ? null : String(value).trim();
-
-/** Every class number a cart row covers: its enrollment class and each meeting. */
-function rowClassNumbers(row: CartRow): string[] {
-  const details = Array.isArray(row.section_details)
-    ? (row.section_details as { class_nbr?: unknown }[])
-    : [];
-  return [
-    row.enroll_class_nbr,
-    row.class_nbr,
-    ...details.map((d) => d?.class_nbr),
-  ]
-    .map(text)
-    .filter((value): value is string => value !== null);
-}
-
-const enrollNumberOf = (row: CartRow): string | null =>
-  text(row.enroll_class_nbr ?? row.class_nbr);
-
-type CachedRow = { hash: string; row: CartRow };
-
-/**
- * The class number MyPack deletes the cart row by (its `enroll_class_nbr`;
- * for a lecture + lab, the lecture), with the cached row when there is one.
- * Labs and problem sessions are shared by several lectures, so a row is never
- * picked just for listing one: during a swap the new section's row lists the
- * same lab. Null when the cache can't say which class to delete.
- */
-async function resolveCartRow(
-  enroll: string | null,
-  candidates: string[],
-): Promise<{ classNumber: string; cached: CachedRow | null } | null> {
-  let rows: CachedRow[] = [];
-  try {
-    const entries = (await getCacheCategory("shopCartTableData")) ?? {};
-    rows = Object.entries(entries).flatMap(([hash, entry]) => {
-      const row = entry?.combinedData as CartRow | undefined;
-      return row ? [{ hash, row }] : [];
-    });
-  } catch (error) {
-    AppLogger.warn("Couldn't read the cached cart:", error);
-  }
-
-  if (enroll) {
-    const exact = rows.find(({ row }) => enrollNumberOf(row) === enroll);
-    // A lecture belongs to one row, so a row listing it is that lecture's,
-    // even when MyPack enrolls it through another section.
-    const covering =
-      exact ?? rows.find(({ row }) => rowClassNumbers(row).includes(enroll));
-    return covering
-      ? {
-          classNumber: enrollNumberOf(covering.row) ?? enroll,
-          cached: covering,
-        }
-      : { classNumber: enroll, cached: null };
-  }
-
-  const matches = rows.filter(({ row }) => {
-    const number = enrollNumberOf(row);
-    return number !== null && candidates.includes(number);
-  });
-  if (matches.length === 1) {
-    return {
-      classNumber: enrollNumberOf(matches[0]!.row)!,
-      cached: matches[0]!,
-    };
-  }
-  if (matches.length === 0 && new Set(candidates).size === 1) {
-    return { classNumber: candidates[0]!, cached: null };
-  }
-  return null;
-}
 
 /** Drops the removed class from the cached cart table and calendar feed. */
 async function forgetCartRow(

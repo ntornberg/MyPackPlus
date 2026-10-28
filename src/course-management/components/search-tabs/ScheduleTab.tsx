@@ -80,11 +80,7 @@ import {
 } from "../calendar/calendarInsights";
 import type { ScheduleData, TabUpdater } from "../tab-state/tabState";
 
-import {
-  cartSelectionFor,
-  conflictsFor,
-  CourseSectionsCardList,
-} from "./CourseSectionsCardList";
+import { conflictsFor, CourseSectionsCardList } from "./CourseSectionsCardList";
 import { useCourseSections } from "./useCourseSections";
 import { useMyPackPairings } from "./useMyPackPairings";
 
@@ -356,12 +352,13 @@ function SessionSwapPicker({
   }, [resetKey]);
 
   const labs = labsOf(row);
-  const current = cartSelectionFor(row, new Set(course.classNumbers));
-  const currentClass = current?.parent
-    ? String(current.section.classNumber)
-    : undefined;
-  const active =
-    labs.find((lab) => String(lab.classNumber) === currentClass) ?? labs[0]!;
+  // Only the lab the cart actually lists; swapping from a guessed one would
+  // put the wrong lab back if the new one can't be added.
+  const cartLab = labs.find((lab) =>
+    course.classNumbers.includes(String(lab.classNumber)),
+  );
+  const currentClass = cartLab ? String(cartLab.classNumber) : undefined;
+  const active = cartLab ?? labs[0]!;
   const name = componentDisplayName(active.component);
 
   const preview = (labClass: string | null) => {
@@ -380,13 +377,13 @@ function SessionSwapPicker({
   };
 
   const swap = async (lab: ModifiedSection) => {
-    if (!row.lecture || !current?.parent) {
+    if (!row.lecture || !cartLab) {
       return;
     }
     const labClass = String(lab.classNumber);
     await onSwap(
       row.lecture,
-      current.section,
+      cartLab,
       lab,
       {
         extras: row.extras ?? [],
@@ -394,7 +391,7 @@ function SessionSwapPicker({
       },
       {
         extras: row.extras ?? [],
-        payload: row.cartPayloads?.[String(current.section.classNumber)],
+        payload: row.cartPayloads?.[String(cartLab.classNumber)],
       },
     );
   };
@@ -412,12 +409,25 @@ function SessionSwapPicker({
         className="group flex w-full items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.06] dark:border-white/10"
       >
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-sm font-medium text-foreground">
-            {name} · Sec {active.section ?? "—"}
-          </span>
-          <span className="truncate text-xs text-muted-foreground">
-            {active.dayTime} · {active.location}
-          </span>
+          {cartLab ? (
+            <>
+              <span className="truncate text-sm font-medium text-foreground">
+                {name} · Sec {cartLab.section ?? "—"}
+              </span>
+              <span className="truncate text-xs text-muted-foreground">
+                {cartLab.dayTime} · {cartLab.location}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="truncate text-sm font-medium text-foreground">
+                {name} · Sec —
+              </span>
+              <span className="truncate text-xs text-muted-foreground">
+                Not matched to your cart
+              </span>
+            </>
+          )}
         </span>
         <span
           className={cn(
@@ -438,7 +448,9 @@ function SessionSwapPicker({
       {open ? (
         <div className="flex max-h-60 flex-col gap-1 overflow-y-auto rounded-lg border border-border/50 bg-card/40 p-1 dark:border-white/[0.08] dark:bg-[rgb(8,14,26)]/60">
           <p className="px-1 pt-0.5 text-[11px] text-muted-foreground">
-            Tap one to see it on your calendar.
+            {cartLab
+              ? "Tap one to see it on your calendar."
+              : `Couldn't tell which ${name.toLowerCase()} your cart has, so swapping is off. Refresh your cart in MyPack to try again.`}
           </p>
           {labs.map((lab) => {
             const labClass = String(lab.classNumber);
@@ -495,7 +507,7 @@ function SessionSwapPicker({
                     type="button"
                     size="sm"
                     variant={shown ? "default" : "outline"}
-                    disabled={swapping != null}
+                    disabled={swapping != null || !cartLab}
                     onClick={() => void swap(lab)}
                     aria-label={`Swap to ${componentDisplayName(lab.component)} ${lab.section ?? ""}`}
                     className="h-7 shrink-0 gap-1 rounded-lg px-2 text-xs"
