@@ -3,7 +3,7 @@ import { setupListener } from "../degree-planning/services/siteResponseStorage";
 import extensionCssRaw from "../index.css?inline";
 import { AppLogger } from "../utils/logger";
 
-import { initializePageStorage } from "./storageMigration";
+import { forceResetExtension, initializePageStorage } from "./storageMigration";
 
 declare global {
   interface Window {
@@ -31,6 +31,19 @@ void storageReady.catch((error) => {
     retry.textContent = "Refresh page";
     retry.onclick = () => window.location.reload();
     notice.appendChild(retry);
+    // Broken stored data is a likely cause here, so offer the last-resort reset too.
+    const reset = document.createElement("button");
+    reset.textContent = "Clear MyPack Plus cache";
+    reset.onclick = () => {
+      if (
+        window.confirm(
+          "Clear every cache, saved search, and preference MyPack Plus keeps, then reload?",
+        )
+      ) {
+        void forceResetExtension();
+      }
+    };
+    notice.appendChild(reset);
     document.body.prepend(notice);
   };
   if (document.body) showError();

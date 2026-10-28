@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   applyUpdate: vi.fn(async () => undefined),
   updateAvailable: vi.fn(async () => undefined),
   check: vi.fn(async () => undefined),
+  forceReset: vi.fn(async () => undefined),
+  reloadOthers: vi.fn(async (_senderTabId?: number) => undefined),
 }));
 vi.mock("./updates", () => ({
   APPLY_UPDATE_MESSAGE: "mypack-apply-update",
@@ -20,8 +22,11 @@ vi.mock("./updates", () => ({
   takeUpdateReloadRequest: mocks.takeReload,
 }));
 vi.mock("./storageMigration", () => ({
+  FORCE_RESET_MESSAGE: "mypack-force-reset",
+  forceResetBackgroundStorage: mocks.forceReset,
   initializeBackgroundStorage: mocks.initialize,
   refreshMigratedTabs: mocks.refresh,
+  reloadOtherMyPackTabs: mocks.reloadOthers,
   STORAGE_READY_MESSAGE: "mypack-storage-ready",
 }));
 
@@ -96,6 +101,33 @@ describe("update wiring", () => {
     installed({ reason: "update" });
     await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
     expect(mocks.finishUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("forced reset wiring", () => {
+  it("answers the sender before reloading the other MyPack tabs", async () => {
+    const respond = vi.fn();
+    expect(
+      message({ type: "mypack-force-reset" }, { tab: { id: 7 } }, respond),
+    ).toBe(true);
+    await vi.waitFor(() => expect(mocks.reloadOthers).toHaveBeenCalledWith(7));
+    expect(respond).toHaveBeenCalledWith({ success: true });
+    expect(respond.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.reloadOthers.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("reports a failed reset and reloads nothing", async () => {
+    mocks.forceReset.mockRejectedValueOnce(new Error("quota"));
+    const respond = vi.fn();
+    message({ type: "mypack-force-reset" }, {}, respond);
+    await vi.waitFor(() =>
+      expect(respond).toHaveBeenCalledWith({
+        success: false,
+        error: "Error: quota",
+      }),
+    );
+    expect(mocks.reloadOthers).not.toHaveBeenCalled();
   });
 });
 

@@ -6,8 +6,11 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { AppLogger } from "../utils/logger";
 
 import {
+  FORCE_RESET_MESSAGE,
+  forceResetBackgroundStorage,
   initializeBackgroundStorage,
   refreshMigratedTabs,
+  reloadOtherMyPackTabs,
   STORAGE_READY_MESSAGE,
 } from "./storageMigration";
 import {
@@ -30,7 +33,7 @@ function setupMessageListener() {
     return;
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     AppLogger.info("[Background] Received message:", message);
 
     if (message?.type === STORAGE_READY_MESSAGE) {
@@ -40,6 +43,21 @@ function setupMessageListener() {
           const { revision } = await initializeBackgroundStorage();
           sendResponse({ success: true, revision });
         } catch (error) {
+          sendResponse({ success: false, error: String(error) });
+        }
+      })();
+      return true;
+    }
+
+    if (message?.type === FORCE_RESET_MESSAGE) {
+      void (async () => {
+        try {
+          await forceResetBackgroundStorage();
+          // The sender reloads itself once it has this answer.
+          sendResponse({ success: true });
+          await reloadOtherMyPackTabs(sender.tab?.id);
+        } catch (error) {
+          AppLogger.error("[Reset] Forced reset failed", error);
           sendResponse({ success: false, error: String(error) });
         }
       })();

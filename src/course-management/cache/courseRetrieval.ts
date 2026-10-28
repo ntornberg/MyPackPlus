@@ -108,6 +108,25 @@ export async function resetCacheDatabase(revision: number): Promise<void> {
   });
 }
 
+/**
+ * Deletes the whole database rather than its entries, so a reset also recovers
+ * from a broken store or schema. Later opens wait for the delete to finish.
+ */
+export async function deleteCacheDatabase(): Promise<void> {
+  await closeCachedDatabase();
+  if (typeof indexedDB === "undefined") return;
+  await new Promise<void>((resolve) => {
+    // Blocked by a connection that ignores versionchange: stop waiting, the
+    // delete still completes once that connection closes.
+    const timeout = setTimeout(resolve, 3000);
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = request.onerror = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+  });
+}
+
 const EXTENSION_CACHE_CATEGORIES = [
   "courseList",
   "openCourses",

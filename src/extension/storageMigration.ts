@@ -1,13 +1,19 @@
 import {
   clearAllExtensionCaches,
+  deleteCacheDatabase,
   resetCacheDatabase,
 } from "../course-management/cache/courseRetrieval";
+import { AppLogger } from "../utils/logger";
 
 export const STORAGE_REVISION = 1;
 export const STORAGE_READY_MESSAGE = "mypack-storage-ready";
 const REVISION_KEY = "mypack.storageRevision";
 const VERSION_KEY = "mypack.extensionVersion";
 const REFRESH_KEY = "mypack.refreshedStorageRevision";
+/** When the student last forced a reset; each origin and tab compares its own copy. */
+const RESET_KEY = "mypack.forceResetAt";
+export const FORCE_RESET_MESSAGE = "mypack-force-reset";
+const MIGRATION_LOCK = "mypack-extension-storage-migration";
 const SITE_KEYS = [
   "mypack-pack-planner-session-v1",
   "mypack-pack-planner-selected-tab-v1",
@@ -97,7 +103,8 @@ export async function initializePageStorage(): Promise<void> {
   if (!result?.success || result.revision !== STORAGE_REVISION) {
     throw new Error(result?.error || "Extension storage initialization failed");
   }
-  await navigator.locks.request("mypack-extension-storage-migration", async () => {
+  const { [RESET_KEY]: resetAt } = await chrome.storage.local.get(RESET_KEY);
+  await navigator.locks.request(MIGRATION_LOCK, async () => {
     if (Number(localStorage.getItem(REVISION_KEY)) < STORAGE_REVISION ||
         !localStorage.getItem(REVISION_KEY)) {
       clearSiteKeys(localStorage);
@@ -110,5 +117,93 @@ export async function initializePageStorage(): Promise<void> {
       clearSiteKeys(sessionStorage);
       sessionStorage.setItem(REVISION_KEY, String(STORAGE_REVISION));
     }
+    // A forced reset from another origin or tab: wipe what only this page can reach.
+    if (typeof resetAt === "number") {
+      if (localStorage.getItem(RESET_KEY) !== String(resetAt)) {
+        clearSiteKeys(localStorage);
+        await deleteCacheDatabase();
+        localStorage.setItem(RESET_KEY, String(resetAt));
+      }
+      if (sessionStorage.getItem(RESET_KEY) !== String(resetAt)) {
+        clearSiteKeys(sessionStorage);
+        sessionStorage.setItem(RESET_KEY, String(resetAt));
+      }
+    }
   });
+}
+
+/**
+ * Worker half of a forced reset: wipes every storage area and its own cache
+ * database, re-runs first-install setup, then records the reset so other
+ * origins and tabs wipe their page storage on their next load.
+ */
+export async function forceResetBackgroundStorage(): Promise<void> {
+  const resetAt = Date.now();
+  await Promise.allSettled([
+    chrome.storage.local.clear(),
+    chrome.storage.sync.clear(),
+    chrome.storage.session.clear(),
+    deleteCacheDatabase(),
+  ]);
+  initialization = undefined;
+  await initializeBackgroundStorage();
+  await chrome.storage.local.set({ [RESET_KEY]: resetAt });
+}
+
+/** Reloads the MyPack tabs other than the one that asked for the reset. */
+export async function reloadOtherMyPackTabs(
+  senderTabId?: number,
+): Promise<void> {
+  const tabs = await queryMyPackTabs();
+  await reloadMyPackTabs(tabs.filter((tab) => tab.id !== senderTabId));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Timed out")), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Last-resort reset for when the extension stops working: clears every cache,
+ * saved search, and preference MyPack Plus keeps, then reloads the page. Works
+ * even when the background worker is unreachable or storage setup failed.
+ */
+export async function forceResetExtension(): Promise<void> {
+  AppLogger.warn("[Reset] Forced reset requested");
+  try {
+    await withTimeout(
+      navigator.locks.request(MIGRATION_LOCK, async () => {
+        clearSiteKeys(localStorage);
+        clearSiteKeys(sessionStorage);
+        await deleteCacheDatabase();
+      }),
+      5000,
+    );
+  } catch (error) {
+    AppLogger.error("[Reset] Could not clear page storage", error);
+  }
+  let resetByWorker = false;
+  try {
+    const result = await withTimeout(
+      chrome.runtime.sendMessage({ type: FORCE_RESET_MESSAGE }),
+      10000,
+    );
+    resetByWorker = result?.success === true;
+  } catch (error) {
+    AppLogger.error("[Reset] Background worker did not respond", error);
+  }
+  if (!resetByWorker) {
+    // Clearing the revision too makes the worker redo first-install setup on its next start.
+    // Each call is deferred so one that throws (e.g. a missing area) cannot skip the reload.
+    await Promise.allSettled([
+      Promise.resolve().then(() => chrome.storage.local.clear()),
+      Promise.resolve().then(() => chrome.storage.sync.clear()),
+    ]);
+  }
+  window.location.reload();
 }

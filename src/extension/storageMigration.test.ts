@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const cache = vi.hoisted(() => ({
   resetCacheDatabase: vi.fn(async (_revision: number) => undefined),
   clearAllExtensionCaches: vi.fn(async () => undefined),
+  deleteCacheDatabase: vi.fn(async () => undefined),
 }));
 vi.mock("../course-management/cache/courseRetrieval", () => cache);
 
@@ -146,6 +147,36 @@ describe("background storage migration", () => {
   });
 });
 
+describe("background forced reset", () => {
+  it("wipes every area, redoes first-install setup, and records the reset", async () => {
+    const chrome = installChrome({
+      "mypack.storageRevision": 1,
+      "mypack.extensionVersion": "3.8.17",
+      requirementChoices: { picked: true },
+    });
+    const migration = await import("./storageMigration");
+    // An earlier startup already settled; the reset must not reuse it.
+    await migration.initializeBackgroundStorage();
+    await migration.forceResetBackgroundStorage();
+    expect(chrome.storage.sync.data).toEqual({});
+    expect(chrome.storage.session.data).toEqual({});
+    expect(cache.deleteCacheDatabase).toHaveBeenCalledTimes(1);
+    expect(cache.resetCacheDatabase).toHaveBeenCalledTimes(1);
+    expect(chrome.storage.local.data).toEqual({
+      "mypack.storageRevision": 1,
+      "mypack.extensionVersion": "3.8.17",
+      "mypack.forceResetAt": expect.any(Number),
+    });
+  });
+
+  it("reloads only the MyPack tabs that did not ask for the reset", async () => {
+    const chrome = installChrome();
+    await (await import("./storageMigration")).reloadOtherMyPackTabs(1);
+    expect(chrome.tabs.reload).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.reload).toHaveBeenCalledWith(2);
+  });
+});
+
 describe("page storage migration", () => {
   beforeEach(() => {
     installChrome();
@@ -221,5 +252,53 @@ describe("page storage migration", () => {
     ).rejects.toThrow("worker failed");
     expect(localStorage.getItem("mypack-theme-mode")).toBe("dark");
     expect(cache.resetCacheDatabase).not.toHaveBeenCalled();
+  });
+
+  it("wipes this origin and tab once after a reset forced elsewhere", async () => {
+    installChrome({ "mypack.forceResetAt": 123 });
+    localStorage.setItem("mypack.storageRevision", "1");
+    sessionStorage.setItem("mypack.storageRevision", "1");
+    const migration = await import("./storageMigration");
+    await migration.initializePageStorage();
+    expect(localStorage.getItem("mypack-theme-mode")).toBeNull();
+    expect(sessionStorage.getItem("mypack-theme-mode")).toBeNull();
+    expect(localStorage.getItem("mypackWebsitePreference")).toBe("keep");
+    expect(cache.deleteCacheDatabase).toHaveBeenCalledTimes(1);
+    localStorage.setItem("mypack-theme-mode", "light");
+    await migration.initializePageStorage();
+    expect(localStorage.getItem("mypack-theme-mode")).toBe("light");
+    expect(cache.deleteCacheDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets through the worker, then reloads the page", async () => {
+    const chrome = installChrome({ kept: "by worker" });
+    chrome.runtime.sendMessage.mockResolvedValueOnce({
+      success: true,
+    } as never);
+    const reload = vi.fn();
+    vi.stubGlobal("window", { location: { reload } });
+    await (await import("./storageMigration")).forceResetExtension();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: "mypack-force-reset",
+    });
+    expect(localStorage.getItem("mypack-theme-mode")).toBeNull();
+    expect(sessionStorage.getItem("mypack-theme-mode")).toBeNull();
+    expect(cache.deleteCacheDatabase).toHaveBeenCalledTimes(1);
+    // The worker owns extension storage when it answers.
+    expect(chrome.storage.local.clear).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("still clears extension storage and reloads when the worker is down", async () => {
+    const chrome = installChrome({ stale: true });
+    chrome.runtime.sendMessage.mockRejectedValueOnce(
+      new Error("Receiving end does not exist"),
+    );
+    const reload = vi.fn();
+    vi.stubGlobal("window", { location: { reload } });
+    await (await import("./storageMigration")).forceResetExtension();
+    expect(chrome.storage.local.data).toEqual({});
+    expect(chrome.storage.sync.data).toEqual({});
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });

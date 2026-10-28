@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 
+import { ForceResetButton } from "../../../user-experience/reset/ForceResetButton";
 import { AppLogger } from "../../../utils/logger";
 
 type Props = {
@@ -16,7 +17,7 @@ type State = { error: Error | null };
 
 /**
  * Keeps a render crash from blanking the whole React root: logs it and shows
- * a notice with a way to try rendering again.
+ * a notice with a way to try rendering again, or to reset the extension.
  */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
@@ -44,13 +45,17 @@ export class ErrorBoundary extends Component<Props, State> {
         className="m-2 space-y-2 rounded-md border border-destructive/40 bg-background p-3 text-sm text-destructive"
       >
         <p>Something went wrong in MyPack Plus.</p>
-        <div className="flex gap-2">
+        <p className="text-muted-foreground">
+          If it keeps happening, clear the cache to start fresh.
+        </p>
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={this.reset}>
             Try again
           </Button>
           <Button size="sm" variant="ghost" onClick={() => location.reload()}>
             Refresh page
           </Button>
+          <ForceResetButton />
         </div>
       </div>
     );

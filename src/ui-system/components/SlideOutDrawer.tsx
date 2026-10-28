@@ -57,6 +57,7 @@ import {
   syncPlanningData,
 } from "../../degree-planning/services/planningSync";
 import PlannerLauncherHint from "../../user-experience/components/UserGuide/PlannerLauncherHint";
+import { ForceResetButton } from "../../user-experience/reset/ForceResetButton";
 import { StatusBanner } from "../../user-experience/status/StatusBanner";
 import { UpdateReadyPill } from "../../user-experience/update/UpdateReadyNotice";
 
@@ -817,6 +818,10 @@ export default function SlideOutDrawer({
                           Report bug / Feedback
                         </a>
                       </Button>
+                      <ForceResetButton
+                        compact
+                        className={plannerActionButtonClassName}
+                      />
                       <Button
                         type="button"
                         variant="outline"
