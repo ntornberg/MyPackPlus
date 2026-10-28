@@ -253,23 +253,28 @@ function UpcomingSections({ instructorId }: { instructorId: string }) {
 export function InstructorDetails({
   instructor,
   className,
+  showHeader = true,
 }: {
   instructor: V2Instructor;
   className?: string;
+  /** Hide the name/Unity ID header when the caller already shows it. */
+  showHeader?: boolean;
 }) {
   const prof = instructorToProf(instructor, instructor.instructor_name);
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <div>
-        <p className="text-sm font-semibold text-foreground">
-          {displayInstructorName(instructor.instructor_name)}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {[instructor.unity_id, instructor.subjects.join(", ")]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      </div>
+      {showHeader ? (
+        <div>
+          <p className="text-sm font-semibold text-foreground">
+            {displayInstructorName(instructor.instructor_name)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {[instructor.unity_id, instructor.subjects.join(", ")]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+      ) : null}
       <section className="flex flex-col gap-1.5">
         <h4 className={SECTION_LABEL}>Rate My Professor</h4>
         <RatingDetails prof={prof} />

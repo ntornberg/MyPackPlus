@@ -47,11 +47,13 @@ function InstructorResult({
               .join(" · ")}
             {instructor.has_gradient_grades ? "" : " · No grade history"}
           </span>
-          <RmpStarsWithScore
-            avgRating={prof.avgRating}
-            rating={prof}
-            starClassName="size-3"
-          />
+          {expanded ? null : (
+            <RmpStarsWithScore
+              avgRating={prof.avgRating}
+              rating={prof}
+              starClassName="size-3"
+            />
+          )}
         </div>
         <ChevronDown
           className={cn(
@@ -63,7 +65,7 @@ function InstructorResult({
       </button>
       {expanded ? (
         <div className="px-4 pb-4">
-          <InstructorDetails instructor={instructor} />
+          <InstructorDetails instructor={instructor} showHeader={false} />
         </div>
       ) : null}
     </li>
