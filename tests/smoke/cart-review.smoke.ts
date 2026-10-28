@@ -9,7 +9,7 @@ test("cart review: calendar retains shared lab after lecture replacement", async
   page,
 }) => {
   await page.route(
-    /IScript_(addClassToShopCart|deleteClassOnShopCart)/,
+    /IScript_(addClassToShopCart|deleteClassOnShopCart|Enroll_Wizard_SETUP)/,
     (route) => route.fulfill({ json: { status: "success", message: "OK" } }),
   );
   await page.goto("/planner-staging.html?bare");

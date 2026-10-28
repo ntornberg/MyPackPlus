@@ -13,6 +13,8 @@ import {
 import type { ToCartPayload } from "../types/cart";
 import type { GroupedSections, ModifiedSection } from "../types/section";
 
+import { inMyPackTerm } from "./myPackSession";
+
 /**
  * One combination MyPack lets a student add to the cart: an enrollment
  * section plus the related sections (lab, recitation, problem session) that
@@ -62,15 +64,18 @@ export function reduceOfferings(
   return offerings;
 }
 
-// The Wizard's search uses the term stored in the MyPack session, so switching
-// the term and searching must not interleave with another search.
-let wizardQueue: Promise<unknown> = Promise.resolve();
+/** The Wizard's term switch; the session's term then applies to searches and the cart. */
+function enrollTermSetupUrl(base: string, strm: string): string {
+  return `${base}${WIZARD_SCRIPT}IScript_Enroll_Wizard_SETUP?${new URLSearchParams({ enrollTermSelect: strm })}`;
+}
+
 const inFlight = new Map<string, Promise<MyPackOffering[] | null>>();
 
 /**
  * Every offering MyPack lists for a course and term, or null when the page
  * isn't MyPack (no session to ask with) or the term is unknown.
- * Sets the Enrollment Wizard's term first, as the Wizard does when switching terms.
+ * Sets the Enrollment Wizard's term first, as the Wizard does when switching
+ * terms, and switches back to the page's term after.
  */
 export function fetchMyPackOfferings(
   courseCode: string,
@@ -94,10 +99,7 @@ export function fetchMyPackOfferings(
     if (cached) {
       return cached.combinedData as MyPackOffering[];
     }
-    const search = async () => {
-      await fetchMyPackText(
-        `${base}${WIZARD_SCRIPT}IScript_Enroll_Wizard_SETUP?${new URLSearchParams({ enrollTermSelect: strm })}`,
-      );
+    const search = () => {
       const params = new URLSearchParams({
         subject,
         catalogNbrOpt: "E",
@@ -113,9 +115,11 @@ export function fetchMyPackOfferings(
         `${base}${WIZARD_SCRIPT}IScript_getClassSearchResults?${params}`,
       );
     };
-    const queued = wizardQueue.then(search, search);
-    wizardQueue = queued.catch(() => undefined);
-    const body = await queued;
+    const body = await inMyPackTerm(
+      strm,
+      (id) => fetchMyPackText(enrollTermSetupUrl(base, id)),
+      search,
+    );
     const rows = (JSON.parse(body) as { data?: ClassSearchRow[] }).data ?? [];
     const offerings = reduceOfferings(rows, courseCode);
     await setGenericCache(

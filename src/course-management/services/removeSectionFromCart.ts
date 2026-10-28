@@ -7,8 +7,10 @@ import {
 } from "../cache/courseRetrieval";
 import { notifyScheduleDataChanged } from "../cache/scheduleCacheSignal";
 import type { ModifiedSection } from "../types/section";
+import { TERM_TAG_FIELD } from "../utils/semester";
 
 import { generateMyPackScriptContentUrl } from "./mypackScriptUrl";
+import { inCartTerm, UNKNOWN_TERM_MESSAGE } from "./myPackSession";
 import { refreshCart } from "./refreshCart";
 
 export type RemoveSectionFromCartResult =
@@ -16,6 +18,7 @@ export type RemoveSectionFromCartResult =
   | { ok: false; message: string };
 
 type CartRow = {
+  [TERM_TAG_FIELD]?: unknown;
   class_nbr?: unknown;
   enroll_class_nbr?: unknown;
   eventid?: unknown;
@@ -39,20 +42,59 @@ function rowClassNumbers(row: CartRow): string[] {
     .filter((value): value is string => value !== null);
 }
 
+const enrollNumberOf = (row: CartRow): string | null =>
+  text(row.enroll_class_nbr ?? row.class_nbr);
+
+type CachedRow = { hash: string; row: CartRow };
+
 /**
- * MyPack deletes by the row's `enroll_class_nbr`, which for a lecture + lab is
- * the lecture. Looks the row up in the cached cart so a section added on MyPack
- * itself resolves the same way; falls back to the lecture's class number.
+ * The class number MyPack deletes the cart row by (its `enroll_class_nbr`;
+ * for a lecture + lab, the lecture), with the cached row when there is one.
+ * Labs and problem sessions are shared by several lectures, so a row is never
+ * picked just for listing one: during a swap the new section's row lists the
+ * same lab. Null when the cache can't say which class to delete.
  */
-async function findCartRow(
-  classNumbers: string[],
-): Promise<{ hash: string; row: CartRow } | null> {
-  const entries = (await getCacheCategory("shopCartTableData")) ?? {};
-  for (const [hash, entry] of Object.entries(entries)) {
-    const row = entry?.combinedData as CartRow | undefined;
-    if (row && rowClassNumbers(row).some((nbr) => classNumbers.includes(nbr))) {
-      return { hash, row };
-    }
+async function resolveCartRow(
+  enroll: string | null,
+  candidates: string[],
+): Promise<{ classNumber: string; cached: CachedRow | null } | null> {
+  let rows: CachedRow[] = [];
+  try {
+    const entries = (await getCacheCategory("shopCartTableData")) ?? {};
+    rows = Object.entries(entries).flatMap(([hash, entry]) => {
+      const row = entry?.combinedData as CartRow | undefined;
+      return row ? [{ hash, row }] : [];
+    });
+  } catch (error) {
+    AppLogger.warn("Couldn't read the cached cart:", error);
+  }
+
+  if (enroll) {
+    const exact = rows.find(({ row }) => enrollNumberOf(row) === enroll);
+    // A lecture belongs to one row, so a row listing it is that lecture's,
+    // even when MyPack enrolls it through another section.
+    const covering =
+      exact ?? rows.find(({ row }) => rowClassNumbers(row).includes(enroll));
+    return covering
+      ? {
+          classNumber: enrollNumberOf(covering.row) ?? enroll,
+          cached: covering,
+        }
+      : { classNumber: enroll, cached: null };
+  }
+
+  const matches = rows.filter(({ row }) => {
+    const number = enrollNumberOf(row);
+    return number !== null && candidates.includes(number);
+  });
+  if (matches.length === 1) {
+    return {
+      classNumber: enrollNumberOf(matches[0]!.row)!,
+      cached: matches[0]!,
+    };
+  }
+  if (matches.length === 0 && new Set(candidates).size === 1) {
+    return { classNumber: candidates[0]!, cached: null };
   }
   return null;
 }
@@ -60,26 +102,35 @@ async function findCartRow(
 /** Drops the removed class from the cached cart table and calendar feed. */
 async function forgetCartRow(
   enrollClassNumber: string,
-  cached: { hash: string; row: CartRow } | null,
+  cached: CachedRow | null,
 ): Promise<void> {
-  const classNumbers = new Set([
-    enrollClassNumber,
-    ...(cached ? rowClassNumbers(cached.row) : []),
-  ]);
-  const eventId = cached ? text(cached.row.eventid) : null;
-
   const tableEntries = (await getCacheCategory("shopCartTableData")) ?? {};
   const tableHashes = Object.entries(tableEntries)
     .filter(([, entry]) => {
       const row = entry?.combinedData as CartRow | undefined;
-      return (
-        row && text(row.enroll_class_nbr ?? row.class_nbr) === enrollClassNumber
-      );
+      return row && enrollNumberOf(row) === enrollClassNumber;
     })
     .map(([hash]) => hash);
   if (cached && !tableHashes.includes(cached.hash)) {
     tableHashes.push(cached.hash);
   }
+
+  // A shared lab stays on the calendar while another cart row still lists it.
+  const stillListed = new Set(
+    Object.entries(tableEntries)
+      .filter(([hash]) => !tableHashes.includes(hash))
+      .flatMap(([, entry]) =>
+        entry?.combinedData
+          ? rowClassNumbers(entry.combinedData as CartRow)
+          : [],
+      ),
+  );
+  const classNumbers = new Set(
+    [enrollClassNumber, ...(cached ? rowClassNumbers(cached.row) : [])].filter(
+      (number) => number === enrollClassNumber || !stillListed.has(number),
+    ),
+  );
+  const eventId = cached ? text(cached.row.eventid) : null;
 
   const calendarEntries =
     (await getCacheCategory("shopCartCalEventsData")) ?? {};
@@ -111,24 +162,30 @@ export function removeSectionFromCart(
   parent?: ModifiedSection,
 ): Promise<RemoveSectionFromCartResult> {
   const lecture = parent ?? selectedSection;
-  return removeClassFromCart([
-    lecture.classNumber,
-    selectedSection.classNumber,
-  ]);
+  return trackWork(() =>
+    removeCartRowNow(
+      text(lecture.classNumber),
+      [lecture.classNumber, selectedSection.classNumber],
+      lecture.term ?? selectedSection.term,
+    ),
+  );
 }
 
 /**
- * Removes the cart row covering any of these class numbers (lecture first),
- * for callers that only know a calendar block's class numbers.
+ * Removes the cart row for a course known only by its calendar blocks' class
+ * numbers, in no particular order, on `term`.
  */
 export function removeClassFromCart(
   classNumbers: (string | null | undefined)[],
+  term?: string | null,
 ): Promise<RemoveSectionFromCartResult> {
-  return trackWork(() => removeClassFromCartNow(classNumbers));
+  return trackWork(() => removeCartRowNow(null, classNumbers, term));
 }
 
-async function removeClassFromCartNow(
+async function removeCartRowNow(
+  enroll: string | null,
   classNumbers: (string | null | undefined)[],
+  term: string | null | undefined,
 ): Promise<RemoveSectionFromCartResult> {
   const candidates = classNumbers
     .map(text)
@@ -140,15 +197,16 @@ async function removeClassFromCartNow(
     };
   }
 
-  let cached: { hash: string; row: CartRow } | null = null;
-  try {
-    cached = await findCartRow(candidates);
-  } catch (error) {
-    AppLogger.warn("Couldn't read the cached cart:", error);
+  const target = await resolveCartRow(enroll, candidates);
+  if (!target) {
+    return {
+      ok: false,
+      message:
+        "Couldn't tell which class MyPack lists this course under, so your cart wasn't changed. Open your Shopping Cart in MyPack, then try again.",
+    };
   }
-  const classNumber =
-    (cached && text(cached.row.enroll_class_nbr ?? cached.row.class_nbr)) ??
-    candidates[0]!;
+  const { classNumber, cached } = target;
+  const cachedTerm = cached?.row[TERM_TAG_FIELD];
 
   const url = generateMyPackScriptContentUrl({
     record: "WEBLIB_ENROLL",
@@ -160,7 +218,14 @@ async function removeClassFromCartNow(
 
   let data: { status?: string; title?: string; message?: string };
   try {
-    const res = await fetchWithTimeout(fullURL, { credentials: "include" });
+    const sent = inCartTerm(
+      term ?? (typeof cachedTerm === "string" ? cachedTerm : null),
+      () => fetchWithTimeout(fullURL, { credentials: "include" }),
+    );
+    if (!sent) {
+      return { ok: false, message: UNKNOWN_TERM_MESSAGE };
+    }
+    const res = await sent;
     if (!res.ok) {
       return {
         ok: false,

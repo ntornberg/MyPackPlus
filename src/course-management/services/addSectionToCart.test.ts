@@ -33,6 +33,12 @@ vi.mock("../cache/courseRetrieval", () => ({
 vi.mock("./mypackScriptUrl", () => ({
   generateMyPackScriptContentUrl: () => "https://example.com/add",
 }));
+// Term switching is covered in myPackSession.test.ts.
+vi.mock("./myPackSession", () => ({
+  inCartTerm: (term: string | undefined, work: () => Promise<unknown>) =>
+    term ? work() : null,
+  UNKNOWN_TERM_MESSAGE: "Unknown term.",
+}));
 vi.mock("../../utils/logger", () => ({
   AppLogger: { error: vi.fn() },
 }));
@@ -190,6 +196,14 @@ describe("addSectionToCart calendar updates", () => {
 
     const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string);
     expect(Object.fromEntries(url.searchParams)).toEqual(payload);
+  });
+
+  it("won't add without knowing the term", async () => {
+    expect(await addSectionToCart({ ...lecture, term: undefined })).toEqual({
+      ok: false,
+      message: "Unknown term.",
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it.each([
