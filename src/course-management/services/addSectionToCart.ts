@@ -9,6 +9,7 @@ import type { ModifiedSection } from "../types/section";
 import { TERM_TAG_FIELD } from "../utils/semester";
 
 import { generateMyPackScriptContentUrl } from "./mypackScriptUrl";
+import { inCartTerm, UNKNOWN_TERM_MESSAGE } from "./myPackSession";
 
 export type AddSectionToCartResult =
   | { ok: true; message: string }
@@ -95,7 +96,14 @@ async function addSectionToCartNow(
   const fullURL = `${url}?${new URLSearchParams(payload)}`;
   let data: { status?: string; title?: string; message?: string };
   try {
-    const res = await fetchWithTimeout(fullURL, { credentials: "include" });
+    const sent = inCartTerm(
+      (parent ?? selectedSection).term ?? selectedSection.term,
+      () => fetchWithTimeout(fullURL, { credentials: "include" }),
+    );
+    if (!sent) {
+      return { ok: false, message: UNKNOWN_TERM_MESSAGE };
+    }
+    const res = await sent;
     if (!res.ok) {
       return {
         ok: false,

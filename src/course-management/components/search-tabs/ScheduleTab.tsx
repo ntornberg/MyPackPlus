@@ -120,7 +120,13 @@ function ScheduleMeeting({
 }
 
 /** Remove, then confirm, for a cart course; the request goes by its class numbers. */
-function RemoveFromCartAction({ course }: { course: ScheduleCourse }) {
+function RemoveFromCartAction({
+  course,
+  term,
+}: {
+  course: ScheduleCourse;
+  term: string | null;
+}) {
   const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +134,7 @@ function RemoveFromCartAction({ course }: { course: ScheduleCourse }) {
   const remove = async () => {
     setRemoving(true);
     setError(null);
-    const result = await removeClassFromCart(course.classNumbers);
+    const result = await removeClassFromCart(course.classNumbers, term);
     setRemoving(false);
     setConfirming(false);
     if (!result.ok) {
@@ -587,6 +593,7 @@ function CartCourseSelection({
 /** A cart or enrolled course; expanding it lists its other sections underneath. */
 function ScheduleCourseRow({
   course,
+  term,
   expanded,
   onToggle,
   compact,
@@ -594,6 +601,7 @@ function ScheduleCourseRow({
   children,
 }: {
   course: ScheduleCourse;
+  term: string | null;
   expanded: boolean;
   onToggle: () => void;
   /** Grade history as a chip (compact) or a full chart, like the section cards. */
@@ -648,7 +656,7 @@ function ScheduleCourseRow({
           </span>
         </button>
         {course.status === "cart" ? (
-          <RemoveFromCartAction course={course} />
+          <RemoveFromCartAction course={course} term={term} />
         ) : null}
       </div>
       {/* Outside the toggle: the RMP score is a link. */}
@@ -991,6 +999,7 @@ export default function ScheduleTab({
             <ScheduleCourseRow
               key={`${course.status}|${course.code}`}
               course={course}
+              term={term}
               expanded={course === selectedCourse}
               onToggle={() => toggleCourse(course)}
               compact={scheduleData.compactSections}

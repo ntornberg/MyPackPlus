@@ -4,7 +4,10 @@ import { getScheduleCacheGeneration } from "../cache/scheduleCacheSignal";
 import type { ModifiedSection } from "../types/section";
 
 import { refreshCart } from "./refreshCart";
-import { removeSectionFromCart } from "./removeSectionFromCart";
+import {
+  removeClassFromCart,
+  removeSectionFromCart,
+} from "./removeSectionFromCart";
 
 const { stored, removeGenericCacheEntries } = vi.hoisted(() => {
   const stored: Record<string, Record<string, { combinedData: unknown }>> = {};
@@ -25,6 +28,12 @@ vi.mock("../cache/courseRetrieval", () => ({
 vi.mock("./mypackScriptUrl", () => ({
   generateMyPackScriptContentUrl: () => "https://example.com/delete",
 }));
+// Term switching is covered in myPackSession.test.ts.
+vi.mock("./myPackSession", () => ({
+  inCartTerm: (term: string | undefined, work: () => Promise<unknown>) =>
+    term ? work() : null,
+  UNKNOWN_TERM_MESSAGE: "Unknown term.",
+}));
 vi.mock("./refreshCart", () => ({ refreshCart: vi.fn() }));
 vi.mock("../../utils/logger", () => ({
   AppLogger: { error: vi.fn(), warn: vi.fn() },
@@ -36,6 +45,7 @@ const lecture = {
   classNumber: "12345",
   course_id: "course-1",
   catalog_nbr: "316",
+  term: "2027 Spring Term",
   courseData: { code: "CSC 316" },
 } as ModifiedSection;
 const lab = {
@@ -136,6 +146,64 @@ describe("removeSectionFromCart", () => {
       expect(refreshCart).not.toHaveBeenCalled();
     },
   );
+
+  it("deletes the old lecture, not a new row sharing its lab", async () => {
+    // Mid-swap: the new lecture's row lists the same lab and comes first.
+    stored.shopCartTableData = {
+      next: {
+        combinedData: {
+          enroll_class_nbr: "22222",
+          section_details: [{ class_nbr: "22222" }, { class_nbr: "12346" }],
+        },
+      },
+    };
+    stored.shopCartCalEventsData = {
+      sharedLab: { combinedData: { class_nbr: "12346" } },
+    };
+    await removeSectionFromCart(lab, lecture);
+    expect(sentClassNumber()).toBe("12345");
+    expect(Object.keys(stored.shopCartTableData)).toEqual(["next"]);
+    expect(Object.keys(stored.shopCartCalEventsData)).toEqual(["sharedLab"]);
+  });
+
+  it("removes a calendar course by its cart row's enrollment class", async () => {
+    stored.shopCartTableData = {
+      row: {
+        combinedData: {
+          enroll_class_nbr: "12345",
+          section_details: [{ class_nbr: "12345" }, { class_nbr: "12346" }],
+        },
+      },
+    };
+    await removeClassFromCart(["12346", "12345"], "2027 Spring Term");
+    expect(sentClassNumber()).toBe("12345");
+  });
+
+  it("won't guess the enrollment class from calendar blocks alone", async () => {
+    expect(
+      (await removeClassFromCart(["12346", "12345"], "2027 Spring Term")).ok,
+    ).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("won't delete without knowing the term", async () => {
+    expect(
+      await removeSectionFromCart({ ...lecture, term: undefined }),
+    ).toEqual({ ok: false, message: "Unknown term." });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the cart row's term when the caller has none", async () => {
+    stored.shopCartTableData = {
+      row: {
+        combinedData: {
+          enroll_class_nbr: "12345",
+          _mypackTerm: "2027 Spring Term",
+        },
+      },
+    };
+    expect((await removeClassFromCart(["12345"])).ok).toBe(true);
+  });
 
   it("reports a network failure", async () => {
     vi.mocked(fetch).mockRejectedValue(new Error("Offline"));
