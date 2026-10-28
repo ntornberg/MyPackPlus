@@ -1,5 +1,4 @@
 import {
-  BookMarkedIcon,
   Check,
   ChevronDown,
   CircleCheck,
@@ -57,6 +56,7 @@ import {
   gradeDistributionAverageGradePoint,
   gradePercentChipColor,
   gradePointToPercent,
+  sectionMeetingLines,
 } from "./sectionCompareUtils";
 
 /** Nested controls use stopPropagation; role="group" is for structure only. */
@@ -350,6 +350,77 @@ function LinkedMeetingOption({
   );
 }
 
+/** "Lecture · Sec 009 · #3163" */
+function SectionMetaLine({
+  component,
+  section,
+  classNumber,
+}: {
+  component?: string;
+  section?: string;
+  classNumber?: string | number;
+}) {
+  const parts = [
+    component ? componentDisplayName(component) : "",
+    section ? `Sec ${section}` : "",
+    classNumber ? `#${classNumber}` : "",
+  ].filter(Boolean);
+  if (parts.length === 0) {
+    return null;
+  }
+  return (
+    <p className="text-xs text-muted-foreground tabular-nums">
+      {parts.join(" · ")}
+    </p>
+  );
+}
+
+/** One line per meeting: when, then where. */
+function SectionMeetingList({
+  dayTime,
+  location,
+  compact,
+}: {
+  dayTime?: string;
+  location?: string;
+  compact: boolean;
+}) {
+  const lines = sectionMeetingLines(dayTime, location);
+  if (lines.length === 0) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Clock className="size-4 shrink-0 text-primary" aria-hidden />
+        <span>Time and room not listed</span>
+      </div>
+    );
+  }
+  return (
+    <ul className={cn("flex flex-col text-sm", compact ? "gap-0.5" : "gap-1")}>
+      {lines.map((line, i) => (
+        <li
+          key={`${line.when}-${i}`}
+          className="flex items-start gap-2 leading-snug"
+        >
+          <Clock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+          <span className="flex min-w-0 flex-wrap gap-x-2">
+            {line.when ? (
+              <span className="whitespace-nowrap font-medium tabular-nums text-foreground">
+                {line.when}
+              </span>
+            ) : null}
+            {line.where ? (
+              <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
+                <MapPinIcon className="size-3 shrink-0" aria-hidden />
+                {line.where}
+              </span>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** One lab, recitation or problem-session meeting shown under the lecture. */
 function LinkedMeetingRow({
   meeting: m,
@@ -360,47 +431,21 @@ function LinkedMeetingRow({
 }) {
   return (
     <div
-      className={cn("border-t border-border/50", compact ? "pt-1.5" : "pt-2")}
-    >
-      {compact ? (
-        <div className="flex items-start gap-2 text-muted-foreground">
-          <Clock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
-          <span className="leading-snug">
-            {componentDisplayName(m.component)}
-            {m.section ? ` · Sec ${m.section}` : ""}
-            {m.classNumber ? ` · #${m.classNumber}` : ""}
-            {m.dayTime ? ` · ${m.dayTime}` : ""}
-            {m.location ? ` · ${m.location}` : ""}
-          </span>
-        </div>
-      ) : (
-        <>
-          <div className="flex items-center gap-2 text-foreground">
-            <BookMarkedIcon
-              className="size-4 shrink-0 text-primary"
-              aria-hidden
-            />
-            <span>
-              {componentDisplayName(m.component)}
-              {m.classNumber ? (
-                <>
-                  {" "}
-                  ·{" "}
-                  <span className="text-muted-foreground">{m.classNumber}</span>
-                </>
-              ) : null}
-            </span>
-          </div>
-          <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
-            <MapPinIcon className="size-4 shrink-0 text-primary" aria-hidden />
-            <span>{m.location}</span>
-          </div>
-          <div className="mt-1.5 flex items-center gap-2 text-muted-foreground">
-            <Clock className="size-4 shrink-0 text-primary" aria-hidden />
-            <span>{m.dayTime}</span>
-          </div>
-        </>
+      className={cn(
+        "flex flex-col border-t border-border/50",
+        compact ? "gap-0.5 pt-1.5" : "gap-1 pt-2",
       )}
+    >
+      <SectionMetaLine
+        component={m.component}
+        section={m.section}
+        classNumber={m.classNumber}
+      />
+      <SectionMeetingList
+        dayTime={m.dayTime}
+        location={m.location}
+        compact={compact}
+      />
     </div>
   );
 }
@@ -413,8 +458,8 @@ export type SectionCompareCardProps = {
   /** When several linked meetings: controlled active lab class # */
   selectedLabClassNumber?: string;
   onLabClassChange?: (classNbr: string) => void;
-  /** Staging mock cart vs extension {@link ToCartGroupedSectionCell} */
-  addToCartSlot: ReactNode;
+  /** Staging mock cart vs extension {@link ToCartGroupedSectionCell}; no footer when absent. */
+  addToCartSlot?: ReactNode;
   /**
    * Cart/enrolled classes this section overlaps: [] means it fits, null means
    * there's no schedule to compare against (no indicator shown).
@@ -422,9 +467,16 @@ export type SectionCompareCardProps = {
   conflictsWith?: string[] | null;
   /** This section is already in the shopping cart. */
   inCart?: boolean;
+  /**
+   * "alternative": a smaller card listed under a Schedule-tab course as a
+   * replacement; no course title, lab picker or cart footer.
+   */
+  variant?: "default" | "alternative";
+  /** Staged as its course's pending change. */
+  pending?: boolean;
 };
 
-function ScheduleFitIndicator({
+export function ScheduleFitIndicator({
   conflictsWith,
   compact,
 }: {
@@ -465,7 +517,9 @@ function areSectionCompareCardPropsEqual(
     prev.addToCartSlot === next.addToCartSlot &&
     String(prev.conflictsWith) === String(next.conflictsWith) &&
     (prev.conflictsWith == null) === (next.conflictsWith == null) &&
-    prev.inCart === next.inCart
+    prev.inCart === next.inCart &&
+    prev.variant === next.variant &&
+    prev.pending === next.pending
   );
 }
 
@@ -473,13 +527,17 @@ export const SectionCompareCard = memo(function SectionCompareCard({
   section,
   isSelected,
   onSelect,
-  compact = false,
+  compact: compactProp = false,
   selectedLabClassNumber,
   onLabClassChange,
   addToCartSlot,
   conflictsWith = null,
   inCart = false,
+  variant = "default",
+  pending = false,
 }: SectionCompareCardProps) {
+  const alternative = variant === "alternative";
+  const compact = compactProp || alternative;
   const linkedLabs = useMemo(
     () => section.linkedMeetings ?? [],
     [section.linkedMeetings],
@@ -489,25 +547,6 @@ export const SectionCompareCard = memo(function SectionCompareCard({
     () => section.requiredMeetings ?? [],
     [section.requiredMeetings],
   );
-  const linkedPanelTitle = useMemo(
-    () => linkedMeetingsPanelTitle(linkedLabs),
-    [linkedLabs],
-  );
-  const [labPanelOpen, setLabPanelOpen] = useState(() => !compact && multiLab);
-  useEffect(() => {
-    setLabPanelOpen(!compact && linkedLabs.length > 1);
-  }, [compact, section.id, linkedLabs.length]);
-  const activeLabClass =
-    multiLab && selectedLabClassNumber
-      ? selectedLabClassNumber
-      : multiLab
-        ? String(linkedLabs[0]!.classNumber ?? "")
-        : undefined;
-  const activeLab = multiLab
-    ? (linkedLabs.find(
-        (m) => String(m.classNumber) === String(activeLabClass),
-      ) ?? linkedLabs[0])
-    : undefined;
 
   const courseCode = section.courseData?.code ?? section.course_id ?? "";
   const title = section.courseData?.title ?? "";
@@ -536,8 +575,8 @@ export const SectionCompareCard = memo(function SectionCompareCard({
       aria-selected={isSelected}
       className={cn(
         "cursor-pointer rounded-xl border-2 text-left transition-[color,background-color,border-color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        compact ? "p-2.5" : "p-4",
-        isSelected
+        alternative ? "p-2" : compact ? "p-2.5" : "p-4",
+        isSelected || pending
           ? "border-primary bg-primary/[0.12] shadow-sm ring-2 ring-primary/25 dark:border-primary/50 dark:bg-primary/12 dark:shadow-[inset_0_0_0_1px_rgba(79,140,255,0.25)] dark:ring-primary/35"
           : "border-border bg-card hover:border-primary/40 hover:bg-muted/30 dark:bg-background/40 dark:hover:border-border dark:hover:bg-background/55",
       )}
@@ -558,10 +597,10 @@ export const SectionCompareCard = memo(function SectionCompareCard({
             <span
               className={cn(
                 "font-semibold text-foreground",
-                compact ? "text-base" : "text-lg",
+                alternative ? "text-sm" : compact ? "text-base" : "text-lg",
               )}
             >
-              {courseCode}
+              {alternative ? `Section ${section.section ?? "—"}` : courseCode}
             </span>
             <Badge
               variant={sectionStatusBadgeVariant(section.availability)}
@@ -578,97 +617,62 @@ export const SectionCompareCard = memo(function SectionCompareCard({
               Seats {section.enrollment || "—"}
             </Badge>
             {inCart ? <InCartBadge /> : null}
+            {pending ? <PendingBadge /> : null}
           </div>
-          {!compact && title ? (
+          {!compact && !alternative && title ? (
             <p className="text-sm text-muted-foreground">{title}</p>
           ) : null}
-          {conflictsWith ? (
-            <ScheduleFitIndicator
-              conflictsWith={conflictsWith}
+          <SectionMetaLine
+            component={section.component}
+            section={section.section}
+            classNumber={section.classNumber}
+          />
+          {/* When and where, then who. */}
+          <div className={compact ? "pt-1" : "pt-2"}>
+            <SectionMeetingList
+              dayTime={section.dayTime}
+              location={section.location}
               compact={compact}
             />
-          ) : null}
+          </div>
           <div
             className={cn(
-              "flex min-w-0 flex-col text-sm",
-              compact ? "pt-0.5 gap-0.5" : "pt-2 gap-1",
+              "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm",
+              compact ? "pt-1" : "pt-2",
             )}
           >
-            <InstructorPopover
-              instructor={section.professor_rating?.instructor}
-              className="min-w-0 font-medium text-foreground"
-            >
-              {primaryInstructor ?? ""}
-            </InstructorPopover>
-            {coInstructors.length > 0 ? (
-              <span
-                className="min-w-0 text-xs leading-snug text-muted-foreground"
-                title={coInstructors.join(", ")}
+            <span className="flex min-w-0 flex-col">
+              <InstructorPopover
+                instructor={section.professor_rating?.instructor}
+                className="min-w-0 font-medium text-foreground"
               >
-                {compact
-                  ? `+ ${coInstructors.length} more`
-                  : `with ${coInstructors.join(", ")}`}
-              </span>
-            ) : null}
+                {primaryInstructor ?? ""}
+              </InstructorPopover>
+              {coInstructors.length > 0 ? (
+                <span
+                  className="min-w-0 text-xs leading-snug text-muted-foreground"
+                  title={coInstructors.join(", ")}
+                >
+                  {compact
+                    ? `+ ${coInstructors.length} more`
+                    : `with ${coInstructors.join(", ")}`}
+                </span>
+              ) : null}
+            </span>
             <RmpStarsWithScore
               avgRating={section.professor_rating?.avgRating ?? null}
               rating={section.professor_rating ?? null}
               starClassName={compact ? "size-3" : "size-3.5"}
             />
           </div>
-          <div
-            className={cn(
-              "flex flex-col text-sm",
-              compact ? "pt-1 gap-1" : "pt-2 gap-1.5",
-            )}
-          >
-            {compact ? (
-              <div className="flex items-start gap-2 text-muted-foreground">
-                <Clock
-                  className="mt-0.5 size-4 shrink-0 text-primary"
-                  aria-hidden
-                />
-                <span className="leading-snug">
-                  Section {section.section} · {section.classNumber}
-                  {section.component ? ` · ${section.component}` : ""}
-                  {section.dayTime ? ` · ${section.dayTime}` : ""}
-                  {section.location ? ` · ${section.location}` : ""}
-                </span>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 text-foreground">
-                  <BookMarkedIcon
-                    className="size-4 shrink-0 text-primary"
-                    aria-hidden
-                  />
-                  <span>
-                    Section {section.section} · {section.classNumber}
-                    {section.component ? (
-                      <>
-                        {" "}
-                        ·{" "}
-                        <span className="text-muted-foreground">
-                          {section.component}
-                        </span>
-                      </>
-                    ) : null}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <MapPinIcon
-                    className="size-4 shrink-0 text-primary"
-                    aria-hidden
-                  />
-                  <span>{section.location || "—"}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Clock className="size-4 shrink-0 text-primary" aria-hidden />
-                  <span>{section.dayTime || "—"}</span>
-                </div>
-              </>
-            )}
-          </div>
+          {conflictsWith ? (
+            <div className={compact ? "pt-1" : "pt-2"}>
+              <ScheduleFitIndicator
+                conflictsWith={conflictsWith}
+                compact={compact}
+              />
+            </div>
+          ) : null}
         </div>
         <SectionGradeDistributionBlock section={section} compact={compact} />
       </div>
@@ -680,84 +684,21 @@ export const SectionCompareCard = memo(function SectionCompareCard({
             compact ? "mt-1.5 gap-1" : "mt-3 gap-1.5",
           )}
         >
-          {multiLab ? (
-            <div
-              role="group"
-              className={cn(
-                "border-l-2 border-primary/50 pl-3",
-                compact ? "mt-1.5 space-y-1.5" : "mt-2 space-y-2",
-              )}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-            >
-              <Label className="sr-only">
-                {linkedPanelTitle} for this lecture meeting; the selected one is
-                used for add to cart and schedule preview. Expand the list to
-                choose a different one.
-              </Label>
-              <button
-                type="button"
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-lg border border-border/60 bg-background/85 text-left text-sm text-foreground shadow-sm transition-[color,background-color,border-color,box-shadow] hover:border-primary/35 hover:bg-background/90 dark:border-white/10 dark:bg-[rgb(12,18,32)]/85 dark:hover:bg-[rgb(14,22,38)]/95",
-                  compact ? "px-2 py-1.5" : "py-2 pl-2 pr-2",
-                )}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setLabPanelOpen((o) => !o);
-                }}
-              >
-                <ChevronDown
-                  className={cn(
-                    "size-4 shrink-0 text-primary transition-transform duration-200",
-                    labPanelOpen && "rotate-180",
-                  )}
-                />
-                <span className="font-medium">
-                  {linkedPanelTitle}
-                  <span className="ml-1.5 font-normal text-muted-foreground">
-                    ({linkedLabs.length})
-                  </span>
-                </span>
-                <span className="ml-auto text-xs font-normal text-muted-foreground">
-                  {labPanelOpen ? "Hide" : "Change"}
-                </span>
-              </button>
-              {!labPanelOpen && activeLab ? (
-                <LinkedMeetingOption
-                  meeting={activeLab}
-                  selected
-                  compact={compact}
-                  title="Used for cart and schedule preview. Click to change."
-                  onClick={() => setLabPanelOpen(true)}
-                />
-              ) : null}
-              {labPanelOpen ? (
-                <div
-                  className={cn(
-                    "flex max-h-52 flex-col gap-1.5 overflow-y-auto rounded-lg border border-border/50 bg-card/40 dark:border-white/[0.08] dark:bg-[rgb(8,14,26)]/60",
-                    compact ? "p-1" : "p-1.5",
-                  )}
-                >
-                  {linkedLabs.map((m) => (
-                    <LinkedMeetingOption
-                      key={m.classNumber ?? m.component}
-                      meeting={m}
-                      selected={
-                        String(m.classNumber) === String(activeLabClass)
-                      }
-                      compact={compact}
-                      onClick={() => {
-                        if (m.classNumber != null) {
-                          onLabClassChange?.(String(m.classNumber));
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </div>
+          {alternative && multiLab ? (
+            // Labs for a replacement are picked on its course card once it's staged.
+            <p className="text-xs text-muted-foreground">
+              {linkedLabs.length}{" "}
+              {linkedMeetingsPanelTitle(linkedLabs).toLowerCase()}
+            </p>
+          ) : multiLab ? (
+            <LinkedMeetingPicker
+              meetings={linkedLabs}
+              value={selectedLabClassNumber}
+              onChange={(classNbr) => onLabClassChange?.(classNbr)}
+              compact={compact}
+              defaultOpen={!compact}
+              resetKey={section.id}
+            />
           ) : (
             linkedLabs.map((m, i) => (
               <LinkedMeetingRow
@@ -778,23 +719,142 @@ export const SectionCompareCard = memo(function SectionCompareCard({
         </div>
       ) : null}
 
-      <div
-        className={cn(
-          "flex flex-wrap items-center justify-end gap-2 border-t border-border/60",
-          compact ? "mt-2 pt-2" : "mt-4 pt-3",
-        )}
-      >
-        {/* Only the cart controls swallow events; the rest of the footer selects the card. */}
+      {addToCartSlot ? (
         <div
-          role="group"
-          className="contents"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
+          className={cn(
+            "flex flex-wrap items-center justify-end gap-2 border-t border-border/60",
+            compact ? "mt-2 pt-2" : "mt-4 pt-3",
+          )}
         >
-          {addToCartSlot}
+          {/* Only the cart controls swallow events; the rest of the footer selects the card. */}
+          <div
+            role="group"
+            className="contents"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            {addToCartSlot}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }, areSectionCompareCardPropsEqual);
+
+/** Marks a section or course whose change is staged but not yet applied to the cart. */
+export function PendingBadge() {
+  return (
+    <Badge className="border-0 bg-amber-500/20 font-semibold text-amber-800 shadow-none dark:bg-amber-400/15 dark:text-amber-300">
+      Pending
+    </Badge>
+  );
+}
+
+/**
+ * Picks one lab / recitation / problem session for a lecture. Collapsed, it
+ * shows just the pick; expanded, every option.
+ */
+export function LinkedMeetingPicker({
+  meetings,
+  value,
+  onChange,
+  compact,
+  defaultOpen,
+  resetKey,
+}: {
+  meetings: SectionLinkedMeeting[];
+  /** Class number of the picked meeting; the first one when unset. */
+  value?: string;
+  onChange: (classNbr: string) => void;
+  compact: boolean;
+  defaultOpen: boolean;
+  /** Re-collapses (or re-opens) to `defaultOpen` when this changes. */
+  resetKey?: unknown;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    setOpen(defaultOpen);
+  }, [defaultOpen, resetKey]);
+  const title = linkedMeetingsPanelTitle(meetings);
+  const activeClass = value ?? String(meetings[0]?.classNumber ?? "");
+  const active =
+    meetings.find((m) => String(m.classNumber) === activeClass) ?? meetings[0];
+
+  return (
+    <div
+      role="group"
+      className={cn(
+        "border-l-2 border-primary/50 pl-3",
+        compact ? "mt-1.5 space-y-1.5" : "mt-2 space-y-2",
+      )}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <Label className="sr-only">
+        {title} for this lecture meeting; the selected one is used for the cart
+        and schedule preview. Expand the list to choose a different one.
+      </Label>
+      <button
+        type="button"
+        className={cn(
+          "flex w-full items-center gap-2 rounded-lg border border-border/60 bg-background/85 text-left text-sm text-foreground shadow-sm transition-[color,background-color,border-color,box-shadow] hover:border-primary/35 hover:bg-background/90 dark:border-white/10 dark:bg-[rgb(12,18,32)]/85 dark:hover:bg-[rgb(14,22,38)]/95",
+          compact ? "px-2 py-1.5" : "py-2 pl-2 pr-2",
+        )}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-primary transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
+        <span className="font-medium">
+          {title}
+          <span className="ml-1.5 font-normal text-muted-foreground">
+            ({meetings.length})
+          </span>
+        </span>
+        <span className="ml-auto text-xs font-normal text-muted-foreground">
+          {open ? "Hide" : "Change"}
+        </span>
+      </button>
+      {!open && active ? (
+        <LinkedMeetingOption
+          meeting={active}
+          selected
+          compact={compact}
+          title="Used for cart and schedule preview. Click to change."
+          onClick={() => setOpen(true)}
+        />
+      ) : null}
+      {open ? (
+        <div
+          className={cn(
+            "flex max-h-52 flex-col gap-1.5 overflow-y-auto rounded-lg border border-border/50 bg-card/40 dark:border-white/[0.08] dark:bg-[rgb(8,14,26)]/60",
+            compact ? "p-1" : "p-1.5",
+          )}
+        >
+          {meetings.map((m) => (
+            <LinkedMeetingOption
+              key={m.classNumber ?? m.component}
+              meeting={m}
+              selected={String(m.classNumber) === activeClass}
+              compact={compact}
+              onClick={() => {
+                if (m.classNumber != null) {
+                  onChange(String(m.classNumber));
+                }
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}

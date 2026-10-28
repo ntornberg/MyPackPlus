@@ -2,7 +2,39 @@ import { describe, expect, it } from "vitest";
 
 import { CALENDAR_COLOR_PINNED_SECTION } from "../types/calendar";
 
-import { parseDayTimeEvent } from "./parseScheduleDayTime";
+import { parseDayTimeEvent, parseDayTimeEvents } from "./parseScheduleDayTime";
+
+describe("parseDayTimeEvents", () => {
+  it("returns one event per meeting in a multi-meeting cell", () => {
+    const events = parseDayTimeEvents(
+      "T Th 11:45 AM - 1:00 PM T 7:30 PM - 9:20 PM",
+      "PY 205",
+      5,
+    );
+    expect(
+      events.map(({ id, start, end, days }) => ({
+        id,
+        start,
+        end,
+        days: days.map((d) => d.day),
+      })),
+    ).toEqual([
+      { id: 5, start: "11:45 AM", end: "1:00 PM", days: ["Tue", "Thu"] },
+      { id: 6, start: "7:30 PM", end: "9:20 PM", days: ["Tue"] },
+    ]);
+  });
+
+  it("matches parseDayTimeEvent for a single or untimed meeting", () => {
+    expect(parseDayTimeEvents("MW 12:00 PM - 1:15 PM", "CSC")).toEqual([
+      parseDayTimeEvent("MW 12:00 PM - 1:15 PM", "CSC"),
+    ]);
+    expect(parseDayTimeEvents("", "CSC")).toEqual([
+      parseDayTimeEvent("", "CSC"),
+    ]);
+    expect(parseDayTimeEvents("TBA", "CSC")).toHaveLength(1);
+    expect(parseDayTimeEvents(undefined, "CSC")).toEqual([]);
+  });
+});
 
 describe("parseDayTimeEvent", () => {
   it.each(["TBA", "TBD", "Arranged", ""])(

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 import { CalendarView } from "../../../course-management/components/calendar/CalendarView";
@@ -60,13 +60,8 @@ export function PlannerPreviewRail({
   );
 
   return (
-    <Card
-      className={cn(
-        "overflow-visible border-2 border-border bg-card text-card-foreground shadow-md ring-1 ring-border/50 dark:ring-white/12",
-        "dark:bg-gradient-to-b dark:from-[rgb(9,15,27)] dark:to-[rgb(10,17,30)] dark:shadow-[inset_0_1px_0_rgba(136,164,224,0.08),0_18px_44px_rgba(0,0,0,0.28)]",
-      )}
-    >
-      <CardHeader className="gap-2 border-b border-border/60 bg-muted/20 dark:bg-transparent">
+    <section className="flex min-w-0 flex-col gap-4 text-sm text-card-foreground">
+      <header className="flex flex-col gap-2">
         <CardTitle className="text-base font-semibold">
           {selectedPreview ? "Selected Section" : "Calendar"}
         </CardTitle>
@@ -78,8 +73,8 @@ export function PlannerPreviewRail({
                 ? "Select a row to pin schedule context, notes, and prerequisites here."
                 : "Choose a section row to pin schedule, notes, and prerequisites while you browse."))}
         </p>
-      </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-4 p-3 sm:p-4">
+      </header>
+      <div className="flex min-w-0 flex-col gap-4">
         {selectedPreview ? (
           <div className="min-w-0 rounded-xl border border-border bg-background/55 p-3 sm:p-4">
             <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
@@ -135,8 +130,8 @@ export function PlannerPreviewRail({
             <ScheduleCalendarLegend className="mt-2 px-0.5" />
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 

@@ -3,7 +3,7 @@ import { fetchWithTimeout } from "../../utils/fetchWithTimeout";
 import { AppLogger } from "../../utils/logger";
 import { generateCacheKey, setGenericCache } from "../cache/courseRetrieval";
 import { notifyScheduleDataChanged } from "../cache/scheduleCacheSignal";
-import { parseDayTimeEvent } from "../schedule/parseScheduleDayTime";
+import { parseDayTimeEvents } from "../schedule/parseScheduleDayTime";
 import type { FullToCartPayload, ToCartPayload } from "../types/cart";
 import type { ModifiedSection } from "../types/section";
 import { TERM_TAG_FIELD } from "../utils/semester";
@@ -128,20 +128,18 @@ async function addSectionToCartNow(
           classs: courseData.code,
           [TERM_TAG_FIELD]: selectedSection.term,
           // Only the submitted lab belongs in the cart, not every linked option.
-          section_details: sections.flatMap((section) => {
-            const event = parseDayTimeEvent(section.dayTime, courseData.code);
-            return event
-              ? [
-                  {
-                    class_nbr: section.classNumber,
-                    section: section.section,
-                    meet_days: event.days.map(({ day }) => day).join("/"),
-                    time: event.allDay ? "" : `${event.start} - ${event.end}`,
-                    type: section.component,
-                  },
-                ]
-              : [];
-          }),
+          // One row per meeting, as MyPack's own cart lists them.
+          section_details: sections.flatMap((section) =>
+            parseDayTimeEvents(section.dayTime, courseData.code).map(
+              (event) => ({
+                class_nbr: section.classNumber,
+                section: section.section,
+                meet_days: event.days.map(({ day }) => day).join("/"),
+                time: event.allDay ? "" : `${event.start} - ${event.end}`,
+                type: section.component,
+              }),
+            ),
+          ),
         },
       });
       await notifyScheduleDataChanged();

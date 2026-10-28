@@ -95,7 +95,19 @@ function ParseCourseElement(
         $dayTime.find(".hidden-xs").remove();
         $dayTime.find(".screen-reader-only-text").remove();
         const dayTime = $dayTime.text().replace(/\s+/g, " ").trim();
-        const location = $cells.eq(5).text().trim();
+        // One room per meeting, on separate lines in the cell.
+        const location = $("<div>")
+          .html(
+            ($cells.eq(5).html() || "").replace(
+              /<br\s*\/?>|<\/(?:div|p|li)>/gi,
+              "\n",
+            ),
+          )
+          .text()
+          .split("\n")
+          .map((line) => line.replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join(" / ");
         const $instructorLink = $cells.eq(6).find("a.instructor-link");
         const ins_list = [];
         const unity_list: string[] = [];

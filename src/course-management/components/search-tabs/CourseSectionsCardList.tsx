@@ -51,6 +51,8 @@ type CourseSectionCardRowProps = {
   replaces?: CartSelection;
   onSelect: (rowId: string) => void;
   onLabClassChange: (rowId: string, classNbr: string) => void;
+  variant: "default" | "alternative";
+  pending: boolean;
 };
 
 const CourseSectionCardRow = memo(
@@ -64,6 +66,8 @@ const CourseSectionCardRow = memo(
     replaces,
     onSelect,
     onLabClassChange,
+    variant,
+    pending,
   }: CourseSectionCardRowProps) {
     const lecture = row.lecture;
     const labs = useMemo(
@@ -80,16 +84,18 @@ const CourseSectionCardRow = memo(
       },
       [onLabClassChange, row.uniqueRowId],
     );
+    // Replacements are applied from their course card, not from each card.
     const addToCartSlot = useMemo(
-      () => (
-        <ToCartGroupedSectionCell
-          {...row}
-          selectedLabClassNumber={selectedLabClassNumber}
-          inCart={inCart}
-          replaces={replaces}
-        />
-      ),
-      [row, selectedLabClassNumber, inCart, replaces],
+      () =>
+        variant === "alternative" ? null : (
+          <ToCartGroupedSectionCell
+            {...row}
+            selectedLabClassNumber={selectedLabClassNumber}
+            inCart={inCart}
+            replaces={replaces}
+          />
+        ),
+      [variant, row, selectedLabClassNumber, inCart, replaces],
     );
 
     if (!lecture) {
@@ -107,6 +113,8 @@ const CourseSectionCardRow = memo(
         addToCartSlot={addToCartSlot}
         conflictsWith={conflictsWith}
         inCart={inCart}
+        variant={variant}
+        pending={pending}
       />
     );
   },
@@ -120,7 +128,9 @@ const CourseSectionCardRow = memo(
     prev.inCart === next.inCart &&
     prev.replaces === next.replaces &&
     prev.onSelect === next.onSelect &&
-    prev.onLabClassChange === next.onLabClassChange,
+    prev.onLabClassChange === next.onLabClassChange &&
+    prev.variant === next.variant &&
+    prev.pending === next.pending,
 );
 
 export type CourseSectionsCardListProps = {
@@ -139,10 +149,18 @@ export type CourseSectionsCardListProps = {
    * (swap it for them) instead of Add to cart.
    */
   replaceInCart?: boolean;
+  /** Lecture class numbers to leave out, e.g. the section a course already has. */
+  excludeClassNumbers?: ReadonlySet<string>;
+  /** "alternative": small replacement cards that stage a change instead of adding to the cart. */
+  variant?: "default" | "alternative";
+  /** Lecture class number of the staged replacement, marked Pending. */
+  pendingClassNumber?: string | null;
+  /** Clicking a card stages it (alternative variant). */
+  onStageRow?: (row: GroupedSections) => void;
 };
 
 /** The lecture with the lab the cart holds (or its first lab), as the cart services take it. */
-function cartSelectionFor(
+export function cartSelectionFor(
   row: GroupedSections,
   cartClassNumbers: Set<string>,
 ): CartSelection | undefined {
@@ -188,7 +206,7 @@ function scrollUpTo(element: HTMLElement, toTop: boolean): void {
 }
 
 /** Cart/enrolled classes the row's meetings overlap, for one lab choice. */
-function conflictsFor(
+export function conflictsFor(
   row: GroupedSections,
   labClass: string | undefined,
   background: ScheduleEvent[],
@@ -235,6 +253,10 @@ export function CourseSectionsCardList({
   scheduleBackground,
   compact = false,
   replaceInCart = false,
+  excludeClassNumbers,
+  variant = "default",
+  pendingClassNumber = null,
+  onStageRow,
 }: CourseSectionsCardListProps) {
   const [labClassByRowId, setLabClassByRowId] = useState<
     Record<string, string>
@@ -287,10 +309,17 @@ export function CourseSectionsCardList({
       .filter(
         (row) =>
           row.lecture != null &&
+          !excludeClassNumbers?.has(String(row.lecture.classNumber)) &&
           sectionMatchesInstructorFilter(row.lecture, instructorFilter),
       )
       .sort(comparator);
-  }, [processedRows, instructorFilter, sortMode, sortFitByRowId]);
+  }, [
+    processedRows,
+    instructorFilter,
+    sortMode,
+    sortFitByRowId,
+    excludeClassNumbers,
+  ]);
 
   const paginationResetKey = [
     rowKeyPrefix,
@@ -345,9 +374,14 @@ export function CourseSectionsCardList({
 
   const handleCardSelect = useCallback(
     (rowId: string) => {
+      const row = processedRowsById.get(rowId);
+      if (onStageRow && row) {
+        onStageRow(row);
+        return;
+      }
       handleRowPreviewById(rowId);
     },
-    [handleRowPreviewById],
+    [handleRowPreviewById, onStageRow, processedRowsById],
   );
 
   const handleCardLabClassChange = useCallback(
@@ -413,6 +447,11 @@ export function CourseSectionsCardList({
               replaces={replaces}
               selectedLabClassNumber={pick}
               onLabClassChange={handleCardLabClassChange}
+              variant={variant}
+              pending={
+                pendingClassNumber != null &&
+                String(row.lecture?.classNumber) === pendingClassNumber
+              }
             />
           );
         })}

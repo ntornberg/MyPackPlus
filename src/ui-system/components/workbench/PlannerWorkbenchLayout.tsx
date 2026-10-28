@@ -19,8 +19,10 @@ export function PlannerWorkbenchLayout({
             {controls}
           </div>
         </div>
-        <div className="min-w-0">{results}</div>
-        <div className="min-w-0 @min-[640px]:col-span-2 @min-[1280px]:col-span-1 @min-[1280px]:sticky @min-[1280px]:top-0 @min-[1280px]:self-start">
+        <div className="min-w-0 @min-[640px]:border-l @min-[640px]:border-border/60 @min-[640px]:pl-4">
+          {results}
+        </div>
+        <div className="min-w-0 @min-[640px]:col-span-2 @min-[1280px]:col-span-1 @min-[1280px]:sticky @min-[1280px]:top-0 @min-[1280px]:self-start @min-[1280px]:border-l @min-[1280px]:border-border/60 @min-[1280px]:pl-4">
           {preview}
         </div>
       </div>

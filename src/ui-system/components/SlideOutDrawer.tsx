@@ -55,7 +55,6 @@ import {
   PLANNING_SYNCED_AT_KEY,
   syncPlanningData,
 } from "../../degree-planning/services/planningSync";
-import { TermIdByName } from "../../generated/catalogs/termIds";
 import PlannerLauncherHint from "../../user-experience/components/UserGuide/PlannerLauncherHint";
 import { StatusBanner } from "../../user-experience/status/StatusBanner";
 import { UpdateReadyPill } from "../../user-experience/update/UpdateReadyNotice";
@@ -277,7 +276,8 @@ function mergeCourseSearchData(
 function mergeScheduleData(
   stored: Partial<ScheduleData> | undefined,
 ): ScheduleData {
-  const selectedTerm = restoredTerm(stored?.selectedTerm);
+  // Schedule always shows the current term.
+  const selectedTerm = ScheduleDataInitialState.selectedTerm;
   // The selected course belongs to the saved term.
   const termChanged =
     stored?.selectedTerm !== undefined && selectedTerm !== stored.selectedTerm;
@@ -442,15 +442,10 @@ export default function SlideOutDrawer({
   const navigation = useMemo<PlannerNavigation>(
     () => ({
       openTab: selectTab,
-      openScheduleFor: (courseCode, semester) => {
-        const term = semester
-          ? Object.keys(TermIdByName).find(
-              (name) => semesterOfTermName(name) === semester,
-            )
-          : undefined;
+      // Schedule stays on the current term, whatever term the course came from.
+      openScheduleFor: (courseCode) => {
         setScheduleData((prev) => ({
           ...prev,
-          selectedTerm: term ?? prev.selectedTerm,
           selectedCourseCode: normalizeCourseCode(courseCode) ?? courseCode,
           instructorFilter: null,
         }));

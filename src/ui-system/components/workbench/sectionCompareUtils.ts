@@ -1,3 +1,4 @@
+import { splitDayTimeMeetings } from "../../../course-management/schedule/parseScheduleDayTime";
 import type {
   GroupedSections,
   ModifiedSection,
@@ -16,7 +17,42 @@ export function formatSectionInstructors(section: ModifiedSection): string {
   return typeof n === "string" ? n : "";
 }
 
-function linkedMeetingFromLab(lab: ModifiedSection): SectionLinkedMeeting {
+/** One meeting of a section: "T Th 11:45 AM–1:00 PM" and its room. */
+export type SectionMeetingLine = { when: string; where: string };
+
+/**
+ * Splits a registrar day/time cell that lists several meetings
+ * ("T Th 11:45 AM - 1:00 PM T 7:30 PM - 9:20 PM") into one line per meeting,
+ * paired with its room by position.
+ */
+export function sectionMeetingLines(
+  dayTime: string | undefined,
+  location: string | undefined,
+): SectionMeetingLine[] {
+  const whens = splitDayTimeMeetings(dayTime).map((part) =>
+    part.replace(/\s+-\s+/g, "–"),
+  );
+  const wheres = (location ?? "")
+    // Older cached cells glued rooms together: "321 Riddick HallRoom To Be Announced".
+    .replace(/(?<=\S)(?=Room To Be Announced)/g, " / ")
+    .split(" / ")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (whens.length === 0) {
+    return wheres.length > 0 ? [{ when: "", where: wheres.join(", ") }] : [];
+  }
+  return whens.map((when, i) => ({
+    when,
+    where:
+      wheres.length === whens.length
+        ? wheres[i]!
+        : i === 0
+          ? wheres.join(", ")
+          : "",
+  }));
+}
+
+export function linkedMeetingFromLab(lab: ModifiedSection): SectionLinkedMeeting {
   return {
     dayTime: lab.dayTime,
     location: lab.location,

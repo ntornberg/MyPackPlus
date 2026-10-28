@@ -16,6 +16,8 @@ type Meeting = {
   days: string;
   time: string;
   location: string;
+  /** A lab taken with section 001, so the Schedule tab's lab picker has something to show. */
+  lab?: { section: string; days: string; time: string; location: string };
 };
 
 const ENROLLED: Meeting[] = [
@@ -36,6 +38,19 @@ const ENROLLED: Meeting[] = [
 ];
 
 const CART: Meeting[] = [
+  {
+    code: "CH 101",
+    title: "Chemistry - A Molecular Science",
+    days: "Tue/Thu",
+    time: "3:00 PM - 4:15 PM",
+    location: "Dabney Hall 222",
+    lab: {
+      section: "201A",
+      days: "Tue",
+      time: "9:00 AM - 10:50 AM",
+      location: "Poe Hall 216",
+    },
+  },
   {
     code: "ST 370",
     title: "Probability and Statistics for Engineers",
@@ -74,6 +89,26 @@ function tableEntry(meeting: Meeting) {
         time: meeting.time,
         dates: "01/07/2027 - 04/23/2027",
       },
+      ...(meeting.lab
+        ? [
+            {
+              section: meeting.lab.section,
+              class_nbr: stagingClassNumber(meeting.code, meeting.lab.section),
+              type: "Laboratory",
+              location: meeting.lab.location,
+              facility: meeting.lab.location,
+              instructors: [
+                instructorForSection(
+                  subject,
+                  `${meeting.code}:${meeting.lab.section}`,
+                ).instructor_name,
+              ],
+              meet_days: meeting.lab.days,
+              time: meeting.lab.time,
+              dates: "01/07/2027 - 04/23/2027",
+            },
+          ]
+        : []),
     ],
   };
 }

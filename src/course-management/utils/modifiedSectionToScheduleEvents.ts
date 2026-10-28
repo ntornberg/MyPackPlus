@@ -1,4 +1,4 @@
-import { parseDayTimeEvent } from "../schedule/parseScheduleDayTime";
+import { parseDayTimeEvents } from "../schedule/parseScheduleDayTime";
 import type { ScheduleEvent } from "../types/calendar";
 import type { ModifiedSection } from "../types/section";
 
@@ -9,24 +9,15 @@ export function modifiedSectionToScheduleEvents(
   section: ModifiedSection,
 ): ScheduleEvent[] {
   const code = section.courseData?.code?.trim() ?? "";
-  let nextId = 1;
   const out: ScheduleEvent[] = [];
 
-  const primary = parseDayTimeEvent(
-    section.dayTime,
-    code || undefined,
-    nextId++,
-  );
-  if (primary) {
-    out.push(primary);
-  }
+  out.push(...parseDayTimeEvents(section.dayTime, code || undefined, 1));
 
   for (const m of section.linkedMeetings ?? []) {
     const label = [code, m.component].filter(Boolean).join(" ").trim();
-    const ev = parseDayTimeEvent(m.dayTime, label || undefined, nextId++);
-    if (ev) {
-      out.push(ev);
-    }
+    out.push(
+      ...parseDayTimeEvents(m.dayTime, label || undefined, out.length + 1),
+    );
   }
 
   return out;

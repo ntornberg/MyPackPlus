@@ -54,3 +54,45 @@ export function replaceCartSection(
     };
   });
 }
+
+/**
+ * Moves a cart lecture to another of its labs. The lecture is already in the
+ * cart, so this removes it first and adds it back with the new lab; if that
+ * add fails it puts the old lab back.
+ */
+export function changeCartLab(
+  lecture: ModifiedSection,
+  fromLab: ModifiedSection,
+  toLab: ModifiedSection,
+  options: AddSectionToCartOptions = {},
+): Promise<ReplaceCartSectionResult> {
+  const current = { section: fromLab, parent: lecture };
+  const next = { section: toLab, parent: lecture };
+  return trackWork(async () => {
+    const removed = await removeSectionFromCart(fromLab, lecture);
+    if (!removed.ok) {
+      return { ok: false, partial: false, message: removed.message };
+    }
+    const added = await addSectionToCart(toLab, lecture, options);
+    if (added.ok) {
+      return {
+        ok: true,
+        message: `Moved ${label(current)} to ${componentLabel(toLab)}.`,
+      };
+    }
+    const restored = await addSectionToCart(fromLab, lecture);
+    if (!restored.ok) {
+      return {
+        ok: false,
+        partial: true,
+        message: `Couldn't add ${label(next)} with ${componentLabel(toLab)}, and couldn't put ${label(current)} back. Add it to your cart again. (${added.message})`,
+      };
+    }
+    return { ok: false, partial: false, message: added.message };
+  });
+}
+
+/** "Problem Session 004B" */
+function componentLabel(section: ModifiedSection): string {
+  return [section.component, section.section].filter(Boolean).join(" ");
+}

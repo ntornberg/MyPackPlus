@@ -1,4 +1,4 @@
-import { parseDayTimeEvent } from "../../course-management/schedule/parseScheduleDayTime";
+import { parseDayTimeEvents } from "../../course-management/schedule/parseScheduleDayTime";
 import type {
   GroupedSections,
   ModifiedSection,
@@ -66,9 +66,10 @@ function parseSectionLabel(
 }
 
 function meetingsClash(a: ModifiedSection, b: ModifiedSection): boolean {
-  const first = parseDayTimeEvent(a.dayTime, undefined);
-  const second = parseDayTimeEvent(b.dayTime, undefined);
-  return first !== null && second !== null && eventsTimeOverlap(first, second);
+  const second = parseDayTimeEvents(b.dayTime, undefined);
+  return parseDayTimeEvents(a.dayTime, undefined).some((first) =>
+    second.some((other) => eventsTimeOverlap(first, other)),
+  );
 }
 
 function componentKey(section: ModifiedSection): string {

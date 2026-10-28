@@ -9,7 +9,7 @@ import {
 } from "../../cache/scheduleCacheSignal";
 import {
   isUntimedDayTime,
-  parseDayTimeEvent,
+  parseDayTimeEvents,
 } from "../../schedule/parseScheduleDayTime";
 import {
   type ScheduleEvent,
@@ -113,24 +113,25 @@ export const mergePinnedDayTimeWithEvents = (
     cachedEvents.length === 0 ? 0 : Math.max(...cachedEvents.map((e) => e.id));
   let nextId = maxBackgroundId + 1;
   const pins: ScheduleEvent[] = [];
-  const primary = parseDayTimeEvent(
+  for (const primary of parseDayTimeEvents(
     dayTime,
     meetingCalendarLabel(courseCode),
-    nextId++,
-  );
-  if (primary) {
+    nextId,
+  )) {
     primary.course = selectedSection
       ? courseDetailsFromSection(selectedSection)
       : courseDetailsFromLabel(courseCode ?? "");
     pins.push(primary);
   }
+  nextId += pins.length;
   for (const m of linkedMeetings ?? []) {
-    const ev = parseDayTimeEvent(
+    const events = parseDayTimeEvents(
       m.dayTime,
       meetingCalendarLabel(courseCode, m.component),
-      nextId++,
+      nextId,
     );
-    if (ev) {
+    nextId += events.length;
+    for (const ev of events) {
       ev.course = selectedSection
         ? {
             ...courseDetailsFromSection(selectedSection),

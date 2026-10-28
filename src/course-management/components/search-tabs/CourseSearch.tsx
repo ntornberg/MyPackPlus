@@ -364,7 +364,7 @@ export default function CourseSearch({
             {controlsPanel}
             {resultsPanel}
           </div>
-          <div className="min-w-0 @min-[1100px]:sticky @min-[1100px]:top-0 @min-[1100px]:self-start">
+          <div className="min-w-0 @min-[1100px]:sticky @min-[1100px]:top-0 @min-[1100px]:self-start @min-[1100px]:border-l @min-[1100px]:border-border/60 @min-[1100px]:pl-4">
             {previewContent}
           </div>
         </div>
