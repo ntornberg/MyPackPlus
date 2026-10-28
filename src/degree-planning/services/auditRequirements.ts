@@ -27,8 +27,16 @@ export type AuditRequirementEntry = {
 /** An unmet requirement and how much of it is left, when MyPack says. */
 export type RequirementNeed = {
   name: string;
+  /** The audit's rule id; "" for a group-wide unit minimum. */
+  requirementId: string;
   unitsLeft: number | null;
   coursesLeft: number | null;
+  /** The list's minimum, when it sets one in hours or courses. */
+  unitsRequired: number | null;
+  coursesRequired: number | null;
+  /** What the audit already applied: completed, enrolled or planned. */
+  unitsDone: number;
+  coursesDone: number;
   /** Approved choices that count toward this requirement; empty without a list. */
   courses: NeedCourse[];
 };
@@ -62,7 +70,9 @@ const unitsOf = (lines: DegreeAuditLine[]) =>
 /**
  * Unmet requirements in a group, with units and courses left from each
  * approved-choice list's minimums less what the audit already applied to it.
- * Unmet rows themselves give no amount (their units often read "Verify"), so
+ * Without a list minimum, the unmet row's own units (1.000 for a 1-credit
+ * rule) say what's left; when those read "Verify" too, only the group's own
+ * unit minimum can say how much is left, so
  * without a list only the group's own unit minimum can say how much is left.
  */
 export function requirementNeeds(
@@ -89,10 +99,27 @@ export function requirementNeeds(
     const applied = group.lines.filter(
       (other) => other.requirementId === line.requirementId && counts(other),
     );
+    // Some lists put the minimum on their groups rather than the list itself.
+    const minUnits =
+      list && !list.minUnits && !list.minCourses
+        ? list.groups.reduce((sum, choice) => sum + choice.minUnits, 0)
+        : (list?.minUnits ?? 0);
+    const minCourses = list?.minCourses ?? 0;
+    // The unmet row's units are what's still owed, on top of what's applied.
+    const rowUnits = !minUnits && !minCourses ? line.units : 0;
     return {
       name: list?.name || line.requirement || line.title,
-      unitsLeft: list ? left(list.minUnits, unitsOf(applied)) : null,
-      coursesLeft: list ? left(list.minCourses, applied.length) : null,
+      requirementId: line.requirementId,
+      unitsLeft: rowUnits
+        ? rowUnits
+        : list
+          ? left(minUnits, unitsOf(applied))
+          : null,
+      coursesLeft: list ? left(minCourses, applied.length) : null,
+      unitsRequired: rowUnits ? rowUnits + unitsOf(applied) : minUnits || null,
+      coursesRequired: minCourses || null,
+      unitsDone: unitsOf(applied),
+      coursesDone: applied.length,
       courses: listCourses(list),
     };
   });
@@ -100,9 +127,22 @@ export function requirementNeeds(
     (need) => need.unitsLeft !== null || need.coursesLeft !== null,
   );
   if (!known && group.minUnits > 0) {
-    const unitsLeft = left(group.minUnits, unitsOf(group.lines.filter(counts)));
+    const applied = group.lines.filter(counts);
+    const unitsLeft = left(group.minUnits, unitsOf(applied));
     if (unitsLeft) {
-      return [{ name: group.name, unitsLeft, coursesLeft: null, courses: [] }];
+      return [
+        {
+          name: group.name,
+          requirementId: "",
+          unitsLeft,
+          coursesLeft: null,
+          unitsRequired: group.minUnits,
+          coursesRequired: null,
+          unitsDone: unitsOf(applied),
+          coursesDone: applied.length,
+          courses: [],
+        },
+      ];
     }
   }
   return needs;

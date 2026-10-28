@@ -5,6 +5,8 @@ import type { RequirementNeed } from "../../../degree-planning/services/auditReq
 import {
   buildCourseRow,
   matchesCourseQuery,
+  metParts,
+  needProgress,
   needSections,
   type NeedSection,
 } from "./RequirementTree";
@@ -55,8 +57,13 @@ describe("needSections", () => {
   };
   const need = (name: string, codes: string[]): RequirementNeed => ({
     name,
+    requirementId: name,
     unitsLeft: 3,
     coursesLeft: null,
+    unitsRequired: 3,
+    coursesRequired: null,
+    unitsDone: 0,
+    coursesDone: 0,
     courses: codes.map(course),
   });
   const rows = ["EC 201", "ARE 201", "AFS 241", "PHI 214", "HI 0233"].map(
@@ -96,5 +103,90 @@ describe("needSections", () => {
   it("keeps one list when no requirement has its own", () => {
     expect(needSections(rows, [need("Electives", [])])).toBeNull();
     expect(needSections(rows, [])).toBeNull();
+  });
+});
+
+describe("needProgress", () => {
+  const need = (overrides: Partial<RequirementNeed>): RequirementNeed => ({
+    name: "Data Communication",
+    requirementId: "1",
+    unitsLeft: null,
+    coursesLeft: null,
+    unitsRequired: null,
+    coursesRequired: null,
+    unitsDone: 0,
+    coursesDone: 0,
+    courses: [],
+    ...overrides,
+  });
+
+  it("shows hours done of the minimum and what's left", () => {
+    expect(
+      needProgress(need({ unitsRequired: 3, unitsDone: 1, unitsLeft: 2 })),
+    ).toEqual({
+      text: "1 of 3 credit hrs done · 2 more credit hrs needed",
+      fraction: 1 / 3,
+    });
+  });
+
+  it("counts courses when the list sets a course minimum", () => {
+    expect(
+      needProgress(
+        need({ coursesRequired: 2, coursesDone: 0, coursesLeft: 2 }),
+      ),
+    ).toEqual({
+      text: "0 of 2 courses done · 2 more courses needed",
+      fraction: 0,
+    });
+  });
+
+  it("says what's done when MyPack gives no minimum", () => {
+    expect(needProgress(need({ unitsDone: 1, coursesDone: 1 })).text).toBe(
+      "1 credit hr done · still needs more",
+    );
+    expect(needProgress(need({})).text).toBe(
+      "Not started · needs at least 1 course",
+    );
+  });
+});
+
+describe("metParts", () => {
+  const finished = (
+    code: string,
+    requirement: string,
+    requirementId: string,
+    status: "completed" | "enrolled" = "completed",
+  ) => {
+    const [abr, num] = code.split(" ");
+    return {
+      ...row(abr, num, code),
+      audit: { status, term: "", grade: "", requirement, requirementId },
+    };
+  };
+  const need = {
+    name: "Data Communication",
+    requirementId: "20",
+    unitsLeft: null,
+    coursesLeft: null,
+    unitsRequired: null,
+    coursesRequired: null,
+    unitsDone: 0,
+    coursesDone: 0,
+    courses: [],
+  };
+
+  it("groups finished courses by the rule they filled, leaving unmet ones out", () => {
+    const parts = metParts(
+      [
+        row("DSA", "202", "DSA 202"),
+        finished("DSA 201", "Foundations", "10"),
+        finished("DSA 406", "Foundations", "10", "enrolled"),
+        finished("DSA 205", "Data Communication", "20"),
+      ],
+      [need],
+    );
+    expect(
+      parts.map((p) => [p.name, p.done, p.rows.map((r) => r.key)]),
+    ).toEqual([["Foundations", false, ["DSA 201", "DSA 406"]]]);
   });
 });

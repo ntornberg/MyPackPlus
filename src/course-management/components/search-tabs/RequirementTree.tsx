@@ -221,6 +221,50 @@ export function needSections(
   return sections;
 }
 
+/** A part of the group MyPack already counts, with the courses that fill it. */
+export type MetPart = {
+  name: string;
+  rows: CourseRowModel[];
+  /** True once every course in it is completed, not just enrolled or planned. */
+  done: boolean;
+};
+
+/**
+ * Parts of a group the audit filled, by the rule each finished course was
+ * applied to. Rules still unmet are left to their need, which counts them.
+ */
+export function metParts(
+  rows: readonly CourseRowModel[],
+  needs: readonly RequirementNeed[],
+): MetPart[] {
+  const open = new Set(needs.map((need) => need.requirementId));
+  const parts = new Map<string, MetPart>();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const audit = row.audit;
+    if (
+      !audit?.requirement ||
+      isNeeded(row) ||
+      audit.elsewhere ||
+      audit.fromPlanner ||
+      (audit.requirementId && open.has(audit.requirementId)) ||
+      seen.has(row.id)
+    ) {
+      continue;
+    }
+    seen.add(row.id);
+    const part = parts.get(audit.requirement) ?? {
+      name: audit.requirement,
+      rows: [],
+      done: true,
+    };
+    part.rows.push(row);
+    part.done &&= audit.status === "completed";
+    parts.set(audit.requirement, part);
+  }
+  return [...parts.values()];
+}
+
 export const STATUS_META: Record<
   RequirementStatus,
   { label: string; icon: typeof Circle; className: string }
@@ -394,6 +438,12 @@ export function CourseRow({
 }) {
   const expandable = row.sectionCount > 0;
   const done = row.audit?.status === "completed";
+  // Finished work says which part of the group it filled.
+  const appliedTo =
+    row.audit?.requirement && !isNeeded(row)
+      ? `Counts toward ${row.audit.requirement}`
+      : undefined;
+  const subtitle = detail ?? appliedTo;
   const cart = useCartCoursesContext();
   const inCart = isCourseInCart(
     cart,
@@ -412,11 +462,11 @@ export function CourseRow({
       <span className="w-20 shrink-0 font-mono text-xs text-muted-foreground">
         {row.course.course_abr} {stripLeadingZeros(row.course.catalog_num)}
       </span>
-      {detail ? (
+      {subtitle ? (
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate">{row.course.course_descrip}</span>
           <span className="truncate text-xs text-muted-foreground">
-            {detail}
+            {subtitle}
           </span>
         </span>
       ) : (
@@ -528,16 +578,66 @@ function requirementSummary(model: RequirementModel): string {
   return parts.length ? parts.join(" · ") : "Nothing applied yet";
 }
 
-/** "Ethics · 3 more credit hrs needed", or that it isn't met yet. */
+export type NeedProgress = {
+  /** "1 of 3 credit hrs done · 2 more needed", or what's known without a minimum. */
+  text: string;
+  /** Share done from 0 to 1; null when MyPack gives no minimum. */
+  fraction: number | null;
+};
+
+/** How far along one unmet requirement is, in hours or courses as its list counts. */
+export function needProgress(need: RequirementNeed): NeedProgress {
+  const byUnits = need.unitsRequired !== null || need.coursesRequired === null;
+  const done = byUnits ? need.unitsDone : need.coursesDone;
+  const required = byUnits ? need.unitsRequired : need.coursesRequired;
+  const label = byUnits ? hoursLabel : coursesLabel;
+  if (required) {
+    const amount = amountLeft(need, true);
+    return {
+      text: `${done} of ${label(required)} done${amount ? ` · ${amount} needed` : ""}`,
+      fraction: Math.min(1, done / required),
+    };
+  }
+  // Without a minimum, unmet still means at least one more course.
+  if (need.unitsDone || need.coursesDone) {
+    const done = need.unitsDone
+      ? hoursLabel(need.unitsDone)
+      : coursesLabel(need.coursesDone);
+    return { text: `${done} done · still needs more`, fraction: null };
+  }
+  return { text: "Not started · needs at least 1 course", fraction: null };
+}
+
+/** "Ethics · 1 of 3 credit hrs done · 2 more credit hrs needed", with a bar. */
 function NeedLabel({ need }: { need: RequirementNeed }) {
-  const amount = amountLeft(need, true);
+  const { text, fraction } = needProgress(need);
   return (
-    <span className="min-w-0 flex-1">
-      <span className="font-medium text-foreground">{need.name}</span>
-      <span className="text-muted-foreground">
-        {" · "}
-        {amount ? `${amount} needed` : "not met yet"}
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      <span className="min-w-0 flex-1">
+        <span className="font-medium text-foreground">{need.name}</span>
+        <span className="text-muted-foreground">
+          {" · "}
+          {text}
+        </span>
       </span>
+      {fraction !== null ? (
+        // The track needs its own contrast; bg-muted vanishes on the tinted header.
+        <span
+          className="flex shrink-0 items-center gap-1.5"
+          role="img"
+          aria-label={text}
+        >
+          <span className="h-2 w-24 overflow-hidden rounded-full bg-foreground/15 ring-1 ring-foreground/25 ring-inset">
+            <span
+              className="block h-full rounded-full bg-emerald-500"
+              style={{ width: `${fraction * 100}%` }}
+            />
+          </span>
+          <span className="w-8 text-right font-medium text-foreground tabular-nums">
+            {Math.round(fraction * 100)}%
+          </span>
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -692,6 +792,7 @@ function RequirementRow({
     }
   }, [model.deferred, model.loading, onOpen, entry.requirementId]);
   const sections = needSections(courses, needs);
+  const met = metParts([...courses, ...finished], needs);
   // Each need starts folded except the first, which shows how they open.
   const [openNeeds, setOpenNeeds] = useState<Set<number>>(() => new Set([0]));
   const toggleNeed = (index: number) =>
@@ -752,6 +853,37 @@ function RequirementRow({
         </span>
       </summary>
       <div className="border-t border-border">
+        {met.map((part) => (
+          <div
+            key={`met:${part.name}`}
+            className="flex items-center gap-2 border-t border-border bg-emerald-500/5 px-4 py-2 text-xs first:border-t-0"
+          >
+            <span className="size-3.5 shrink-0" aria-hidden />
+            {part.done ? (
+              <CheckCircle2
+                className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400"
+                aria-label="Done"
+              />
+            ) : (
+              <CircleDot
+                className="size-3 shrink-0 text-primary"
+                aria-label="In progress"
+              />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="font-medium text-foreground">{part.name}</span>
+              <span className="text-muted-foreground">
+                {part.done ? " · done with " : " · filled by "}
+                {part.rows
+                  .map(
+                    (row) =>
+                      `${row.course.course_abr} ${stripLeadingZeros(row.course.catalog_num)}`,
+                  )
+                  .join(", ")}
+              </span>
+            </span>
+          </div>
+        ))}
         {sections ? (
           sections.map(({ need, rows }, index) => {
             const open = openNeeds.has(index);

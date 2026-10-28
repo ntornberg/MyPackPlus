@@ -1,5 +1,5 @@
 import {
-  ChevronRightIcon,
+  ChevronLeftIcon,
   GraduationCapIcon,
   MoonStarIcon,
   SunMediumIcon,
@@ -715,9 +715,9 @@ export default function SlideOutDrawer({
             plannerLauncherClassName,
           )}
         >
+          <ChevronLeftIcon className="size-4" aria-hidden="true" />
           <GraduationCapIcon className="size-5" strokeWidth={2.25} />
           MyPack+ Planner
-          <ChevronRightIcon className="size-4" aria-hidden="true" />
         </Button>
       </PlannerLauncherHint>
 

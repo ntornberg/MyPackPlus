@@ -178,8 +178,13 @@ describe("requirementNeeds", () => {
     ).toEqual([
       {
         name: "Electives Group A",
+        requirementId: "000001",
         unitsLeft: 1,
         coursesLeft: null,
+        unitsRequired: 6,
+        coursesRequired: null,
+        unitsDone: 5,
+        coursesDone: 3,
         courses: [
           "TST 301",
           "TST 297",
@@ -191,8 +196,13 @@ describe("requirementNeeds", () => {
       },
       {
         name: "Electives Group B",
+        requirementId: "000002",
         unitsLeft: null,
         coursesLeft: null,
+        unitsRequired: null,
+        coursesRequired: null,
+        unitsDone: 6,
+        coursesDone: 2,
         courses: [],
       },
     ]);
@@ -216,8 +226,61 @@ describe("requirementNeeds", () => {
   it("falls back to the group's unit minimum without choice lists", () => {
     // Applied C/E/P units: 1 + 1 + 3 + 3 + 3; unmet "Verify" rows add none.
     expect(requirementNeeds({ ...electives, minUnits: 15 })).toEqual([
-      { name: "Other Electives", unitsLeft: 4, coursesLeft: null, courses: [] },
+      {
+        name: "Other Electives",
+        requirementId: "",
+        unitsLeft: 4,
+        coursesLeft: null,
+        unitsRequired: 15,
+        coursesRequired: null,
+        unitsDone: 11,
+        coursesDone: 5,
+        courses: [],
+      },
     ]);
+  });
+
+  it("takes the minimum from the list's groups when the list sets none", () => {
+    const parsed = parseRequirementChoices(requirementFixture(), "000001");
+    const list = {
+      ...parsed,
+      minUnits: 0,
+      minCourses: 0,
+      groups: parsed.groups.map((group, index) => ({
+        ...group,
+        minUnits: index === 0 ? 8 : 0,
+      })),
+    };
+    expect(
+      requirementNeeds(electives, { "000001|": { list } })[0],
+    ).toMatchObject({ unitsRequired: 8, unitsLeft: 3, unitsDone: 5 });
+  });
+
+  it("reads what's left from the unmet row's units without a list minimum", () => {
+    const group = {
+      id: "500",
+      name: "Required Courses",
+      minUnits: 0,
+      status: "U" as const,
+      lines: [
+        {
+          ...electives.lines[0],
+          status: "U" as const,
+          requirementId: "20",
+          requirement: "Data Communication",
+          units: 1,
+          subject: "",
+          catalogNbr: "",
+          courseId: "",
+        },
+      ],
+    };
+    expect(requirementNeeds(group)[0]).toMatchObject({
+      name: "Data Communication",
+      unitsLeft: 1,
+      unitsRequired: 1,
+      unitsDone: 0,
+    });
   });
 
   it("is empty for a group with nothing unmet", () => {

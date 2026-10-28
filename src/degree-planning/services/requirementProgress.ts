@@ -19,6 +19,9 @@ export type CourseAuditState = {
   fromPlanner?: boolean;
   /** The audit counts this course toward a different requirement. */
   elsewhere?: boolean;
+  /** The rule the audit applied the course to, e.g. "Data Communication". */
+  requirement?: string;
+  requirementId?: string;
 };
 
 /** Requirement status shown in the tree; "unknown" when no audit covers it. */
@@ -53,7 +56,14 @@ export function auditLineState(line: DegreeAuditLine): CourseAuditState {
         : line.status === "P"
           ? "planned"
           : "other";
-  return { status, term: line.term, grade: line.grade };
+  const requirement = line.requirement.trim();
+  return {
+    status,
+    term: line.term,
+    grade: line.grade,
+    ...(requirement ? { requirement } : {}),
+    ...(line.requirementId ? { requirementId: line.requirementId } : {}),
+  };
 }
 
 export function requirementStatus(status: AuditLineStatus): RequirementStatus {

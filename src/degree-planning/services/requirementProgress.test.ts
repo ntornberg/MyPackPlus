@@ -113,6 +113,38 @@ describe("requirementProgress", () => {
     expect(progress.extraCourses.map((l) => l.subject)).toEqual(["OTH"]);
   });
 
+  it("keeps the rule the audit applied a course to", () => {
+    const progress = requirementProgress(
+      "400",
+      [course("41", "DSA", "201")],
+      auditGroupsById([
+        {
+          ...audit,
+          groups: [
+            {
+              id: "400",
+              name: "Required Courses",
+              minUnits: 0,
+              status: "U",
+              lines: [
+                line({
+                  courseId: "41",
+                  subject: "DSA",
+                  catalogNbr: "201",
+                  requirement: " Data Science Foundations ",
+                }),
+              ],
+            },
+          ],
+        },
+      ]),
+    );
+
+    expect(progress.courses.get("DSA 201")?.requirement).toBe(
+      "Data Science Foundations",
+    );
+  });
+
   it("lists a course named under several unmet requirements once", () => {
     const unmet = (subject: string, catalogNbr: string) =>
       line({ status: "U", subject, catalogNbr, grade: "", term: "" });
