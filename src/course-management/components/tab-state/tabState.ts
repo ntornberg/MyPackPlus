@@ -104,6 +104,7 @@ export type ScheduleData = {
   selectedTerm: string | null;
   /** Normalized code ("CSC 316") of the cart/enrolled course whose alternatives are shown. */
   selectedCourseCode: string | null;
+  selectedCourseStatus: "cart" | "enrolled" | null;
   instructorFilter: string | null;
   sortMode: SectionSortMode;
   compactSections: boolean;
@@ -111,6 +112,7 @@ export type ScheduleData = {
 export const ScheduleDataInitialState: ScheduleData = {
   selectedTerm: DEFAULT_TERM,
   selectedCourseCode: null,
+  selectedCourseStatus: null,
   instructorFilter: null,
   sortMode: "recommended",
   compactSections: true,

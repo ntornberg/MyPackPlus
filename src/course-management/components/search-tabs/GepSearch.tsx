@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, RefreshCwIcon } from "lucide-react";
 import React, {
   useEffect,
   useMemo,
@@ -8,6 +8,7 @@ import React, {
 } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
@@ -734,14 +735,6 @@ export default function GepSearch({
           onCheckedChange={handleHideNoSectionsChange}
         />
       </div>
-      <LoadingProgress
-        className="mt-4"
-        active={!isLoaded}
-        value={progress}
-        label={progressLabel}
-        succeeded={progress === 100}
-        doneLabel={`Found ${courses?.length ?? 0} GEP course${courses?.length === 1 ? "" : "s"}`}
-      />
     </PlannerPanel>
   );
 
@@ -857,6 +850,31 @@ export default function GepSearch({
               : "Courses"
           }
           description={resultsDescription}
+          action={
+            selectedSubjectCode && selectedTerm ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void courseSearch()}
+                disabled={!isLoaded}
+                className="h-7 shrink-0 gap-1 px-2 text-xs"
+              >
+                <RefreshCwIcon
+                  className={cn("size-3", !isLoaded && "animate-spin")}
+                  aria-hidden
+                />
+                Refresh sections
+              </Button>
+            ) : null
+          }
+        />
+        <LoadingProgress
+          active={!isLoaded}
+          value={progress}
+          label={progressLabel}
+          succeeded={progress === 100}
+          doneLabel={`Found ${courses?.length ?? 0} GEP course${courses?.length === 1 ? "" : "s"}`}
         />
         {resultsBody}
       </section>
@@ -877,16 +895,21 @@ export default function GepSearch({
 function SectionHeading({
   title,
   description,
+  action,
 }: {
   title: string;
   description?: string;
+  action?: React.ReactNode;
 }) {
   return (
-    <div className="border-b border-border pb-1">
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      {description ? (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      ) : null}
+    <div className="flex items-start justify-between gap-2 border-b border-border pb-1">
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {description ? (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      {action}
     </div>
   );
 }

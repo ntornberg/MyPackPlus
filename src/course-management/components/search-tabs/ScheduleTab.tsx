@@ -319,17 +319,20 @@ function catalogCourseFor(code: string | undefined) {
     : null;
 }
 
-/**
- * The cart's lab / problem session with the others under it. Clicking one
- * shows it on the calendar; Swap changes it in the cart. Stays open through
- * both so options can be compared.
- */
+type CartLabSwapProps = {
+  swapping: string | null;
+  onSwap: (...args: Parameters<typeof changeCartLab>) => Promise<void>;
+};
+
+/** The cart's lab / problem session picker; preview before swapping. */
 function SessionSwapPicker({
   course,
   row,
   background,
   resetKey,
   onPreviewSectionChange,
+  swapping,
+  onSwap,
 }: {
   course: ScheduleCourse;
   row: GroupedSections;
@@ -338,15 +341,12 @@ function SessionSwapPicker({
   /** Closes the list and drops the preview when this changes. */
   resetKey: unknown;
   onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
-}) {
+} & CartLabSwapProps) {
   const [open, setOpen] = useState(false);
   const [previewing, setPreviewing] = useState<string | null>(null);
-  const [swapping, setSwapping] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     setOpen(false);
     setPreviewing(null);
-    setError(null);
   }, [resetKey]);
 
   const labs = labsOf(row);
@@ -378,20 +378,19 @@ function SessionSwapPicker({
       return;
     }
     const labClass = String(lab.classNumber);
-    setSwapping(labClass);
-    setError(null);
-    const result = await changeCartLab(row.lecture, current.section, lab, {
-      extras: row.extras ?? [],
-      payload: row.cartPayloads?.[labClass],
-    });
-    setSwapping(null);
-    if (result.ok) {
-      preview(null);
-      void refreshCart();
-    } else {
-      AppLogger.warn("Swapping section failed:", result.message);
-      setError(result.message);
-    }
+    await onSwap(
+      row.lecture,
+      current.section,
+      lab,
+      {
+        extras: row.extras ?? [],
+        payload: row.cartPayloads?.[labClass],
+      },
+      {
+        extras: row.extras ?? [],
+        payload: row.cartPayloads?.[String(current.section.classNumber)],
+      },
+    );
   };
 
   return (
@@ -508,11 +507,6 @@ function SessionSwapPicker({
           })}
         </div>
       ) : null}
-      {error ? (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
     </section>
   );
 }
@@ -528,6 +522,8 @@ function CartCourseSelection({
   background,
   expanded,
   onPreviewSectionChange,
+  swapping,
+  onSwap,
 }: {
   course: ScheduleCourse;
   term: string | null;
@@ -537,7 +533,7 @@ function CartCourseSelection({
   /** Cart and enrolled classes, this course included. */
   background: ScheduleEvent[];
   onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
-}) {
+} & CartLabSwapProps) {
   const needed = course.classNumbers.length > 1;
   const catalogCourse = needed ? catalogCourseFor(course.code) : null;
   const { data, loading } = useCourseSections(
@@ -582,6 +578,8 @@ function CartCourseSelection({
       background={otherCourses}
       resetKey={`${course.code}|${expanded}`}
       onPreviewSectionChange={onPreviewSectionChange}
+      swapping={swapping}
+      onSwap={onSwap}
     />
   );
 }
@@ -713,6 +711,29 @@ export default function ScheduleTab({
   const navigation = usePlannerNavigation();
   const term = scheduleData.selectedTerm;
   const schedule = useTermSchedule(term);
+  // A swap removes the course row before recovery finishes; keep its state here.
+  const [swapping, setSwapping] = useState<string | null>(null);
+  const [swapError, setSwapError] = useState<string | null>(null);
+  const swapCartLab: CartLabSwapProps["onSwap"] = async (...args) => {
+    setSwapping(String(args[2].classNumber));
+    setSwapError(null);
+    try {
+      const result = await changeCartLab(...args);
+      if (!result.ok) {
+        AppLogger.warn("Swapping section failed:", result.message);
+        setSwapError(result.message);
+      }
+    } catch (error) {
+      AppLogger.warn("Swapping section failed:", error);
+      setSwapError(
+        "Couldn't finish the swap. Refresh your MyPack cart to check which sections remain.",
+      );
+    } finally {
+      setSwapping(null);
+      onPreviewSectionChange(null);
+      void refreshCart();
+    }
+  };
   const courses = useMemo(
     () =>
       schedule ? scheduleCoursesFrom(schedule.cart, schedule.enrolled) : [],
@@ -720,8 +741,12 @@ export default function ScheduleTab({
   );
   // The expanded course; all start collapsed.
   const selectedCourse =
-    courses.find((course) => course.code === scheduleData.selectedCourseCode) ??
-    null;
+    courses.find(
+      (course) =>
+        course.code === scheduleData.selectedCourseCode &&
+        (!scheduleData.selectedCourseStatus ||
+          course.status === scheduleData.selectedCourseStatus),
+    ) ?? null;
   const background = useMemo(
     () => (schedule ? [...schedule.cart, ...schedule.enrolled] : null),
     [schedule],
@@ -763,7 +788,7 @@ export default function ScheduleTab({
   previewCallback.current = onPreviewSectionChange;
   useEffect(() => {
     previewCallback.current(null);
-  }, [term, selectedCourse?.code]);
+  }, [term, selectedCourse?.code, selectedCourse?.status]);
 
   // While an alternative is pinned, fade the section it would replace.
   const previewCode = selectedPreview
@@ -813,6 +838,7 @@ export default function ScheduleTab({
   const toggleCourse = (course: ScheduleCourse) =>
     setScheduleTabData({
       selectedCourseCode: course === selectedCourse ? null : course.code,
+      selectedCourseStatus: course === selectedCourse ? null : course.status,
       instructorFilter: null,
     });
 
@@ -940,14 +966,19 @@ export default function ScheduleTab({
       }
       contentClassName="space-y-4"
     >
+      {swapError ? (
+        <Alert variant="destructive">
+          <AlertTitle>Section swap failed</AlertTitle>
+          <AlertDescription>{swapError}</AlertDescription>
+        </Alert>
+      ) : null}
       {courses.some((course) => course.status === "cart") ? (
         <Alert>
           <InfoIcon />
-          <AlertTitle>Your cart isn&apos;t your schedule yet</AlertTitle>
+          <AlertTitle>Courses in your cart aren&apos;t enrolled yet</AlertTitle>
           <AlertDescription>
-            Adding, replacing, and removing here only change your MyPack
-            shopping cart. To register, open your Shopping Cart in MyPack and
-            click Enroll.
+            Changes here update your MyPack shopping cart. To enroll in these
+            courses, open your Shopping Cart in MyPack and click Enroll.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -972,6 +1003,8 @@ export default function ScheduleTab({
                     background={background ?? []}
                     expanded={course === selectedCourse}
                     onPreviewSectionChange={onPreviewSectionChange}
+                    swapping={swapping}
+                    onSwap={swapCartLab}
                   />
                 ) : null
               }

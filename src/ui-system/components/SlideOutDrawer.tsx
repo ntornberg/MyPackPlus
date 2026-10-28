@@ -289,6 +289,9 @@ function mergeScheduleData(
     selectedCourseCode: termChanged
       ? null
       : (stored?.selectedCourseCode ?? null),
+    selectedCourseStatus: termChanged
+      ? null
+      : (stored?.selectedCourseStatus ?? null),
   };
 }
 
@@ -448,6 +451,7 @@ export default function SlideOutDrawer({
         setScheduleData((prev) => ({
           ...prev,
           selectedCourseCode: normalizeCourseCode(courseCode) ?? courseCode,
+          selectedCourseStatus: null,
           instructorFilter: null,
         }));
         selectTab("schedule");

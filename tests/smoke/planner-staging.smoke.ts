@@ -112,7 +112,7 @@ test("lists the schedule and replaces a cart section", async ({ page }) => {
     await expect(courses.getByText(code, { exact: true })).toBeVisible();
   }
   await expect(
-    page.getByText("Your cart isn't your schedule yet"),
+    page.getByText("Courses in your cart aren't enrolled yet"),
   ).toBeVisible();
 
   // The course row, not the section cards nested inside it.
@@ -121,7 +121,11 @@ test("lists the schedule and replaces a cart section", async ({ page }) => {
     .filter({ has: page.getByText("ENG 331", { exact: true }) })
     .first();
   await eng.getByRole("button", { name: "Show other sections" }).click();
-  await expect(eng.getByRole("button", { name: /In cart/ })).toBeVisible();
+  await expect(
+    eng.getByRole("button", { name: "Replace", exact: true }).first(),
+  ).toBeVisible();
+  const replacement = await eng.getByRole("option").first().innerText();
+  const replacementSection = replacement.match(/Section (\S+)/)![1];
 
   await eng
     .getByRole("button", { name: "Replace", exact: true })
@@ -132,9 +136,8 @@ test("lists the schedule and replaces a cart section", async ({ page }) => {
     .getByRole("alertdialog")
     .getByRole("button", { name: "Replace", exact: true })
     .click();
-  await expect(
-    page.getByText(/Swapped ENG 331 \(001\) for ENG 331/),
-  ).toBeVisible();
-  await expect(eng.getByText(/^Lecture 001/)).toHaveCount(0);
+  await expect(eng.locator("p").first()).toContainText(
+    `Sec ${replacementSection}`,
+  );
   expect(errors).toEqual([]);
 });

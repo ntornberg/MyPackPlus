@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ToCartPayload } from "../types/cart";
 import type { ModifiedSection } from "../types/section";
 
 import { addSectionToCart } from "./addSectionToCart";
@@ -118,7 +119,76 @@ describe("changeCartLab", () => {
       partial: false,
       message: "Class is full.",
     });
-    expect(addSectionToCart).toHaveBeenLastCalledWith(fromLab, lecture);
+    expect(addSectionToCart).toHaveBeenLastCalledWith(fromLab, lecture, {
+      extras: undefined,
+    });
+  });
+
+  it("restores the original exact payload and every related section", async () => {
+    vi.mocked(removeSectionFromCart).mockResolvedValue({
+      ok: true,
+      message: "Removed.",
+    });
+    vi.mocked(addSectionToCart)
+      .mockResolvedValueOnce({ ok: false, message: "Class is full." })
+      .mockResolvedValueOnce({ ok: true, message: "Restored." });
+    const extras = [section("204", "401")];
+    const original = {
+      extras,
+      payload: {
+        class_nbr: "200",
+        relate_class_nbr_1: "201",
+        relate_class_nbr_2: "204",
+        unt_taken: "4",
+        course_career: "UGRD",
+        session_code: "1",
+        crse_id: "123",
+        catalog_nbr: "316",
+        grading_basis: "GRD",
+        rqmnt_designtn: "",
+        wait_list_okay: "N",
+      } as ToCartPayload,
+    };
+    const replacement = {
+      extras,
+      payload: { ...original.payload, relate_class_nbr_1: "203" },
+    };
+
+    await changeCartLab(lecture, fromLab, toLab, replacement, original);
+
+    expect(addSectionToCart).toHaveBeenNthCalledWith(
+      1,
+      toLab,
+      lecture,
+      replacement,
+    );
+    expect(addSectionToCart).toHaveBeenNthCalledWith(
+      2,
+      fromLab,
+      lecture,
+      original,
+    );
+  });
+
+  it("preserves extras without reusing the replacement payload when no original payload is available", async () => {
+    vi.mocked(removeSectionFromCart).mockResolvedValue({
+      ok: true,
+      message: "Removed.",
+    });
+    vi.mocked(addSectionToCart).mockResolvedValue({
+      ok: false,
+      message: "Unavailable.",
+    });
+    const extras = [section("204", "401")];
+
+    await changeCartLab(lecture, fromLab, toLab, {
+      extras,
+      payload: { class_nbr: "200" } as never,
+    });
+
+    expect(addSectionToCart).toHaveBeenLastCalledWith(fromLab, lecture, {
+      extras,
+    });
   });
 
   it("reports a partial change when the old lab can't be put back", async () => {

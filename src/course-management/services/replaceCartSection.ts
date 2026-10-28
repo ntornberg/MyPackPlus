@@ -15,7 +15,7 @@ export type CartSelection = {
 
 export type ReplaceCartSectionResult =
   | { ok: true; message: string }
-  /** `partial`: the new section was added but the old one is still in the cart. */
+  /** `partial`: removal or recovery failed; the cart needs manual attention. */
   | { ok: false; partial: boolean; message: string };
 
 function label({ section, parent }: CartSelection): string {
@@ -65,6 +65,8 @@ export function changeCartLab(
   fromLab: ModifiedSection,
   toLab: ModifiedSection,
   options: AddSectionToCartOptions = {},
+  /** The original combination, never the replacement's exact payload. */
+  restoreOptions: AddSectionToCartOptions = { extras: options.extras },
 ): Promise<ReplaceCartSectionResult> {
   const current = { section: fromLab, parent: lecture };
   const next = { section: toLab, parent: lecture };
@@ -80,7 +82,7 @@ export function changeCartLab(
         message: `Moved ${label(current)} to ${componentLabel(toLab)}.`,
       };
     }
-    const restored = await addSectionToCart(fromLab, lecture);
+    const restored = await addSectionToCart(fromLab, lecture, restoreOptions);
     if (!restored.ok) {
       return {
         ok: false,
