@@ -3,6 +3,7 @@ import type {
   CourseSearchData,
   GepSearchData,
   MajorPlanSearchData,
+  ScheduleData,
 } from "../../course-management/components/tab-state/tabState";
 
 import type { PlannerWorkbenchTab } from "./workbench/workbenchTypes";
@@ -18,9 +19,19 @@ export type PersistedPlannerSession = {
   courseSearchData: CourseSearchData;
   majorPlanSearchData: MajorPlanSearchData;
   GepSearchData: GepSearchData;
+  /** Absent in sessions saved before the Schedule tab. */
+  scheduleData?: ScheduleData;
+  /**
+   * `selectedTab` is the planner's default, not one the student picked, so the
+   * next load may choose a different default.
+   */
+  defaultTab?: true;
 };
 
-type LegacyPlannerWorkbenchTab = PlannerWorkbenchTab | "plan_search";
+type LegacyPlannerWorkbenchTab =
+  | PlannerWorkbenchTab
+  | "plan_search"
+  | "instructor_search";
 
 type LegacyPersistedPlannerSession = Omit<
   PersistedPlannerSession,
@@ -37,11 +48,15 @@ function normalizePlannerWorkbenchTab(
   if (value === "plan_search") {
     return "major_plan_search";
   }
+  // Instructor lookup moved from its own tab to a header button.
+  if (value === "instructor_search") {
+    return "course_search";
+  }
   if (
+    value === "schedule" ||
     value === "course_search" ||
     value === "gep_search" ||
-    value === "major_plan_search" ||
-    value === "instructor_search"
+    value === "major_plan_search"
   ) {
     return value;
   }
@@ -142,7 +157,9 @@ export function persistPlannerSession(payload: PersistedPlannerSession): void {
   if (typeof window === "undefined") {
     return;
   }
-  persistPlannerSelectedTab(payload.selectedTab);
+  if (!payload.defaultTab) {
+    persistPlannerSelectedTab(payload.selectedTab);
+  }
   try {
     const json = JSON.stringify({
       ...payload,

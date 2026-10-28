@@ -22,6 +22,10 @@ type PlannerPreviewRailProps = {
   stagingOptions?: {
     calendarEvents: ScheduleEvent[];
   };
+  /** Draw these instead of every cached cart/enrolled block (e.g. one term's). */
+  backgroundEvents?: ScheduleEvent[];
+  /** Replaces the hint shown while no section is pinned. */
+  emptyDescription?: string;
 };
 
 const normalizeRichText = (value: string | null | undefined): string | null => {
@@ -40,8 +44,11 @@ export function PlannerPreviewRail({
   selectedPreview,
   isOpen: _isOpen,
   stagingOptions,
+  backgroundEvents,
+  emptyDescription,
 }: PlannerPreviewRailProps) {
   const selectedSection = selectedPreview?.section;
+  const calendarEvents = backgroundEvents ?? stagingOptions?.calendarEvents;
 
   const selectedNotes = useMemo(
     () => normalizeRichText(selectedSection?.notes),
@@ -66,9 +73,10 @@ export function PlannerPreviewRail({
         <p className="text-sm text-muted-foreground">
           {selectedPreview
             ? "Schedule, class notes, and prerequisites for the pinned section (grades and instructor stay on each row card)."
-            : stagingOptions
-              ? "Select a row to pin schedule context, notes, and prerequisites here."
-              : "Choose a section row to pin schedule, notes, and prerequisites while you browse."}
+            : (emptyDescription ??
+              (stagingOptions
+                ? "Select a row to pin schedule context, notes, and prerequisites here."
+                : "Choose a section row to pin schedule, notes, and prerequisites while you browse."))}
         </p>
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-4 p-3 sm:p-4">
@@ -81,7 +89,7 @@ export function PlannerPreviewRail({
                 dayTime={selectedSection?.dayTime}
                 courseData={selectedSection?.courseData}
                 linkedMeetings={selectedSection?.linkedMeetings}
-                staticBackgroundEvents={stagingOptions?.calendarEvents}
+                staticBackgroundEvents={calendarEvents}
               />
             </div>
             <ScheduleCalendarLegend className="mt-2 px-0.5" />
@@ -121,7 +129,7 @@ export function PlannerPreviewRail({
                 dayTime={selectedSection?.dayTime}
                 courseData={selectedSection?.courseData}
                 linkedMeetings={selectedSection?.linkedMeetings}
-                staticBackgroundEvents={stagingOptions?.calendarEvents}
+                staticBackgroundEvents={calendarEvents}
               />
             </div>
             <ScheduleCalendarLegend className="mt-2 px-0.5" />

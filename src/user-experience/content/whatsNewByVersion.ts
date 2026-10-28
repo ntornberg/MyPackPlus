@@ -21,6 +21,33 @@ export type WhatsNewRelease = {
 };
 
 export const whatsNewByVersion: Record<string, WhatsNewRelease> = {
+  "3.9.0": {
+    title: "Your schedule, front and center",
+    subtitle:
+      "A new Schedule tab shows your week and the other sections you could take instead.",
+    sections: [
+      {
+        title: "Schedule tab",
+        kind: "new",
+        icon: "calendar",
+        items: [
+          "See every cart and enrolled class for the term on one calendar, with conflicts flagged.",
+          "Pick a course to list its other sections, ranked by whether they fit the rest of your week.",
+          "Preview a section to see it in place of the one you have.",
+          "Replace swaps a cart section for another one, adding the new one first so your cart only changes if that works.",
+          "Hover a class on any planner calendar and choose See alternatives to jump straight there.",
+        ],
+      },
+      {
+        title: "Instructor lookup moved",
+        kind: "improved",
+        icon: "instructors",
+        items: [
+          "Instructor search now opens from the Instructors button at the top of the planner, so it's there from every tab.",
+        ],
+      },
+    ],
+  },
   "3.8.17": {
     title: "Spring 2027: plan around your degree",
     subtitle:

@@ -20,7 +20,7 @@ import { installStagingEnvironment } from "./stagingEnvironment";
 /**
  * Staging renders the real planner drawer against dummy data. Query presets
  * for screenshots:
- *   ?tab=course_search|gep_search|major_plan_search|instructor_search
+ *   ?tab=schedule|course_search|gep_search|major_plan_search
  *   ?course=CSC 316   preselect a course in Course Search
  *   ?theme=light|dark
  *   ?launcher         closed drawer with the launcher button and hint
@@ -39,10 +39,10 @@ if (!container) {
 
 const params = new URLSearchParams(window.location.search);
 const TABS: PlannerWorkbenchTab[] = [
+  "schedule",
   "course_search",
   "gep_search",
   "major_plan_search",
-  "instructor_search",
 ];
 
 const bare = params.has("bare");

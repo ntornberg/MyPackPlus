@@ -2,13 +2,17 @@ import { DEFAULT_TERM_NAME } from "../../course-management/components/tab-state/
 import { TERM_TAG_FIELD } from "../../course-management/utils/semester";
 
 import { instructorForSection } from "./instructors";
+import { stagingClassNumber } from "./sections";
 
-/** Enrolled and shopping-cart classes the preview calendar draws behind a section. */
+/**
+ * Enrolled and shopping-cart classes the preview calendar draws behind a
+ * section. Each is section 001 with the class number the dummy registrar gives
+ * it, so the Schedule tab can match and remove it.
+ */
 
 type Meeting = {
   code: string;
   title: string;
-  classNumber: string;
   days: string;
   time: string;
   location: string;
@@ -18,7 +22,6 @@ const ENROLLED: Meeting[] = [
   {
     code: "CSC 326",
     title: "Software Engineering",
-    classNumber: "13245",
     days: "Tue/Thu",
     time: "10:15 AM - 11:30 AM",
     location: "Engineering Bldg II 1231",
@@ -26,7 +29,6 @@ const ENROLLED: Meeting[] = [
   {
     code: "CSC 411",
     title: "Introduction to Artificial Intelligence",
-    classNumber: "13377",
     days: "Mon/Wed",
     time: "1:30 PM - 2:45 PM",
     location: "Engineering Bldg III 2211",
@@ -37,7 +39,6 @@ const CART: Meeting[] = [
   {
     code: "ST 370",
     title: "Probability and Statistics for Engineers",
-    classNumber: "15102",
     days: "Mon/Wed/Fri",
     time: "9:35 AM - 10:25 AM",
     location: "SAS Hall 1102",
@@ -45,7 +46,6 @@ const CART: Meeting[] = [
   {
     code: "ENG 331",
     title: "Communication for Engineering and Technology",
-    classNumber: "11820",
     days: "Tue/Thu",
     time: "1:30 PM - 2:45 PM",
     location: "Tompkins Hall G108",
@@ -58,12 +58,12 @@ function tableEntry(meeting: Meeting) {
     classs: meeting.code,
     crse_title: meeting.title,
     description: meeting.title,
-    enroll_class_nbr: meeting.classNumber,
+    enroll_class_nbr: stagingClassNumber(meeting.code, "001"),
     [TERM_TAG_FIELD]: DEFAULT_TERM_NAME,
     section_details: [
       {
         section: "001",
-        class_nbr: meeting.classNumber,
+        class_nbr: stagingClassNumber(meeting.code, "001"),
         type: "Lecture",
         location: meeting.location,
         facility: meeting.location,
@@ -82,9 +82,10 @@ function cacheCategory(meetings: Meeting[]) {
   const timestamp = Date.now();
   return Object.fromEntries(
     meetings.map((meeting) => [
-      `staging-${meeting.classNumber}`,
+      `staging-${stagingClassNumber(meeting.code, "001")}`,
       {
-        combinedData: JSON.stringify(tableEntry(meeting)),
+        // Objects, as the extension stores captured MyPack rows.
+        combinedData: tableEntry(meeting),
         timestamp,
         expiresAt: timestamp + 24 * 60 * 60 * 1000,
       },

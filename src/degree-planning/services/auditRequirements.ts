@@ -4,6 +4,8 @@ import {
   isRequirementGroup,
   isUnmetLine,
   type DegreeAudit,
+  type DegreeAuditGroup,
+  type DegreeAuditLine,
 } from "./degreeAudit";
 import { plannerCourseCode } from "./packPlanner";
 import {
@@ -17,7 +19,89 @@ export type AuditRequirementEntry = {
   /** The audit group number, which is also what the tree matches status by. */
   requirementId: string;
   courses: RequiredCourse[];
+  /** What MyPack still marks unmet in this group; empty when nothing is. */
+  needs: RequirementNeed[];
 };
+
+/** An unmet requirement and how much of it is left, when MyPack says. */
+export type RequirementNeed = {
+  name: string;
+  unitsLeft: number | null;
+  coursesLeft: number | null;
+  /** Approved choices that count toward this requirement; empty without a list. */
+  courses: RequiredCourse[];
+};
+
+/** A choice list's courses, once each, in list order. */
+function listCourses(
+  list: { groups: { courses: RequiredCourse[] }[] } | undefined,
+): RequiredCourse[] {
+  const courses = new Map<string, RequiredCourse>();
+  for (const group of list?.groups ?? []) {
+    for (const course of group.courses) {
+      const code = plannerCourseCode(course.course_abr, course.catalog_num);
+      if (course.course_abr && course.catalog_num && !courses.has(code)) {
+        courses.set(code, course);
+      }
+    }
+  }
+  return [...courses.values()];
+}
+
+const counts = (line: DegreeAuditLine) =>
+  line.status === "C" || line.status === "E" || line.status === "P";
+
+const unitsOf = (lines: DegreeAuditLine[]) =>
+  lines.reduce((total, line) => total + line.units, 0);
+
+/**
+ * Unmet requirements in a group, with units and courses left from each
+ * approved-choice list's minimums less what the audit already applied to it.
+ * Unmet rows themselves give no amount (their units often read "Verify"), so
+ * without a list only the group's own unit minimum can say how much is left.
+ */
+export function requirementNeeds(
+  group: DegreeAuditGroup,
+  results: RequirementChoices["results"] = {},
+): RequirementNeed[] {
+  const unmet = new Map<string, DegreeAuditLine>();
+  for (const line of group.lines) {
+    if (line.requirementId && isUnmetLine(line)) {
+      const ref = requirementChoiceKey(
+        line.requirementId,
+        line.isExceptionRequirement,
+      );
+      if (!unmet.has(ref)) unmet.set(ref, line);
+    }
+  }
+  if (unmet.size === 0) {
+    return [];
+  }
+  const left = (min: number, applied: number) =>
+    min > 0 ? Math.max(0, min - applied) : null;
+  const needs = [...unmet].map(([ref, line]): RequirementNeed => {
+    const list = results[ref]?.list;
+    const applied = group.lines.filter(
+      (other) => other.requirementId === line.requirementId && counts(other),
+    );
+    return {
+      name: list?.name || line.requirement || line.title,
+      unitsLeft: list ? left(list.minUnits, unitsOf(applied)) : null,
+      coursesLeft: list ? left(list.minCourses, applied.length) : null,
+      courses: listCourses(list),
+    };
+  });
+  const known = needs.some(
+    (need) => need.unitsLeft !== null || need.coursesLeft !== null,
+  );
+  if (!known && group.minUnits > 0) {
+    const unitsLeft = left(group.minUnits, unitsOf(group.lines.filter(counts)));
+    if (unitsLeft) {
+      return [{ name: group.name, unitsLeft, coursesLeft: null, courses: [] }];
+    }
+  }
+  return needs;
+}
 
 /** Courses the audit lists as planned ("P"), which still need registering. */
 export function plannedAuditCourses(audit: DegreeAudit): RequiredCourse[] {
@@ -87,6 +171,7 @@ export function auditRequirementEntries(
       requirementKey: name,
       requirementId: group.id,
       courses: [...courses.values()],
+      needs: requirementNeeds(group, results),
     };
   });
 }

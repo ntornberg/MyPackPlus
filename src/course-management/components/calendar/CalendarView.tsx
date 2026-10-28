@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { cn } from "@/lib/utils";
+
 import { getCacheCategory } from "../../cache/courseRetrieval";
 import {
   getScheduleCacheGeneration,
@@ -202,6 +204,8 @@ export const markOverlaps = (events: ScheduleEvent[]): ScheduleEvent[] => {
       if (
         !eventA.allDay &&
         !eventB.allDay &&
+        !eventA.dimmed &&
+        !eventB.dimmed &&
         toMinutes(eventA.start) < toMinutes(eventB.end) &&
         toMinutes(eventA.end) > toMinutes(eventB.start) &&
         hasSharedDay(eventA.days, eventB.days)
@@ -883,7 +887,10 @@ export const CalendarView = (params: CalendarViewProps) => {
             {untimedEvents.map((event) => (
               <li
                 key={event.id}
-                className="rounded-md py-1 pr-2 pl-2.5 text-[11px] leading-4 font-semibold"
+                className={cn(
+                  "rounded-md py-1 pr-2 pl-2.5 text-[11px] leading-4 font-semibold",
+                  event.dimmed && "opacity-35",
+                )}
                 style={calendarBlockShellStyle(event.color)}
               >
                 <button

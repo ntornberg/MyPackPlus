@@ -61,8 +61,14 @@ const CARD_GRADE_PIE_SIZE = 80;
 const CARD_GRADE_PIE_SIZE_EMPTY = 64;
 const COMPACT_GRADE_PIE_SIZE = 72;
 
+/** The grade history and rating a grade block reads. */
+type GradeBlockSource = Pick<
+  ModifiedSection,
+  "grade_distribution" | "professor_rating"
+>;
+
 /** Explains an empty grade block: S/U-only history vs. an instructor with no history at all. */
-function emptyGradeLabel(section: ModifiedSection): string {
+function emptyGradeLabel(section: GradeBlockSource): string {
   const g = section.grade_distribution;
   if (g?.has_letter_grades === false) {
     return "S/U only";
@@ -73,11 +79,11 @@ function emptyGradeLabel(section: ModifiedSection): string {
   return "No grades";
 }
 
-function SectionGradeDistributionBlock({
+export function SectionGradeDistributionBlock({
   section,
   compact = false,
 }: {
-  section: ModifiedSection;
+  section: GradeBlockSource;
   compact?: boolean;
 }) {
   const g = section.grade_distribution;

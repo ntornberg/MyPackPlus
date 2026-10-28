@@ -78,6 +78,13 @@ import { CourseSectionsCardList } from "./CourseSectionsCardList";
 import { RequirementTree, type RequirementTreeEntry } from "./RequirementTree";
 
 const EMPTY_COURSES: Record<string, MergedCourseData> = {};
+const EMPTY_IDS: ReadonlySet<string> = new Set();
+
+/**
+ * Requirements with more approved options than this (a humanities list can
+ * run to 400) aren't searched up front; their sections load when opened.
+ */
+const DEFERRED_OPTIONS_OVER = 24;
 
 const CourseDisplay = memo(
   ({
@@ -198,7 +205,13 @@ export default function MajorPlanSearch({
   const [personalResult, setPersonalResult] = useState<{
     context: string;
     courses: Record<string, MergedCourseData>;
+    /** Requirement ids whose options are still unsearched. */
+    deferred: ReadonlySet<string>;
   } | null>(null);
+  const [loadingRequirements, setLoadingRequirements] =
+    useState<ReadonlySet<string>>(EMPTY_IDS);
+  // Keyed by context and requirement id, so a new term or audit starts over.
+  const requirementLoads = useRef(new Set<string>());
   const [personalBusy, setPersonalBusy] = useState(false);
   const [personalProgress, setPersonalProgress] = useState({
     value: 0,
@@ -261,6 +274,57 @@ export default function MajorPlanSearch({
   const personalGroups = useMemo(
     () => auditGroupsById(selectedAudit ? [selectedAudit] : []),
     [selectedAudit],
+  );
+
+  // Searches one deferred requirement's options, once per search.
+  const selectedTerm = majorPlanSearchData.selectedTerm;
+  const loadDeferredRequirement = useCallback(
+    async (requirementId: string) => {
+      const context = personalContext;
+      const loadKey = `${context}|${requirementId}`;
+      const entry = personalEntries.find(
+        (e) => e.requirementId === requirementId,
+      );
+      if (!entry || !selectedTerm || requirementLoads.current.has(loadKey)) {
+        return;
+      }
+      requirementLoads.current.add(loadKey);
+      setLoadingRequirements((previous) =>
+        new Set(previous).add(requirementId),
+      );
+      try {
+        const data = await fetchCourseSearchData(
+          [{ id: requirementId, min_units: 0, courses: entry.courses }],
+          selectedTerm,
+          undefined,
+          (message) => {
+            if (mounted.current) setPersonalError(message);
+          },
+        );
+        if (!mounted.current) return;
+        setPersonalResult((previous) => {
+          if (previous?.context !== context) return previous;
+          const deferred = new Set(previous.deferred);
+          deferred.delete(requirementId);
+          return {
+            ...previous,
+            courses: { ...previous.courses, ...data },
+            deferred,
+          };
+        });
+      } catch (error) {
+        if (mounted.current)
+          setPersonalError(`Couldn't load sections: ${String(error)}`);
+      } finally {
+        if (mounted.current)
+          setLoadingRequirements((previous) => {
+            const next = new Set(previous);
+            next.delete(requirementId);
+            return next;
+          });
+      }
+    },
+    [personalContext, personalEntries, selectedTerm],
   );
   const personalChoiceErrors = useMemo(
     () => (selectedAudit ? choiceErrors(selectedAudit, personalChoices) : []),
@@ -372,8 +436,14 @@ export default function MajorPlanSearch({
             plannerCourseCode(course.course_abr, course.catalog_num),
             course,
           );
+        const deferred = new Set<string>();
         for (const entry of auditRequirementEntries(selectedAudit, choices)) {
-          if (openIds.has(entry.requirementId)) entry.courses.forEach(add);
+          if (!openIds.has(entry.requirementId)) continue;
+          if (entry.courses.length > DEFERRED_OPTIONS_OVER) {
+            deferred.add(entry.requirementId);
+          } else {
+            entry.courses.forEach(add);
+          }
         }
         // Planned courses still need registering, so look them up too.
         plannedAuditCourses(selectedAudit).forEach(add);
@@ -400,8 +470,15 @@ export default function MajorPlanSearch({
               },
             )
           : null;
-        if (mounted.current && request === personalRequest.current)
-          setPersonalResult({ context: personalContext, courses: data ?? {} });
+        if (mounted.current && request === personalRequest.current) {
+          // A new search searches opened groups again.
+          requirementLoads.current.clear();
+          setPersonalResult({
+            context: personalContext,
+            courses: data ?? {},
+            deferred,
+          });
+        }
       } catch (error) {
         if (mounted.current && request === personalRequest.current)
           setPersonalError(`Couldn't load sections: ${String(error)}`);
@@ -897,6 +974,11 @@ export default function MajorPlanSearch({
                 (majorPlanSearchData.hideNoSections ?? false)
               }
               sectionsSearched={personalSearched}
+              deferredRequirements={
+                personalSearched ? personalResult.deferred : undefined
+              }
+              loadingRequirements={loadingRequirements}
+              onLoadRequirement={loadDeferredRequirement}
               filter={majorPlanSearchData.requirementFilter ?? "needed"}
               onFilterChange={(value) =>
                 setMajorPlanSearchTabData("requirementFilter", value)

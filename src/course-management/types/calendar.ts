@@ -26,6 +26,11 @@ export interface ScheduleEvent {
   allDay?: boolean;
   /** Semester key (e.g. "2027-spring") for cached cart/enrolled events, when known. */
   semester?: string;
+  /**
+   * Drawn faded and left out of overlap checks: the section a previewed
+   * alternative would replace.
+   */
+  dimmed?: boolean;
 }
 
 /** Official schedule (enrolled) — neutral vs cart blue and preview green. */

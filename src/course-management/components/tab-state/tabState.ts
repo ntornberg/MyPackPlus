@@ -100,6 +100,22 @@ export const MajorPlanSearchDataInitialState: MajorPlanSearchData = {
   requirementFilter: "needed",
 };
 
+export type ScheduleData = {
+  selectedTerm: string | null;
+  /** Normalized code ("CSC 316") of the cart/enrolled course whose alternatives are shown. */
+  selectedCourseCode: string | null;
+  instructorFilter: string | null;
+  sortMode: SectionSortMode;
+  compactSections: boolean;
+};
+export const ScheduleDataInitialState: ScheduleData = {
+  selectedTerm: DEFAULT_TERM,
+  selectedCourseCode: null,
+  instructorFilter: null,
+  sortMode: "recommended",
+  compactSections: true,
+};
+
 export type GepSearchData = {
   selectedTerm: string | null;
   searchSubject: string | null;

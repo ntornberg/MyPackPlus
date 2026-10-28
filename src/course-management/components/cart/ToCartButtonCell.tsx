@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowLeftRight,
   Check,
   CheckCircle2,
   Loader2,
@@ -23,6 +24,10 @@ import {
   type AddSectionToCartOptions,
 } from "../../services/addSectionToCart";
 import { removeSectionFromCart } from "../../services/removeSectionFromCart";
+import {
+  replaceCartSection,
+  type CartSelection,
+} from "../../services/replaceCartSection";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
 
 const cartButtonClassName =
@@ -83,15 +88,25 @@ function ToastFeedback({
   );
 }
 
+function selectionLabel({ section, parent }: CartSelection): string {
+  const code = section.courseData?.code ?? "";
+  return parent
+    ? `${code} (${parent.section}) with ${section.component ?? "lab"} ${section.section}`
+    : `${code} (${section.section})`;
+}
+
 /**
  * Renders an Add to Cart button for a section and invokes the MyPack add-to-cart endpoint.
- * Once the section is in the cart, the button removes it instead.
+ * Once the section is in the cart, the button removes it instead. With
+ * `replaces` (another section of the course already in the cart), it swaps
+ * that one for this one.
  */
 export const ToCartButtonCell = (
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
   inCart = false,
   cartOptions: AddSectionToCartOptions = {},
+  replaces?: CartSelection,
 ) => {
   const { course_id, classNumber, catalog_nbr, courseData } = selectedSection;
 
@@ -153,13 +168,121 @@ export const ToCartButtonCell = (
     setTimeout(() => setOpen(false), 3000);
   };
 
-  const sectionLabel = parent
-    ? `${courseData.code} (${parent.section}) with ${selectedSection.component ?? "lab"} ${selectedSection.section}`
-    : `${courseData.code} (${selectedSection.section})`;
+  const handleReplace = async () => {
+    if (!replaces) return;
+    setRemoving(true);
+    const data = await replaceCartSection(
+      replaces,
+      { section: selectedSection, parent },
+      cartOptions,
+    );
+    setRemoving(false);
+    setConfirmOpen(false);
+    if (data.ok) {
+      AppLogger.info("Replaced in cart! " + data.message);
+      setSeverity("success");
+    } else {
+      AppLogger.warn("Replace in cart failed:", data.message);
+      setSeverity("error");
+    }
+    setMessage(data.message);
+    setOpen(true);
+    // A partial swap needs the student to act, so leave it up longer.
+    setTimeout(() => setOpen(false), !data.ok && data.partial ? 8000 : 3000);
+  };
+
+  const sectionLabel = selectionLabel({ section: selectedSection, parent });
 
   return (
     <div className="relative inline-block text-right">
-      {inCart ? (
+      {!inCart && replaces ? (
+        <Popover
+          open={confirmOpen}
+          onOpenChange={(next) => {
+            if (!removing) setConfirmOpen(next);
+          }}
+        >
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              title={`Swap ${selectionLabel(replaces)} for this section in your MyPack cart`}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              className={cartButtonClassName}
+            >
+              {open && severity === "success" ? (
+                <CheckCircle2
+                  className="mpp-check-pop size-4"
+                  strokeWidth={2.25}
+                />
+              ) : (
+                <ArrowLeftRight
+                  className="size-4 opacity-95"
+                  strokeWidth={2.25}
+                />
+              )}
+              Replace
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="end"
+            role="alertdialog"
+            aria-labelledby={`replace-cart-title-${classNumber}`}
+            aria-describedby={`replace-cart-desc-${classNumber}`}
+            className="w-72 p-3.5 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              id={`replace-cart-title-${classNumber}`}
+              className="text-sm font-semibold text-foreground"
+            >
+              Replace in cart?
+            </p>
+            <p
+              id={`replace-cart-desc-${classNumber}`}
+              className="mt-1 text-xs leading-relaxed text-muted-foreground"
+            >
+              <span className="font-medium text-foreground">
+                {sectionLabel}
+              </span>{" "}
+              will be added to your MyPack shopping cart, then{" "}
+              <span className="font-medium text-foreground">
+                {selectionLabel(replaces)}
+              </span>{" "}
+              will be removed. If the add fails, your cart stays as it is.
+              Then click Enroll in MyPack to register for it.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={removing}
+                onClick={() => setConfirmOpen(false)}
+                className="rounded-lg px-3 font-medium"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={removing}
+                onClick={() => void handleReplace()}
+                className="gap-1.5 rounded-lg px-3 font-semibold"
+              >
+                {removing ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <ArrowLeftRight className="size-3.5" strokeWidth={2.5} />
+                )}
+                {removing ? "Replacing…" : "Replace"}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : inCart ? (
         <Popover
           open={confirmOpen}
           onOpenChange={(next) => {
@@ -298,6 +421,8 @@ export type ToCartGroupedSectionCellProps = GroupedSections & {
   selectedLabClassNumber?: string;
   /** The section (with the selected lab) is already in the cart; the button then removes it. */
   inCart?: boolean;
+  /** Another section of this course in the cart; the button then swaps it for this one. */
+  replaces?: CartSelection;
 };
 
 /**
@@ -315,20 +440,27 @@ export function ToCartGroupedSectionCell({
   cartPayloads,
   selectedLabClassNumber,
   inCart = false,
+  replaces,
 }: ToCartGroupedSectionCellProps) {
   if (!lecture) {
     return null;
   }
   const labs = (rawLabs ?? []).filter(Boolean) as ModifiedSection[];
   if (labs.length === 0) {
-    return ToCartButtonCell(lecture, undefined, inCart, {
-      extras,
-      payload: cartPayloads?.[""],
-    });
+    return ToCartButtonCell(
+      lecture,
+      undefined,
+      inCart,
+      { extras, payload: cartPayloads?.[""] },
+      replaces,
+    );
   }
   const selectedLab = resolveSelectedLab(labs, selectedLabClassNumber);
-  return ToCartButtonCell(selectedLab, lecture, inCart, {
-    extras,
-    payload: cartPayloads?.[String(selectedLab.classNumber)],
-  });
+  return ToCartButtonCell(
+    selectedLab,
+    lecture,
+    inCart,
+    { extras, payload: cartPayloads?.[String(selectedLab.classNumber)] },
+    replaces,
+  );
 }

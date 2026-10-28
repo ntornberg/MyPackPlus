@@ -1,10 +1,10 @@
 import type { ModifiedSection } from "../../../course-management/types/section";
 
 export type PlannerWorkbenchTab =
+  | "schedule"
   | "course_search"
   | "gep_search"
-  | "major_plan_search"
-  | "instructor_search";
+  | "major_plan_search";
 
 export type PlannerSectionPreview = {
   id: string;

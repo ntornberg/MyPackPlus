@@ -193,13 +193,31 @@ export function requirementProgress(
   const count = (status: AuditLineStatus) =>
     appliedLines.filter((line) => line.status === status).length;
 
+  // A course the audit names under several unmet requirements (ARE 201 for
+  // both Microeconomics and an elective) is one option, not one per mention.
+  // Repeated attempts that count are still listed apart.
+  const listedCodes = new Set(
+    catalogCourses.map((course) =>
+      `${course.course_abr} ${normalizedCatalog(course.catalog_num)}`.toUpperCase(),
+    ),
+  );
+  const extraCourses = appliedLines.filter((line) => {
+    if (matchedLines.has(line)) return false;
+    if (counted(line)) return true;
+    const code =
+      `${line.subject} ${normalizedCatalog(line.catalogNbr)}`.toUpperCase();
+    if (listedCodes.has(code)) return false;
+    listedCodes.add(code);
+    return true;
+  });
+
   return {
     status: group ? requirementStatus(group.status) : "unknown",
     completed: count("C"),
     enrolled: count("E"),
     planned: count("P") + plannerOnly,
     courses,
-    extraCourses: appliedLines.filter((line) => !matchedLines.has(line)),
+    extraCourses,
   };
 }
 

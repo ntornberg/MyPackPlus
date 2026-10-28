@@ -4,6 +4,8 @@ import {
   auditRequirementEntries,
   choiceErrors,
   plannedAuditCourses,
+  requirementNeeds,
+  type RequirementNeed,
 } from "./auditRequirements";
 import type { DegreeAudit, DegreeAuditGroup } from "./degreeAudit";
 import {
@@ -153,5 +155,73 @@ describe("choiceErrors", () => {
     expect(
       choiceErrors(personalAuditFixture, choices(personalAuditFixture)),
     ).toEqual(["Choices unavailable: session expired"]);
+  });
+});
+
+describe("requirementNeeds", () => {
+  const electives = personalAuditFixture.groups.find(
+    (group) => group.name === "Other Electives",
+  )!;
+
+  const summary = (need: RequirementNeed) => ({
+    ...need,
+    courses: need.courses.map((c) => `${c.course_abr} ${c.catalog_num}`),
+  });
+
+  it("subtracts applied units from the choice list's minimum", () => {
+    // Group A: two 1-unit TST 297 attempts and planned 3-unit TST 406 of 6.
+    // Group B's list failed, so its amount and options are unknown.
+    expect(
+      requirementNeeds(electives, choices(personalAuditFixture).results).map(
+        summary,
+      ),
+    ).toEqual([
+      {
+        name: "Electives Group A",
+        unitsLeft: 1,
+        coursesLeft: null,
+        courses: [
+          "TST 301",
+          "TST 297",
+          "TST 499",
+          "TST 440",
+          "TST 540",
+          "OTH 540",
+        ],
+      },
+      {
+        name: "Electives Group B",
+        unitsLeft: null,
+        coursesLeft: null,
+        courses: [],
+      },
+    ]);
+  });
+
+  it("counts courses left when the list sets a course minimum", () => {
+    const list = {
+      ...parseRequirementChoices(requirementFixture(), "000001"),
+      minUnits: 0,
+      minCourses: 5,
+    };
+    expect(
+      requirementNeeds(electives, { "000001|": { list } })[0],
+    ).toMatchObject({
+      name: "Electives Group A",
+      unitsLeft: null,
+      coursesLeft: 2,
+    });
+  });
+
+  it("falls back to the group's unit minimum without choice lists", () => {
+    // Applied C/E/P units: 1 + 1 + 3 + 3 + 3; unmet "Verify" rows add none.
+    expect(requirementNeeds({ ...electives, minUnits: 15 })).toEqual([
+      { name: "Other Electives", unitsLeft: 4, coursesLeft: null, courses: [] },
+    ]);
+  });
+
+  it("is empty for a group with nothing unmet", () => {
+    const core = personalAuditFixture.groups.find((g) => g.name === "Core")!;
+    expect(requirementNeeds({ ...core, minUnits: 30 })).toEqual([]);
   });
 });

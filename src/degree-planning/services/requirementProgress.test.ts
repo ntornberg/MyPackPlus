@@ -113,6 +113,40 @@ describe("requirementProgress", () => {
     expect(progress.extraCourses.map((l) => l.subject)).toEqual(["OTH"]);
   });
 
+  it("lists a course named under several unmet requirements once", () => {
+    const unmet = (subject: string, catalogNbr: string) =>
+      line({ status: "U", subject, catalogNbr, grade: "", term: "" });
+    const progress = requirementProgress(
+      "300",
+      [course("201", "EC", "201")],
+      auditGroupsById([
+        {
+          ...audit,
+          groups: [
+            {
+              id: "300",
+              name: "Humanities and Social Sciences",
+              minUnits: 0,
+              status: "U",
+              lines: [
+                unmet("EC", "201"),
+                unmet("ARE", "201"),
+                unmet("ARE", "0201"),
+                unmet("EC", "201"),
+                // Two counted attempts stay apart.
+                line({ subject: "HI", catalogNbr: "233", term: "Fall '23" }),
+                line({ subject: "HI", catalogNbr: "233", term: "Spring '24" }),
+              ],
+            },
+          ],
+        },
+      ]),
+    );
+    expect(
+      progress.extraCourses.map((l) => `${l.subject} ${l.catalogNbr}`),
+    ).toEqual(["ARE 201", "HI 233", "HI 233"]);
+  });
+
   it("marks courses only Pack Planner has as planned", () => {
     const planner = plannerIndex({
       "2271": {

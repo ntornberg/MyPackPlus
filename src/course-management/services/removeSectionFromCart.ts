@@ -110,15 +110,27 @@ export function removeSectionFromCart(
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
 ): Promise<RemoveSectionFromCartResult> {
-  return trackWork(() => removeSectionFromCartNow(selectedSection, parent));
+  const lecture = parent ?? selectedSection;
+  return removeClassFromCart([
+    lecture.classNumber,
+    selectedSection.classNumber,
+  ]);
 }
 
-async function removeSectionFromCartNow(
-  selectedSection: ModifiedSection,
-  parent?: ModifiedSection,
+/**
+ * Removes the cart row covering any of these class numbers (lecture first),
+ * for callers that only know a calendar block's class numbers.
+ */
+export function removeClassFromCart(
+  classNumbers: (string | null | undefined)[],
 ): Promise<RemoveSectionFromCartResult> {
-  const lecture = parent ?? selectedSection;
-  const candidates = [lecture.classNumber, selectedSection.classNumber]
+  return trackWork(() => removeClassFromCartNow(classNumbers));
+}
+
+async function removeClassFromCartNow(
+  classNumbers: (string | null | undefined)[],
+): Promise<RemoveSectionFromCartResult> {
+  const candidates = classNumbers
     .map(text)
     .filter((value): value is string => value !== null);
   if (candidates.length === 0) {

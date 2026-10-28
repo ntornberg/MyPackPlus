@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   initialize: vi.fn(async () => ({ revision: 1, migrated: true })),
   refresh: vi.fn(async () => undefined),
-  trackInstall: vi.fn(async () => undefined),
   takeReload: vi.fn(async () => false),
   finishUpdate: vi.fn(async () => undefined),
   applyIfIdle: vi.fn(async () => undefined),
@@ -24,9 +23,6 @@ vi.mock("./storageMigration", () => ({
   initializeBackgroundStorage: mocks.initialize,
   refreshMigratedTabs: mocks.refresh,
   STORAGE_READY_MESSAGE: "mypack-storage-ready",
-}));
-vi.mock("../analytics/gaBackground", () => ({
-  trackExtensionInstalled: mocks.trackInstall,
 }));
 
 let installed: (details: { reason: string }) => void;
@@ -106,7 +102,7 @@ describe("update wiring", () => {
 describe("storage startup wiring", () => {
   it("does not refresh tabs on fresh installation", async () => {
     installed({ reason: "install" });
-    await vi.waitFor(() => expect(mocks.trackInstall).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(mocks.initialize).toHaveBeenCalledTimes(1));
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 

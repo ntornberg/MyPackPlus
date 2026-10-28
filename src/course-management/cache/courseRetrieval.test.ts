@@ -157,7 +157,7 @@ describe("CourseRetrieval cache expiration", () => {
     expect(storageState[cacheCategory].expired).toBeUndefined();
   });
 
-  it("clears cache categories without removing analytics state", async () => {
+  it("clears cache categories without clearing all extension storage", async () => {
     const storageState: Record<string, any> = {
       openCourses: {
         CSC_316_Fall_2024: {

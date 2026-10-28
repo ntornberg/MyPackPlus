@@ -18,6 +18,7 @@ import {
   type PlannerSectionPreview,
   type PlannerWorkbenchTab,
 } from "../../../ui-system/components/workbench/workbenchTypes";
+import type { CartSelection } from "../../services/replaceCartSection";
 import type { ScheduleEvent } from "../../types/calendar";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
 import {
@@ -46,6 +47,8 @@ type CourseSectionCardRowProps = {
   /** Names of cart/enrolled classes this section overlaps; [] when it fits; null when unknown. */
   conflictsWith: string[] | null;
   inCart: boolean;
+  /** The course's section in the cart, which this row's button would swap out. */
+  replaces?: CartSelection;
   onSelect: (rowId: string) => void;
   onLabClassChange: (rowId: string, classNbr: string) => void;
 };
@@ -58,6 +61,7 @@ const CourseSectionCardRow = memo(
     selectedLabClassNumber,
     conflictsWith,
     inCart,
+    replaces,
     onSelect,
     onLabClassChange,
   }: CourseSectionCardRowProps) {
@@ -82,9 +86,10 @@ const CourseSectionCardRow = memo(
           {...row}
           selectedLabClassNumber={selectedLabClassNumber}
           inCart={inCart}
+          replaces={replaces}
         />
       ),
-      [row, selectedLabClassNumber, inCart],
+      [row, selectedLabClassNumber, inCart, replaces],
     );
 
     if (!lecture) {
@@ -113,6 +118,7 @@ const CourseSectionCardRow = memo(
     String(prev.conflictsWith) === String(next.conflictsWith) &&
     (prev.conflictsWith === null) === (next.conflictsWith === null) &&
     prev.inCart === next.inCart &&
+    prev.replaces === next.replaces &&
     prev.onSelect === next.onSelect &&
     prev.onLabClassChange === next.onLabClassChange,
 );
@@ -128,7 +134,30 @@ export type CourseSectionsCardListProps = {
   sortMode: SectionSortMode;
   scheduleBackground: ScheduleEvent[] | null;
   compact?: boolean;
+  /**
+   * When one of these sections is in the cart, the others offer Replace
+   * (swap it for them) instead of Add to cart.
+   */
+  replaceInCart?: boolean;
 };
+
+/** The lecture with the lab the cart holds (or its first lab), as the cart services take it. */
+function cartSelectionFor(
+  row: GroupedSections,
+  cartClassNumbers: Set<string>,
+): CartSelection | undefined {
+  const lecture = row.lecture;
+  if (!lecture) {
+    return undefined;
+  }
+  const labs = (row.labs ?? []).filter(Boolean) as ModifiedSection[];
+  if (labs.length === 0) {
+    return { section: lecture };
+  }
+  const lab =
+    labs.find((l) => cartClassNumbers.has(String(l.classNumber))) ?? labs[0]!;
+  return { section: lab, parent: lecture };
+}
 
 /**
  * Scrolls the nearest scrolling ancestor up so `element` starts at its top,
@@ -205,6 +234,7 @@ export function CourseSectionsCardList({
   sortMode,
   scheduleBackground,
   compact = false,
+  replaceInCart = false,
 }: CourseSectionsCardListProps) {
   const [labClassByRowId, setLabClassByRowId] = useState<
     Record<string, string>
@@ -274,6 +304,16 @@ export function CourseSectionsCardList({
     setPage,
     slice: paginatedRows,
   } = usePagination(filteredRows, compact ? 8 : 4, paginationResetKey);
+
+  const replaces = useMemo(() => {
+    if (!replaceInCart || !cart) {
+      return undefined;
+    }
+    const cartRow = processedRows.find(
+      (row) => row.lecture != null && isSectionInCart(cart, row.lecture),
+    );
+    return cartRow ? cartSelectionFor(cartRow, cart.classNumbers) : undefined;
+  }, [replaceInCart, cart, processedRows]);
 
   const processedRowsById = useMemo(
     () => new Map(processedRows.map((row) => [row.uniqueRowId, row])),
@@ -370,6 +410,7 @@ export function CourseSectionsCardList({
               compact={compact}
               conflictsWith={conflictsWith}
               inCart={inCart}
+              replaces={replaces}
               selectedLabClassNumber={pick}
               onLabClassChange={handleCardLabClassChange}
             />

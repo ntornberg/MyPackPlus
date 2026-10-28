@@ -1,4 +1,3 @@
-import { trackExtensionInstalled } from "../analytics/gaBackground";
 import {
   fetchStatusWorkerStatusDirect,
   isStatusWorkerFetchMessage,
@@ -131,9 +130,6 @@ async function handleInstalled(
   const reloadTabs =
     details.reason === "update" && (await takeUpdateReloadRequest());
   const { migrated } = await initializeBackgroundStorage();
-  if (details.reason === "install") {
-    void trackExtensionInstalled();
-  }
   if (details.reason === "update" && migrated) {
     await refreshMigratedTabs();
   } else if (details.reason === "update") {

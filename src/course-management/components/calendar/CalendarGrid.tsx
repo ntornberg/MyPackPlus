@@ -300,9 +300,15 @@ export default function CalendarGrid({
                     className={cn(
                       "group/event absolute flex min-w-0 flex-col items-start justify-start overflow-hidden rounded-md px-1.5 py-[3px] text-left transition-[filter,transform] hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring sm:px-2",
                       lines === 1 && "justify-center py-0",
+                      ev.dimmed &&
+                        "opacity-35 outline-1 outline-dashed outline-foreground/50",
                     )}
                     title={
-                      isOverlap ? conflictLabel : `${ev.subj} · ${timeRange}`
+                      isOverlap
+                        ? conflictLabel
+                        : ev.dimmed
+                          ? `${ev.subj} · ${timeRange} (would be replaced)`
+                          : `${ev.subj} · ${timeRange}`
                     }
                     style={{
                       top: GRID_TOP_PAD + topPx + 1,

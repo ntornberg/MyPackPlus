@@ -38,10 +38,10 @@ for (const [width, height] of [
       expect(bounds.stacked).toBe(true);
 
     for (const tab of [
+      "Schedule",
       "Course Search",
       "GEP Search",
       "Major Plan Search",
-      "Instructors",
     ]) {
       await page.getByRole("tab", { name: tab, exact: true }).click();
       await expect(

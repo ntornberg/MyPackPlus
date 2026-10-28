@@ -8,15 +8,21 @@ import {
   type RefObject,
 } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   GradeDistributionChart,
   gradeDistributionPercents,
 } from "@/ui-system/components/shared/GradeDistributionChart";
+import { usePlannerNavigation } from "@/ui-system/components/workbench/plannerNavigation";
 import { describeRating, formatRatingCount } from "@/utils/rmpDisplay";
 
-import type { ScheduleEvent } from "../../types/calendar";
+import {
+  CALENDAR_COLOR_CART_CLASS,
+  CALENDAR_COLOR_ENROLLED_CLASS,
+  type ScheduleEvent,
+} from "../../types/calendar";
 
 import { courseDetailsFromLabel } from "./calendarCourseDetails";
 import { loadCalendarInsights, type CalendarInsight } from "./calendarInsights";
@@ -389,6 +395,11 @@ function CourseCard({ event }: { event: ScheduleEvent }) {
   const conflicts = [
     ...new Set(event.days.flatMap((d) => d.conflictsWith ?? [])),
   ];
+  // Only inside the planner, and only for classes already in the cart or schedule.
+  const navigation = usePlannerNavigation();
+  const scheduled =
+    event.color === CALENDAR_COLOR_CART_CLASS ||
+    event.color === CALENDAR_COLOR_ENROLLED_CLASS;
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -414,6 +425,19 @@ function CourseCard({ event }: { event: ScheduleEvent }) {
           Conflicts with {conflicts.join(", ")}
         </p>
       )}
+      {navigation && scheduled ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() =>
+            navigation.openScheduleFor(course.code, event.semester)
+          }
+        >
+          See alternatives
+        </Button>
+      ) : null}
       {!insights && (
         <>
           <p>

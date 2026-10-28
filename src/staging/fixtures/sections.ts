@@ -83,6 +83,11 @@ function availability(random: () => number, capacity: number) {
   return { availability: "Waitlist", enrollment: `${capacity}/${capacity}` };
 }
 
+/** Class number the dummy registrar gives a section, e.g. ("CSC 316", "001"). */
+export function stagingClassNumber(code: string, section: string): string {
+  return String(10000 + (hashString(`${code}:${section}`) % 9000));
+}
+
 function sectionsFor(subject: string, catalogNum: string): DummySection[] {
   const code = `${subject} ${catalogNum}`;
   const random = seededRandom(`sections:${code}`);
@@ -97,7 +102,7 @@ function sectionsFor(subject: string, catalogNum: string): DummySection[] {
     sections.push({
       section,
       component: "Lec",
-      classNumber: String(10000 + (hashString(`${code}:${section}`) % 9000)),
+      classNumber: stagingClassNumber(code, section),
       ...availability(random, capacity),
       dayTime: pick(random, LECTURE_SLOTS),
       location: pick(random, ROOMS),
@@ -125,9 +130,7 @@ function sectionsFor(subject: string, catalogNum: string): DummySection[] {
       sections.push({
         section: labSection,
         component: "Lab",
-        classNumber: String(
-          10000 + (hashString(`${code}:${labSection}`) % 9000),
-        ),
+        classNumber: stagingClassNumber(code, labSection),
         ...availability(random, 24),
         dayTime: LAB_SLOTS[(n + l) % LAB_SLOTS.length]!,
         location: pick(random, ROOMS),

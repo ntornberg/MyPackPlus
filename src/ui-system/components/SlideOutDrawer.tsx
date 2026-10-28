@@ -2,6 +2,7 @@ import {
   GraduationCapIcon,
   MoonStarIcon,
   SunMediumIcon,
+  UserSearchIcon,
   XIcon,
 } from "lucide-react";
 import React, {
@@ -30,22 +31,31 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+import {
+  loadCartScheduleEvents,
+  loadScheduleEvents,
+} from "../../course-management/components/calendar/CalendarView";
 import InstructorSearch from "../../course-management/components/search-tabs/InstructorSearch";
 import {
   CourseSearchDataInitialState,
   GepSearchDataInitialState,
   MajorPlanSearchDataInitialState,
   restoredTerm,
+  ScheduleDataInitialState,
   type CourseSearchData,
   type GepSearchData,
   type MajorPlanSearchData,
+  type ScheduleData,
   type TabUpdater,
 } from "../../course-management/components/tab-state/tabState";
 import { refreshCart } from "../../course-management/services/refreshCart";
+import { normalizeCourseCode } from "../../course-management/utils/cartCourses";
+import { semesterOfTermName } from "../../course-management/utils/semester";
 import {
   PLANNING_SYNCED_AT_KEY,
   syncPlanningData,
 } from "../../degree-planning/services/planningSync";
+import { TermIdByName } from "../../generated/catalogs/termIds";
 import PlannerLauncherHint from "../../user-experience/components/UserGuide/PlannerLauncherHint";
 import { StatusBanner } from "../../user-experience/status/StatusBanner";
 import { UpdateReadyPill } from "../../user-experience/update/UpdateReadyNotice";
@@ -65,6 +75,10 @@ import {
   schedulePlannerSessionPersist,
 } from "./plannerSessionPersistence";
 import { TabLoadingSkeleton } from "./shared/TabLoadingSkeleton";
+import {
+  PlannerNavigationContext,
+  type PlannerNavigation,
+} from "./workbench/plannerNavigation";
 import { PlannerPreviewRail } from "./workbench/PlannerPreviewRail";
 import { useOverlayPortalContainer } from "./workbench/useOverlayPortalContainer";
 import {
@@ -78,9 +92,12 @@ const loadGepSearch = () =>
   import("../../course-management/components/search-tabs/GepSearch");
 const loadMajorPlanSearch = () =>
   import("../../course-management/components/search-tabs/MajorPlanSearch");
+const loadScheduleTab = () =>
+  import("../../course-management/components/search-tabs/ScheduleTab");
 const CourseSearch = React.lazy(loadCourseSearch);
 const GepSearch = React.lazy(loadGepSearch);
 const MajorPlanSearch = React.lazy(loadMajorPlanSearch);
+const ScheduleTab = React.lazy(loadScheduleTab);
 
 /**
  * Warms the caches for the term's likely courses. Imported on demand because
@@ -183,12 +200,51 @@ const MemoizedMajorPlanSearchTab = React.memo(
   ),
 );
 
+const MemoizedScheduleTab = React.memo(
+  ({
+    setScheduleTabData,
+    scheduleData,
+    onPreviewSectionChange,
+    selectedPreview,
+    isOpen,
+  }: {
+    setScheduleTabData: TabUpdater<ScheduleData>;
+    scheduleData: ScheduleData;
+    onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
+    selectedPreview: PlannerSectionPreview | null;
+    isOpen: boolean;
+  }) => (
+    <React.Suspense
+      fallback={<TabLoadingSkeleton label="Loading your schedule…" />}
+    >
+      <ScheduleTab
+        setScheduleTabData={setScheduleTabData}
+        scheduleData={scheduleData}
+        onPreviewSectionChange={onPreviewSectionChange}
+        selectedPreview={selectedPreview}
+        isOpen={isOpen}
+      />
+    </React.Suspense>
+  ),
+);
+
 const PLANNER_TABS: PlannerWorkbenchTab[] = [
+  "schedule",
   "course_search",
   "gep_search",
   "major_plan_search",
-  "instructor_search",
 ];
+
+/** Whether any cart or enrolled class is cached for this term. */
+async function hasScheduleForTerm(term: string | null): Promise<boolean> {
+  const semester = semesterOfTermName(term);
+  if (!semester) return false;
+  const [cart, enrolled] = await Promise.all([
+    loadCartScheduleEvents(),
+    loadScheduleEvents(),
+  ]);
+  return [...cart, ...enrolled].some((event) => event.semester === semester);
+}
 
 const MemoizedPlannerPreviewRail = React.memo(
   PlannerPreviewRail,
@@ -215,6 +271,23 @@ function mergeCourseSearchData(
             title: storedCourseInfo?.title ?? null,
             id: storedCourseInfo?.id ?? "",
           },
+  };
+}
+
+function mergeScheduleData(
+  stored: Partial<ScheduleData> | undefined,
+): ScheduleData {
+  const selectedTerm = restoredTerm(stored?.selectedTerm);
+  // The selected course belongs to the saved term.
+  const termChanged =
+    stored?.selectedTerm !== undefined && selectedTerm !== stored.selectedTerm;
+  return {
+    ...ScheduleDataInitialState,
+    ...stored,
+    selectedTerm,
+    selectedCourseCode: termChanged
+      ? null
+      : (stored?.selectedCourseCode ?? null),
   };
 }
 
@@ -296,13 +369,19 @@ export default function SlideOutDrawer({
   // `parked`: closed and the exit animation has finished, so it isn't rendered.
   const [panelMounted, setPanelMounted] = useState(defaultOpen);
   const [parked, setParked] = useState(!defaultOpen);
-  const [selectedTab, setSelectedTab] = useState<PlannerWorkbenchTab>(() => {
-    const fromTabKey = loadPlannerSelectedTab();
-    if (fromTabKey) {
-      return fromTabKey;
-    }
-    return persisted?.selectedTab ?? "course_search";
-  });
+  // A tab the student picked always wins. Without one, the planner starts on
+  // Course Search and switches to Schedule once it finds classes for the term.
+  const [savedTab] = useState<PlannerWorkbenchTab | null>(
+    () =>
+      loadPlannerSelectedTab() ??
+      (persisted && !persisted.defaultTab ? persisted.selectedTab : null),
+  );
+  const [tabChosen, setTabChosen] = useState(savedTab !== null);
+  // Read by the default-tab check, which may finish after a click.
+  const tabChosenRef = useRef(tabChosen);
+  const [selectedTab, setSelectedTab] = useState<PlannerWorkbenchTab>(
+    savedTab ?? "course_search",
+  );
   // Only the tab in view mounts with the panel; the rest follow once it has opened.
   const [mountedTabs, setMountedTabs] = useState<
     ReadonlySet<PlannerWorkbenchTab>
@@ -332,7 +411,74 @@ export default function SlideOutDrawer({
   const [GepSearchData, setGepSearchData] = useState(() =>
     mergeGepData(persisted?.GepSearchData),
   );
+  const [scheduleData, setScheduleData] = useState(() =>
+    mergeScheduleData(persisted?.scheduleData),
+  );
+  const [instructorLookupOpen, setInstructorLookupOpen] = useState(false);
   const portalContainer = useOverlayPortalContainer();
+
+  const setScheduleTabData: TabUpdater<ScheduleData> = useCallback(
+    (keyOrPatch, value) => {
+      setScheduleData((prev) =>
+        typeof keyOrPatch === "object"
+          ? { ...prev, ...keyOrPatch }
+          : { ...prev, [keyOrPatch]: value },
+      );
+    },
+    [],
+  );
+
+  const selectTab = useCallback((next: PlannerWorkbenchTab) => {
+    setSelectedTab(next);
+    tabChosenRef.current = true;
+    setTabChosen(true);
+    setMountedTabs((tabs) =>
+      tabs.has(next) ? tabs : new Set([...tabs, next]),
+    );
+    persistPlannerSelectedTab(next);
+    setSelectedPreview(null);
+  }, []);
+
+  const navigation = useMemo<PlannerNavigation>(
+    () => ({
+      openTab: selectTab,
+      openScheduleFor: (courseCode, semester) => {
+        const term = semester
+          ? Object.keys(TermIdByName).find(
+              (name) => semesterOfTermName(name) === semester,
+            )
+          : undefined;
+        setScheduleData((prev) => ({
+          ...prev,
+          selectedTerm: term ?? prev.selectedTerm,
+          selectedCourseCode: normalizeCourseCode(courseCode) ?? courseCode,
+          instructorFilter: null,
+        }));
+        selectTab("schedule");
+      },
+    }),
+    [selectTab],
+  );
+
+  // No saved tab: open on Schedule when the default term already has classes.
+  useEffect(() => {
+    if (tabChosenRef.current) return;
+    let cancelled = false;
+    void hasScheduleForTerm(scheduleData.selectedTerm)
+      .then((known) => {
+        if (!known || cancelled || tabChosenRef.current) return;
+        setSelectedTab("schedule");
+        setMountedTabs((tabs) =>
+          tabs.has("schedule") ? tabs : new Set([...tabs, "schedule"]),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // Only the first load picks a default; later term changes are the student's.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setCourseSearchTabData: TabUpdater<CourseSearchData> = useCallback(
     (keyOrPatch, value) => {
@@ -366,13 +512,15 @@ export default function SlideOutDrawer({
     [],
   );
 
-  // Term of the tab in view (Instructor search has none; use Course search's).
+  // Term of the tab in view.
   const activeTerm =
     selectedTab === "gep_search"
       ? GepSearchData.selectedTerm
       : selectedTab === "major_plan_search"
         ? majorPlanSearchData.selectedTerm
-        : courseSearchData.selectedTerm;
+        : selectedTab === "schedule"
+          ? scheduleData.selectedTerm
+          : courseSearchData.selectedTerm;
 
   // First hover or focus on the launcher: load the tab code, refresh Pack
   // Planner and the audit (a no-op while the last sync is fresh), and mount the
@@ -382,6 +530,7 @@ export default function SlideOutDrawer({
     if (warmedUp.current) return;
     warmedUp.current = true;
     void Promise.all([
+      loadScheduleTab(),
       loadCourseSearch(),
       loadGepSearch(),
       loadMajorPlanSearch(),
@@ -518,11 +667,20 @@ export default function SlideOutDrawer({
     schedulePlannerSessionPersist({
       version: 1,
       selectedTab,
+      ...(tabChosen ? {} : { defaultTab: true }),
       courseSearchData,
       majorPlanSearchData,
       GepSearchData,
+      scheduleData,
     });
-  }, [courseSearchData, GepSearchData, majorPlanSearchData, selectedTab]);
+  }, [
+    courseSearchData,
+    GepSearchData,
+    majorPlanSearchData,
+    scheduleData,
+    selectedTab,
+    tabChosen,
+  ]);
 
   useEffect(() => flushPlannerSessionPersist, []);
 
@@ -606,222 +764,258 @@ export default function SlideOutDrawer({
           )}
         >
           <TooltipProvider delayDuration={150}>
-            <DialogTitle className="sr-only">MyPack+ Planner</DialogTitle>
-            <DialogDescription className="sr-only">
-              Use Search to filter sections, pick a row to pin the preview, and
-              compare options with schedule context.
-            </DialogDescription>
+            <PlannerNavigationContext.Provider value={navigation}>
+              <DialogTitle className="sr-only">MyPack+ Planner</DialogTitle>
+              <DialogDescription className="sr-only">
+                Use Search to filter sections, pick a row to pin the preview,
+                and compare options with schedule context.
+              </DialogDescription>
 
-            <Tabs
-              value={selectedTab}
-              activationMode="manual"
-              onValueChange={(value) => {
-                const next = value as PlannerWorkbenchTab;
-                setSelectedTab(next);
-                setMountedTabs((tabs) =>
-                  tabs.has(next) ? tabs : new Set([...tabs, next]),
-                );
-                persistPlannerSelectedTab(next);
-                setSelectedPreview(null);
-              }}
-              className="flex min-h-0 max-h-full flex-1 flex-col gap-0 overflow-hidden"
-            >
-              <div className="shrink-0 border-b border-border/60 bg-muted/25 px-3 py-3 sm:px-6 sm:py-5 dark:bg-background/40">
-                <div className="mb-3 flex min-h-7 flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                      MyPack+ Planner
+              <Tabs
+                value={selectedTab}
+                activationMode="manual"
+                onValueChange={(value) =>
+                  selectTab(value as PlannerWorkbenchTab)
+                }
+                className="flex min-h-0 max-h-full flex-1 flex-col gap-0 overflow-hidden"
+              >
+                <div className="shrink-0 border-b border-border/60 bg-muted/25 px-3 py-3 sm:px-6 sm:py-5 dark:bg-background/40">
+                  <div className="mb-3 flex min-h-7 flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                        MyPack+ Planner
+                      </div>
+                      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                        Use Search to filter, then pick a row to pin the preview
+                        and compare sections side by side.
+                      </p>
                     </div>
-                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                      Use Search to filter, then pick a row to pin the preview
-                      and compare sections side by side.
-                    </p>
+
+                    <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+                      <UpdateReadyPill className="shrink-0" />
+                      <StatusBanner className="shrink-0" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={cn(plannerActionButtonClassName, "gap-1.5")}
+                        onClick={() => setInstructorLookupOpen(true)}
+                        aria-label="Look up instructor"
+                        title="Look up an instructor's ratings and grades"
+                      >
+                        <UserSearchIcon />
+                        <span className="max-sm:hidden">Instructors</span>
+                      </Button>
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className={plannerActionButtonClassName}
+                      >
+                        <a href="mailto:nicktornberg12@gmail.com?subject=Pack%20Planner%20Feedback">
+                          Report bug / Feedback
+                        </a>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        className={plannerActionButtonClassName}
+                        onClick={() =>
+                          setThemeMode((current) =>
+                            current === "dark" ? "light" : "dark",
+                          )
+                        }
+                        aria-label={`Switch to ${
+                          themeMode === "dark" ? "light" : "dark"
+                        } mode`}
+                      >
+                        {themeMode === "dark" ? (
+                          <SunMediumIcon />
+                        ) : (
+                          <MoonStarIcon />
+                        )}
+                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DialogClose asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              className={plannerActionButtonClassName}
+                              aria-label="Close planner"
+                            >
+                              <XIcon strokeWidth={2.25} />
+                            </Button>
+                          </DialogClose>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          Close planner
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
 
-                  <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
-                    <UpdateReadyPill className="shrink-0" />
-                    <StatusBanner className="shrink-0" />
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className={plannerActionButtonClassName}
+                  <TabsList
+                    variant="segmented"
+                    className="w-full min-w-0 max-sm:min-h-10 sm:min-h-12 sm:max-w-2xl"
+                    aria-label="Planner search tabs"
+                  >
+                    <TabsTrigger value="schedule" className="min-w-0 truncate">
+                      Schedule
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="course_search"
+                      className="min-w-0 truncate"
                     >
-                      <a href="mailto:nicktornberg12@gmail.com?subject=Pack%20Planner%20Feedback">
-                        Report bug / Feedback
-                      </a>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      className={plannerActionButtonClassName}
-                      onClick={() =>
-                        setThemeMode((current) =>
-                          current === "dark" ? "light" : "dark",
-                        )
-                      }
-                      aria-label={`Switch to ${
-                        themeMode === "dark" ? "light" : "dark"
-                      } mode`}
+                      Course Search
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="gep_search"
+                      className="min-w-0 truncate"
                     >
-                      {themeMode === "dark" ? (
-                        <SunMediumIcon />
-                      ) : (
-                        <MoonStarIcon />
-                      )}
-                    </Button>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <DialogClose asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className={plannerActionButtonClassName}
-                            aria-label="Close planner"
-                          >
-                            <XIcon strokeWidth={2.25} />
-                          </Button>
-                        </DialogClose>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={6}>
-                        Close planner
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
+                      GEP Search
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="major_plan_search"
+                      className="min-w-0 truncate"
+                    >
+                      Major Plan Search
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
 
-                <TabsList
-                  variant="segmented"
-                  className="w-full min-w-0 max-sm:min-h-10 sm:min-h-12 sm:max-w-2xl"
-                  aria-label="Planner search tabs"
+                <div
+                  id="dialog-scroll-container"
+                  className="min-h-0 max-h-full flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] bg-muted/15 touch-pan-y dark:bg-background/30"
+                  onWheelCapture={(e) => e.stopPropagation()}
+                  onTouchMoveCapture={(e) => e.stopPropagation()}
                 >
-                  <TabsTrigger
+                  <TabsContent
+                    value="schedule"
+                    forceMount
+                    className={
+                      selectedTab === "schedule"
+                        ? "planner-tab-panel block min-h-0"
+                        : "hidden min-h-0"
+                    }
+                  >
+                    {mountedTabs.has("schedule") ? (
+                      <MemoizedScheduleTab
+                        setScheduleTabData={setScheduleTabData}
+                        scheduleData={scheduleData}
+                        onPreviewSectionChange={setSelectedPreview}
+                        selectedPreview={
+                          selectedTab === "schedule" ? selectedPreview : null
+                        }
+                        isOpen={drawerOpen}
+                      />
+                    ) : null}
+                  </TabsContent>
+                  <TabsContent
                     value="course_search"
-                    className="min-w-0 truncate"
+                    forceMount
+                    className={
+                      selectedTab === "course_search"
+                        ? "planner-tab-panel block min-h-0"
+                        : "hidden min-h-0"
+                    }
                   >
-                    Course Search
-                  </TabsTrigger>
-                  <TabsTrigger value="gep_search" className="min-w-0 truncate">
-                    GEP Search
-                  </TabsTrigger>
-                  <TabsTrigger
+                    {mountedTabs.has("course_search") ? (
+                      <MemoizedCourseSearchTab
+                        setCourseSearchTabData={setCourseSearchTabData}
+                        courseSearchData={courseSearchData}
+                        onPreviewSectionChange={setSelectedPreview}
+                        previewContent={
+                          selectedTab === "course_search"
+                            ? previewRail
+                            : inactivePreviewRail
+                        }
+                        selectedPreviewId={
+                          selectedTab === "course_search"
+                            ? selectedPreviewId
+                            : null
+                        }
+                      />
+                    ) : null}
+                  </TabsContent>
+                  <TabsContent
+                    value="gep_search"
+                    forceMount
+                    className={
+                      selectedTab === "gep_search"
+                        ? "planner-tab-panel block min-h-0"
+                        : "hidden min-h-0"
+                    }
+                  >
+                    {mountedTabs.has("gep_search") ? (
+                      <MemoizedGepSearchTab
+                        setGepSearchTabData={setGepSearchTabData}
+                        GepSearchData={GepSearchData}
+                        onPreviewSectionChange={setSelectedPreview}
+                        previewContent={
+                          selectedTab === "gep_search"
+                            ? previewRail
+                            : inactivePreviewRail
+                        }
+                        selectedPreviewId={
+                          selectedTab === "gep_search"
+                            ? selectedPreviewId
+                            : null
+                        }
+                        isActive={selectedTab === "gep_search"}
+                      />
+                    ) : null}
+                  </TabsContent>
+                  <TabsContent
                     value="major_plan_search"
-                    className="min-w-0 truncate"
+                    forceMount
+                    className={
+                      selectedTab === "major_plan_search"
+                        ? "planner-tab-panel block min-h-0"
+                        : "hidden min-h-0"
+                    }
                   >
-                    Major Plan Search
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="instructor_search"
-                    className="min-w-0 truncate"
-                  >
-                    Instructors
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <div
-                id="dialog-scroll-container"
-                className="min-h-0 max-h-full flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] bg-muted/15 touch-pan-y dark:bg-background/30"
-                onWheelCapture={(e) => e.stopPropagation()}
-                onTouchMoveCapture={(e) => e.stopPropagation()}
+                    {mountedTabs.has("major_plan_search") ? (
+                      <MemoizedMajorPlanSearchTab
+                        setMajorPlanSearchTabData={setMajorPlanSearchTabData}
+                        majorPlanSearchData={majorPlanSearchData}
+                        onPreviewSectionChange={setSelectedPreview}
+                        previewContent={
+                          selectedTab === "major_plan_search"
+                            ? previewRail
+                            : inactivePreviewRail
+                        }
+                        selectedPreviewId={
+                          selectedTab === "major_plan_search"
+                            ? selectedPreviewId
+                            : null
+                        }
+                      />
+                    ) : null}
+                  </TabsContent>
+                </div>
+              </Tabs>
+              <Dialog
+                open={instructorLookupOpen}
+                onOpenChange={setInstructorLookupOpen}
               >
-                <TabsContent
-                  value="course_search"
-                  forceMount
-                  className={
-                    selectedTab === "course_search"
-                      ? "planner-tab-panel block min-h-0"
-                      : "hidden min-h-0"
-                  }
+                <DialogContent
+                  container={portalContainer}
+                  className="max-h-[85vh] w-[min(40rem,calc(100vw-2rem))] max-w-none overflow-y-auto p-0 sm:max-w-none"
                 >
-                  {mountedTabs.has("course_search") ? (
-                    <MemoizedCourseSearchTab
-                      setCourseSearchTabData={setCourseSearchTabData}
-                      courseSearchData={courseSearchData}
-                      onPreviewSectionChange={setSelectedPreview}
-                      previewContent={
-                        selectedTab === "course_search"
-                          ? previewRail
-                          : inactivePreviewRail
-                      }
-                      selectedPreviewId={
-                        selectedTab === "course_search"
-                          ? selectedPreviewId
-                          : null
-                      }
-                    />
-                  ) : null}
-                </TabsContent>
-                <TabsContent
-                  value="gep_search"
-                  forceMount
-                  className={
-                    selectedTab === "gep_search"
-                      ? "planner-tab-panel block min-h-0"
-                      : "hidden min-h-0"
-                  }
-                >
-                  {mountedTabs.has("gep_search") ? (
-                    <MemoizedGepSearchTab
-                      setGepSearchTabData={setGepSearchTabData}
-                      GepSearchData={GepSearchData}
-                      onPreviewSectionChange={setSelectedPreview}
-                      previewContent={
-                        selectedTab === "gep_search"
-                          ? previewRail
-                          : inactivePreviewRail
-                      }
-                      selectedPreviewId={
-                        selectedTab === "gep_search" ? selectedPreviewId : null
-                      }
-                      isActive={selectedTab === "gep_search"}
-                    />
-                  ) : null}
-                </TabsContent>
-                <TabsContent
-                  value="major_plan_search"
-                  forceMount
-                  className={
-                    selectedTab === "major_plan_search"
-                      ? "planner-tab-panel block min-h-0"
-                      : "hidden min-h-0"
-                  }
-                >
-                  {mountedTabs.has("major_plan_search") ? (
-                    <MemoizedMajorPlanSearchTab
-                      setMajorPlanSearchTabData={setMajorPlanSearchTabData}
-                      majorPlanSearchData={majorPlanSearchData}
-                      onPreviewSectionChange={setSelectedPreview}
-                      previewContent={
-                        selectedTab === "major_plan_search"
-                          ? previewRail
-                          : inactivePreviewRail
-                      }
-                      selectedPreviewId={
-                        selectedTab === "major_plan_search"
-                          ? selectedPreviewId
-                          : null
-                      }
-                    />
-                  ) : null}
-                </TabsContent>
-                <TabsContent
-                  value="instructor_search"
-                  forceMount
-                  className={
-                    selectedTab === "instructor_search"
-                      ? "planner-tab-panel block min-h-0"
-                      : "hidden min-h-0"
-                  }
-                >
-                  {mountedTabs.has("instructor_search") ? (
-                    <InstructorSearch />
-                  ) : null}
-                </TabsContent>
-              </div>
-            </Tabs>
+                  <DialogTitle className="sr-only">
+                    Look up instructor
+                  </DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Search instructors by name, Unity ID, or subject to see
+                    their ratings and grade history.
+                  </DialogDescription>
+                  {instructorLookupOpen ? <InstructorSearch /> : null}
+                </DialogContent>
+              </Dialog>
+            </PlannerNavigationContext.Provider>
           </TooltipProvider>
         </DialogContent>
       </Dialog>
