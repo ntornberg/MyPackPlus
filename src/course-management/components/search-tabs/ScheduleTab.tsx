@@ -1,7 +1,8 @@
 import {
   AlertTriangleIcon,
-  ArrowRightIcon,
+  ArrowLeftRightIcon,
   CalendarDaysIcon,
+  CheckIcon,
   ChevronDownIcon,
   InfoIcon,
   Loader2,
@@ -10,7 +11,14 @@ import {
   Trash2Icon,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -26,19 +34,13 @@ import { InstructorFilterCombobox } from "../../../ui-system/components/workbenc
 import { usePlannerNavigation } from "../../../ui-system/components/workbench/plannerNavigation";
 import { PlannerPreviewRail } from "../../../ui-system/components/workbench/PlannerPreviewRail";
 import { RmpStarsWithScore } from "../../../ui-system/components/workbench/PlannerSectionInsights";
-import {
-  LinkedMeetingPicker,
-  PendingBadge,
-  ScheduleFitIndicator,
-  SectionGradeDistributionBlock,
-} from "../../../ui-system/components/workbench/SectionCompareCard";
+import { SectionGradeDistributionBlock } from "../../../ui-system/components/workbench/SectionCompareCard";
 import {
   buildInstructorFilterOptions,
   defaultLabClassForGroup,
   formatInstructorDisplayName,
   groupedSectionForPreview,
   groupRowSections,
-  linkedMeetingFromLab,
 } from "../../../ui-system/components/workbench/sectionCompareUtils";
 import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import { CartCoursesContext } from "../../../ui-system/components/workbench/useCartCourses";
@@ -53,10 +55,7 @@ import { AppLogger } from "../../../utils/logger";
 import { fetchPlannerCourseSections } from "../../services/api/planner-search/dataService";
 import { refreshCart } from "../../services/refreshCart";
 import { removeClassFromCart } from "../../services/removeSectionFromCart";
-import {
-  changeCartLab,
-  replaceCartSection,
-} from "../../services/replaceCartSection";
+import { changeCartLab } from "../../services/replaceCartSection";
 import type { ScheduleEvent } from "../../types/calendar";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
 import {
@@ -260,137 +259,301 @@ function ScheduleCourseInsights({
   );
 }
 
-/** A staged section change: the lecture and, when it has several, the lab. */
-type PendingChange = { lectureClass: string; labClass?: string };
-
 function labsOf(row: GroupedSections): ModifiedSection[] {
   return (row.labs ?? []).filter(Boolean) as ModifiedSection[];
 }
 
-/** "Sec 004 + Problem Session 004A" */
-function rowLabel(row: GroupedSections, lab?: ModifiedSection): string {
-  const lecture = `Sec ${row.lecture?.section ?? "—"}`;
-  return lab
-    ? `${lecture} + ${componentDisplayName(lab.component)} ${lab.section ?? ""}`.trim()
-    : lecture;
+/** The first lab that fits, so a staged section starts out conflict-free if it can. */
+function firstFittingLabClass(
+  row: GroupedSections,
+  background: ScheduleEvent[],
+): string | undefined {
+  const labs = labsOf(row);
+  if (labs.length <= 1) {
+    return labs[0] ? String(labs[0].classNumber) : undefined;
+  }
+  return (
+    labs
+      .map((lab) => String(lab.classNumber))
+      .find(
+        (labClass) => conflictsFor(row, labClass, background)?.length === 0,
+      ) ?? defaultLabClassForGroup(row)
+  );
 }
 
-/** What a course's staged change swaps, whether it fits, and Apply / Discard. */
-function PendingChangePanel({
-  classNumbers,
-  from,
-  to,
-  toLabClass,
+function catalogCourseFor(code: string | undefined) {
+  const compactCode = code?.toLowerCase().replace(/\s+/g, "");
+  return compactCode
+    ? (getCourseSearchIndex().find(
+        (course) => course.normalizedCode === compactCode,
+      ) ?? null)
+    : null;
+}
+
+/**
+ * The cart's lab / problem session with the others under it. Clicking one
+ * shows it on the calendar; Swap changes it in the cart. Stays open through
+ * both so options can be compared.
+ */
+function SessionSwapPicker({
+  course,
+  row,
   background,
-  onDiscard,
-  onApplied,
+  resetKey,
+  onPreviewSectionChange,
 }: {
-  /** The course's class numbers now in the cart. */
-  classNumbers: string[];
-  from: GroupedSections;
-  to: GroupedSections;
-  toLabClass?: string;
+  course: ScheduleCourse;
+  row: GroupedSections;
   /** Cart and enrolled classes other than this course. */
   background: ScheduleEvent[];
-  onDiscard: () => void;
-  onApplied: () => void;
+  /** Closes the list and drops the preview when this changes. */
+  resetKey: unknown;
+  onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
 }) {
-  const [applying, setApplying] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [swapping, setSwapping] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const current = cartSelectionFor(from, new Set(classNumbers));
-  const toLab =
-    labsOf(to).find((lab) => String(lab.classNumber) === toLabClass) ??
-    labsOf(to)[0];
-  const conflicts = conflictsFor(to, toLabClass, background);
-  const conflictsWith = conflicts
-    ? [...new Set(conflicts.map((ev) => courseCodeOf(ev.subj) ?? ev.subj))]
-    : null;
+  useEffect(() => {
+    setOpen(false);
+    setPreviewing(null);
+    setError(null);
+  }, [resetKey]);
 
-  const apply = async () => {
-    if (!current || !to.lecture) {
+  const labs = labsOf(row);
+  const current = cartSelectionFor(row, new Set(course.classNumbers));
+  const currentClass = current?.parent
+    ? String(current.section.classNumber)
+    : undefined;
+  const active =
+    labs.find((lab) => String(lab.classNumber) === currentClass) ?? labs[0]!;
+  const name = componentDisplayName(active.component);
+
+  const preview = (labClass: string | null) => {
+    setPreviewing(labClass);
+    const section = labClass ? groupedSectionForPreview(row, labClass) : null;
+    onPreviewSectionChange(
+      section ? createSectionPreview("schedule", section) : null,
+    );
+  };
+
+  const toggleOpen = () => {
+    if (open && previewing) {
+      preview(null);
+    }
+    setOpen(!open);
+  };
+
+  const swap = async (lab: ModifiedSection) => {
+    if (!row.lecture || !current?.parent) {
       return;
     }
-    setApplying(true);
+    const labClass = String(lab.classNumber);
+    setSwapping(labClass);
     setError(null);
-    const options = {
-      extras: to.extras ?? [],
-      payload: to.cartPayloads?.[toLab ? String(toLab.classNumber) : ""],
-    };
-    const sameLecture =
-      String(to.lecture.classNumber) === String(from.lecture?.classNumber);
-    const result =
-      sameLecture && toLab && current.parent
-        ? await changeCartLab(to.lecture, current.section, toLab, options)
-        : await replaceCartSection(
-            current,
-            toLab
-              ? { section: toLab, parent: to.lecture }
-              : { section: to.lecture },
-            options,
-          );
-    setApplying(false);
+    const result = await changeCartLab(row.lecture, current.section, lab, {
+      extras: row.extras ?? [],
+      payload: row.cartPayloads?.[labClass],
+    });
+    setSwapping(null);
     if (result.ok) {
-      onApplied();
+      preview(null);
+      void refreshCart();
     } else {
-      AppLogger.warn("Applying section change failed:", result.message);
+      AppLogger.warn("Swapping section failed:", result.message);
       setError(result.message);
     }
   };
 
   return (
-    <section
-      aria-label="Pending change"
-      className="space-y-2 rounded-lg border border-amber-500/50 bg-amber-500/[0.06] p-3"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <PendingBadge />
-        <span className="text-xs text-muted-foreground">
-          Not in your cart until you apply it.
+    <section aria-label={`Your ${name.toLowerCase()}`} className="space-y-1">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Your {name.toLowerCase()}
+      </h4>
+      <button
+        type="button"
+        aria-expanded={open}
+        title={open ? "Close" : `Switch ${name.toLowerCase()}`}
+        onClick={toggleOpen}
+        className="group flex w-full items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.06] dark:border-white/10"
+      >
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium text-foreground">
+            {name} · Sec {active.section ?? "—"}
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            {active.dayTime} · {active.location}
+          </span>
         </span>
-      </div>
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className="text-muted-foreground line-through decoration-muted-foreground/60">
-          {rowLabel(from, current?.parent ? current.section : undefined)}
-        </span>
-        <ArrowRightIcon
-          className="size-3.5 text-muted-foreground"
+        <span
+          className={cn(
+            "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+            open
+              ? "border-primary/60 bg-primary/15 text-primary"
+              : "border-border/60 text-muted-foreground group-hover:border-primary/40 group-hover:text-primary",
+          )}
           aria-hidden
-        />
-        <span className="font-semibold text-foreground">
-          {rowLabel(to, toLab)}
+        >
+          {open ? (
+            <X className="size-3.5" />
+          ) : (
+            <ArrowLeftRightIcon className="size-3.5" />
+          )}
         </span>
-      </p>
-      {conflictsWith ? (
-        <ScheduleFitIndicator conflictsWith={conflictsWith} compact />
+      </button>
+      {open ? (
+        <div className="flex max-h-60 flex-col gap-1 overflow-y-auto rounded-lg border border-border/50 bg-card/40 p-1 dark:border-white/[0.08] dark:bg-[rgb(8,14,26)]/60">
+          <p className="px-1 pt-0.5 text-[11px] text-muted-foreground">
+            Tap one to see it on your calendar.
+          </p>
+          {labs.map((lab) => {
+            const labClass = String(lab.classNumber);
+            const inCart = labClass === currentClass;
+            const shown = labClass === previewing;
+            const conflicts = inCart
+              ? null
+              : conflictsFor(row, labClass, background);
+            const conflictsWith = [
+              ...new Set(
+                (conflicts ?? []).map((ev) => courseCodeOf(ev.subj) ?? ev.subj),
+              ),
+            ];
+            return (
+              <div
+                key={labClass}
+                className={cn(
+                  "flex items-center gap-2 rounded-md border px-2 py-1.5 transition-colors",
+                  inCart
+                    ? "border-transparent bg-muted/40"
+                    : shown
+                      ? "border-primary/60 bg-primary/[0.14]"
+                      : "border-transparent hover:border-border hover:bg-primary/[0.06]",
+                )}
+              >
+                <button
+                  type="button"
+                  aria-pressed={shown}
+                  disabled={inCart}
+                  onClick={() => preview(shown ? null : labClass)}
+                  className="flex min-w-0 flex-1 flex-col items-start text-left disabled:cursor-default"
+                >
+                  <span className="max-w-full truncate text-sm font-medium text-foreground">
+                    {componentDisplayName(lab.component)} · Sec{" "}
+                    {lab.section ?? "—"}
+                  </span>
+                  <span className="max-w-full truncate text-xs text-muted-foreground">
+                    {lab.dayTime} · {lab.location}
+                  </span>
+                  {conflictsWith.length > 0 ? (
+                    <span className="flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                      <AlertTriangleIcon className="size-3" aria-hidden />
+                      Conflicts with {conflictsWith.join(", ")}
+                    </span>
+                  ) : null}
+                </button>
+                {inCart ? (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    <CheckIcon className="size-3" aria-hidden />
+                    In cart
+                  </span>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={shown ? "default" : "outline"}
+                    disabled={swapping != null}
+                    onClick={() => void swap(lab)}
+                    aria-label={`Swap to ${componentDisplayName(lab.component)} ${lab.section ?? ""}`}
+                    className="h-7 shrink-0 gap-1 rounded-lg px-2 text-xs"
+                  >
+                    {swapping === labClass ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <ArrowLeftRightIcon className="size-3.5" />
+                    )}
+                    {swapping === labClass ? "Swapping…" : "Swap"}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
       ) : null}
       {error ? (
         <p role="alert" className="text-xs text-destructive">
           {error}
         </p>
       ) : null}
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={applying}
-          onClick={onDiscard}
-          className="h-7 rounded-lg px-2 text-xs"
-        >
-          Discard
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={applying || !current}
-          onClick={() => void apply()}
-          className="h-7 gap-1 rounded-lg px-2.5 text-xs font-semibold"
-        >
-          {applying ? <Loader2 className="size-3.5 animate-spin" /> : null}
-          {applying ? "Applying…" : "Apply to cart"}
-        </Button>
-      </div>
     </section>
+  );
+}
+
+/**
+ * A cart course's lab / problem session picker, shown without expanding the
+ * course. Loads the course's sections only when it has a linked meeting.
+ */
+function CartCourseSelection({
+  course,
+  term,
+  loadSections,
+  background,
+  expanded,
+  onPreviewSectionChange,
+}: {
+  course: ScheduleCourse;
+  term: string | null;
+  /** Its other sections are open; re-collapses the picker. */
+  expanded: boolean;
+  loadSections: typeof fetchPlannerCourseSections;
+  /** Cart and enrolled classes, this course included. */
+  background: ScheduleEvent[];
+  onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
+}) {
+  const needed = course.classNumbers.length > 1;
+  const catalogCourse = needed ? catalogCourseFor(course.code) : null;
+  const { data, loading } = useCourseSections(
+    catalogCourse?.subject ?? null,
+    catalogCourse?.catalogNum ?? null,
+    catalogCourse?.id,
+    term,
+    loadSections,
+  );
+  const sectionsArray = useMemo(
+    (): GroupedSections[] =>
+      data?.sections ? Object.values(data.sections) : [],
+    [data?.sections],
+  );
+  const pairedSections = useMyPackPairings(sectionsArray);
+  const currentRow =
+    pairedSections.find((row) =>
+      course.classNumbers.includes(String(row.lecture?.classNumber)),
+    ) ?? null;
+  const otherCourses = useMemo(
+    () =>
+      background.filter(
+        (event) =>
+          normalizeCourseCode(event.course?.code || event.subj) !== course.code,
+      ),
+    [background, course.code],
+  );
+
+  if (!needed) {
+    return null;
+  }
+  if (loading && !currentRow) {
+    return <Skeleton className="h-16 w-full rounded-lg" aria-hidden />;
+  }
+  if (!currentRow?.lecture || labsOf(currentRow).length <= 1) {
+    return null;
+  }
+  return (
+    <SessionSwapPicker
+      course={course}
+      row={currentRow}
+      background={otherCourses}
+      resetKey={`${course.code}|${expanded}`}
+      onPreviewSectionChange={onPreviewSectionChange}
+    />
   );
 }
 
@@ -399,17 +562,17 @@ function ScheduleCourseRow({
   course,
   expanded,
   onToggle,
-  pending,
   compact,
+  selection,
   children,
 }: {
   course: ScheduleCourse;
   expanded: boolean;
   onToggle: () => void;
-  /** A section change is staged for this course. */
-  pending: boolean;
   /** Grade history as a chip (compact) or a full chart, like the section cards. */
   compact: boolean;
+  /** Its lab picker, shown collapsed or not. */
+  selection?: ReactNode;
   children?: ReactNode;
 }) {
   const regionId = `schedule-course-${course.status}-${course.code.replace(/\s+/g, "-")}`;
@@ -417,11 +580,7 @@ function ScheduleCourseRow({
     <li
       className={cn(
         "flex flex-col rounded-xl border bg-card ring-1 ring-foreground/5 transition-colors",
-        pending
-          ? "border-amber-500/70"
-          : expanded
-            ? "border-primary/60"
-            : "border-border",
+        expanded ? "border-primary/60" : "border-border",
       )}
     >
       <div className="flex items-start gap-2 p-3">
@@ -448,7 +607,6 @@ function ScheduleCourseRow({
               >
                 {course.status === "cart" ? "Cart" : "Enrolled"}
               </Badge>
-              {pending ? <PendingBadge /> : null}
             </span>
             {course.title ? (
               <span className="truncate text-xs text-muted-foreground">
@@ -478,6 +636,7 @@ function ScheduleCourseRow({
       {/* Outside the toggle: the RMP score is a link. */}
       <div className="flex flex-col gap-2 px-3 pb-3 pl-9">
         <ScheduleCourseInsights course={course} compact={compact} />
+        {selection}
         <button
           type="button"
           onClick={onToggle}
@@ -544,12 +703,7 @@ export default function ScheduleTab({
     [schedule],
   );
 
-  const compactCode = selectedCourse?.code.toLowerCase().replace(/\s+/g, "");
-  const catalogCourse = compactCode
-    ? (getCourseSearchIndex().find(
-        (course) => course.normalizedCode === compactCode,
-      ) ?? null)
-    : null;
+  const catalogCourse = catalogCourseFor(selectedCourse?.code);
   const {
     data: courseData,
     loading: isLoading,
@@ -588,7 +742,7 @@ export default function ScheduleTab({
     if (!background) {
       return [];
     }
-    if (!previewCode || previewCode !== selectedCourse?.code) {
+    if (!previewCode) {
       return background;
     }
     return background.map((event) =>
@@ -596,33 +750,9 @@ export default function ScheduleTab({
         ? { ...event, dimmed: true }
         : event,
     );
-  }, [background, previewCode, selectedCourse?.code]);
-
-  // Staged section changes per course code, applied to the cart one course at a time.
-  const [pendingByCourse, setPendingByCourse] = useState<
-    Record<string, PendingChange>
-  >({});
-  useEffect(() => {
-    setPendingByCourse({});
-  }, [term]);
+  }, [background, previewCode]);
 
   const pairedSections = useMyPackPairings(sectionsArray);
-  // The lecture (with its labs) the expanded course has now.
-  const currentRow = useMemo(
-    () =>
-      (selectedCourse &&
-        pairedSections.find((row) =>
-          selectedCourse.classNumbers.includes(
-            String(row.lecture?.classNumber),
-          ),
-        )) ??
-      null,
-    [pairedSections, selectedCourse],
-  );
-  const currentLabs = currentRow ? labsOf(currentRow) : [];
-  const currentLabClass = currentLabs.find((lab) =>
-    selectedCourse?.classNumbers.includes(String(lab.classNumber)),
-  )?.classNumber;
   const excludeClassNumbers = useMemo(
     () => new Set(selectedCourse?.classNumbers ?? []),
     [selectedCourse],
@@ -633,18 +763,6 @@ export default function ScheduleTab({
   ).length;
   // Only cart courses change here; enrolled ones swap in MyPack.
   const canChange = selectedCourse?.status === "cart";
-  const pending = selectedCourse
-    ? pendingByCourse[selectedCourse.code]
-    : undefined;
-  const pendingRow =
-    (pending &&
-      pairedSections.find(
-        (row) => String(row.lecture?.classNumber) === pending.lectureClass,
-      )) ||
-    null;
-  const labClassShown =
-    pending?.labClass ??
-    (currentLabClass != null ? String(currentLabClass) : undefined);
   // Fit is judged against everything but the course being changed.
   const otherCoursesBackground = useMemo(
     () =>
@@ -656,82 +774,10 @@ export default function ScheduleTab({
     [background, selectedCourse?.code],
   );
 
-  /** Stages a change, or clears it when it would leave the course as it is. */
-  const setPending = (code: string, change: PendingChange | null) => {
-    const unchanged =
-      change != null &&
-      change.lectureClass === String(currentRow?.lecture?.classNumber) &&
-      (change.labClass ?? "") ===
-        (currentLabClass != null ? String(currentLabClass) : "");
-    setPendingByCourse((prev) => {
-      const next = { ...prev };
-      if (change && !unchanged) {
-        next[code] = change;
-      } else {
-        delete next[code];
-      }
-      return next;
-    });
-    if (!change || unchanged) {
-      previewCallback.current(null);
-    }
-  };
-
-  const stageRow = (row: GroupedSections) => {
-    if (!selectedCourse) {
-      return;
-    }
-    const lectureClass = String(row.lecture?.classNumber ?? "");
-    const labs = labsOf(row);
-    // The first lab that fits, so a staged section starts out conflict-free if it can.
-    const labClass =
-      labs.length > 1
-        ? (labs
-            .map((lab) => String(lab.classNumber))
-            .find(
-              (labClass) =>
-                conflictsFor(row, labClass, otherCoursesBackground)?.length ===
-                0,
-            ) ?? defaultLabClassForGroup(row))
-        : labs[0]
-          ? String(labs[0].classNumber)
-          : undefined;
-    if (!canChange) {
-      const section = groupedSectionForPreview(row, labClass);
-      onPreviewSectionChange(
-        section ? createSectionPreview("schedule", section) : null,
-      );
-      return;
-    }
-    setPending(
-      selectedCourse.code,
-      pending?.lectureClass === lectureClass
-        ? null
-        : { lectureClass, labClass },
-    );
-  };
-
-  const changeLab = (labClass: string) => {
-    const base = pendingRow ?? currentRow;
-    if (!selectedCourse || !base?.lecture) {
-      return;
-    }
-    setPending(selectedCourse.code, {
-      lectureClass: String(base.lecture.classNumber),
-      labClass,
-    });
-  };
-
-  // Show the staged section on the calendar in place of the current one.
-  useEffect(() => {
-    if (!pendingRow) {
-      return;
-    }
-    const section = groupedSectionForPreview(pendingRow, pending?.labClass);
-    previewCallback.current(
-      section ? createSectionPreview("schedule", section) : null,
-    );
-  }, [pendingRow, pending?.labClass]);
+  const defaultLabClassFor = useCallback(
+    (row: GroupedSections) => firstFittingLabClass(row, otherCoursesBackground),
+    [otherCoursesBackground],
+  );
 
   const toggleCourse = (course: ScheduleCourse) =>
     setScheduleTabData({
@@ -772,47 +818,7 @@ export default function ScheduleTab({
       ) : null}
       {hasSectionResults ? (
         <>
-          {canChange &&
-          currentRow &&
-          labsOf(pendingRow ?? currentRow).length > 1 ? (
-            <section aria-label="Your section" className="space-y-1">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Your{" "}
-                {componentDisplayName(
-                  labsOf(pendingRow ?? currentRow)[0]!.component,
-                ).toLowerCase()}
-              </h4>
-              <LinkedMeetingPicker
-                meetings={labsOf(pendingRow ?? currentRow).map(
-                  linkedMeetingFromLab,
-                )}
-                value={labClassShown}
-                onChange={changeLab}
-                compact
-                defaultOpen={false}
-                resetKey={selectedCourse.code}
-              />
-            </section>
-          ) : null}
-          {canChange && pending && pendingRow && currentRow ? (
-            <PendingChangePanel
-              key={`${pending.lectureClass}|${pending.labClass ?? ""}`}
-              classNumbers={selectedCourse.classNumbers}
-              from={currentRow}
-              to={pendingRow}
-              toLabClass={pending.labClass}
-              background={otherCoursesBackground}
-              onDiscard={() => setPending(selectedCourse.code, null)}
-              onApplied={() => {
-                setPending(selectedCourse.code, null);
-                void refreshCart();
-              }}
-            />
-          ) : null}
           <section aria-label="Other sections" className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Other sections
-            </h4>
             {alternativeCount === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {selectedCourse.code} has no other sections in {term}.
@@ -856,8 +862,8 @@ export default function ScheduleTab({
                     compact={scheduleData.compactSections}
                     variant="alternative"
                     excludeClassNumbers={excludeClassNumbers}
-                    pendingClassNumber={pending?.lectureClass ?? null}
-                    onStageRow={stageRow}
+                    replaceInCart={canChange}
+                    defaultLabClassFor={defaultLabClassFor}
                   />
                 </div>
               </>
@@ -925,8 +931,19 @@ export default function ScheduleTab({
               course={course}
               expanded={course === selectedCourse}
               onToggle={() => toggleCourse(course)}
-              pending={course.code in pendingByCourse}
               compact={scheduleData.compactSections}
+              selection={
+                course.status === "cart" ? (
+                  <CartCourseSelection
+                    course={course}
+                    term={term}
+                    loadSections={loadSections}
+                    background={background ?? []}
+                    expanded={course === selectedCourse}
+                    onPreviewSectionChange={onPreviewSectionChange}
+                  />
+                ) : null
+              }
             >
               {course === selectedCourse ? alternatives : null}
             </ScheduleCourseRow>

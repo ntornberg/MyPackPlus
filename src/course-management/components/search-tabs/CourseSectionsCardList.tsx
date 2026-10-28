@@ -52,7 +52,6 @@ type CourseSectionCardRowProps = {
   onSelect: (rowId: string) => void;
   onLabClassChange: (rowId: string, classNbr: string) => void;
   variant: "default" | "alternative";
-  pending: boolean;
 };
 
 const CourseSectionCardRow = memo(
@@ -67,7 +66,6 @@ const CourseSectionCardRow = memo(
     onSelect,
     onLabClassChange,
     variant,
-    pending,
   }: CourseSectionCardRowProps) {
     const lecture = row.lecture;
     const labs = useMemo(
@@ -84,10 +82,10 @@ const CourseSectionCardRow = memo(
       },
       [onLabClassChange, row.uniqueRowId],
     );
-    // Replacements are applied from their course card, not from each card.
+    // Alternatives only swap for the course's cart section; enrolled ones swap in MyPack.
     const addToCartSlot = useMemo(
       () =>
-        variant === "alternative" ? null : (
+        variant === "alternative" && !replaces ? null : (
           <ToCartGroupedSectionCell
             {...row}
             selectedLabClassNumber={selectedLabClassNumber}
@@ -114,7 +112,6 @@ const CourseSectionCardRow = memo(
         conflictsWith={conflictsWith}
         inCart={inCart}
         variant={variant}
-        pending={pending}
       />
     );
   },
@@ -129,8 +126,7 @@ const CourseSectionCardRow = memo(
     prev.replaces === next.replaces &&
     prev.onSelect === next.onSelect &&
     prev.onLabClassChange === next.onLabClassChange &&
-    prev.variant === next.variant &&
-    prev.pending === next.pending,
+    prev.variant === next.variant,
 );
 
 export type CourseSectionsCardListProps = {
@@ -151,12 +147,10 @@ export type CourseSectionsCardListProps = {
   replaceInCart?: boolean;
   /** Lecture class numbers to leave out, e.g. the section a course already has. */
   excludeClassNumbers?: ReadonlySet<string>;
-  /** "alternative": small replacement cards that stage a change instead of adding to the cart. */
+  /** "alternative": small replacement cards, with Replace only when `replaceInCart` finds a cart section. */
   variant?: "default" | "alternative";
-  /** Lecture class number of the staged replacement, marked Pending. */
-  pendingClassNumber?: string | null;
-  /** Clicking a card stages it (alternative variant). */
-  onStageRow?: (row: GroupedSections) => void;
+  /** A card's lab before one is picked; `defaultLabClassForGroup` otherwise. */
+  defaultLabClassFor?: (row: GroupedSections) => string | undefined;
 };
 
 /** The lecture with the lab the cart holds (or its first lab), as the cart services take it. */
@@ -255,8 +249,7 @@ export function CourseSectionsCardList({
   replaceInCart = false,
   excludeClassNumbers,
   variant = "default",
-  pendingClassNumber = null,
-  onStageRow,
+  defaultLabClassFor = defaultLabClassForGroup,
 }: CourseSectionsCardListProps) {
   const [labClassByRowId, setLabClassByRowId] = useState<
     Record<string, string>
@@ -375,13 +368,17 @@ export function CourseSectionsCardList({
   const handleCardSelect = useCallback(
     (rowId: string) => {
       const row = processedRowsById.get(rowId);
-      if (onStageRow && row) {
-        onStageRow(row);
-        return;
-      }
-      handleRowPreviewById(rowId);
+      handleRowPreviewById(
+        rowId,
+        row ? (labClassByRowId[rowId] ?? defaultLabClassFor(row)) : undefined,
+      );
     },
-    [handleRowPreviewById, onStageRow, processedRowsById],
+    [
+      defaultLabClassFor,
+      handleRowPreviewById,
+      labClassByRowId,
+      processedRowsById,
+    ],
   );
 
   const handleCardLabClassChange = useCallback(
@@ -417,7 +414,7 @@ export function CourseSectionsCardList({
       >
         {paginatedRows.map((row) => {
           const pick =
-            labClassByRowId[row.uniqueRowId] ?? defaultLabClassForGroup(row);
+            labClassByRowId[row.uniqueRowId] ?? defaultLabClassFor(row);
           const selectedId = previewIdForGroupedRow(row, pick);
           // The badge reflects the lab currently picked on the card.
           const conflicts = scheduleBackground
@@ -448,10 +445,6 @@ export function CourseSectionsCardList({
               selectedLabClassNumber={pick}
               onLabClassChange={handleCardLabClassChange}
               variant={variant}
-              pending={
-                pendingClassNumber != null &&
-                String(row.lecture?.classNumber) === pendingClassNumber
-              }
             />
           );
         })}

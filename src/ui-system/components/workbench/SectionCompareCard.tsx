@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   Check,
   ChevronDown,
   CircleCheck,
@@ -472,8 +473,6 @@ export type SectionCompareCardProps = {
    * replacement; no course title, lab picker or cart footer.
    */
   variant?: "default" | "alternative";
-  /** Staged as its course's pending change. */
-  pending?: boolean;
 };
 
 export function ScheduleFitIndicator({
@@ -518,8 +517,7 @@ function areSectionCompareCardPropsEqual(
     String(prev.conflictsWith) === String(next.conflictsWith) &&
     (prev.conflictsWith == null) === (next.conflictsWith == null) &&
     prev.inCart === next.inCart &&
-    prev.variant === next.variant &&
-    prev.pending === next.pending
+    prev.variant === next.variant
   );
 }
 
@@ -534,7 +532,6 @@ export const SectionCompareCard = memo(function SectionCompareCard({
   conflictsWith = null,
   inCart = false,
   variant = "default",
-  pending = false,
 }: SectionCompareCardProps) {
   const alternative = variant === "alternative";
   const compact = compactProp || alternative;
@@ -576,7 +573,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
       className={cn(
         "cursor-pointer rounded-xl border-2 text-left transition-[color,background-color,border-color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-ring",
         alternative ? "p-2" : compact ? "p-2.5" : "p-4",
-        isSelected || pending
+        isSelected
           ? "border-primary bg-primary/[0.12] shadow-sm ring-2 ring-primary/25 dark:border-primary/50 dark:bg-primary/12 dark:shadow-[inset_0_0_0_1px_rgba(79,140,255,0.25)] dark:ring-primary/35"
           : "border-border bg-card hover:border-primary/40 hover:bg-muted/30 dark:bg-background/40 dark:hover:border-border dark:hover:bg-background/55",
       )}
@@ -617,7 +614,6 @@ export const SectionCompareCard = memo(function SectionCompareCard({
               Seats {section.enrollment || "—"}
             </Badge>
             {inCart ? <InCartBadge /> : null}
-            {pending ? <PendingBadge /> : null}
           </div>
           {!compact && !alternative && title ? (
             <p className="text-sm text-muted-foreground">{title}</p>
@@ -685,11 +681,15 @@ export const SectionCompareCard = memo(function SectionCompareCard({
           )}
         >
           {alternative && multiLab ? (
-            // Labs for a replacement are picked on its course card once it's staged.
-            <p className="text-xs text-muted-foreground">
-              {linkedLabs.length}{" "}
-              {linkedMeetingsPanelTitle(linkedLabs).toLowerCase()}
-            </p>
+            <LinkedMeetingPicker
+              meetings={linkedLabs}
+              value={selectedLabClassNumber}
+              onChange={(classNbr) => onLabClassChange?.(classNbr)}
+              compact
+              defaultOpen={false}
+              resetKey={section.id}
+              variant="swap"
+            />
           ) : multiLab ? (
             <LinkedMeetingPicker
               meetings={linkedLabs}
@@ -742,18 +742,10 @@ export const SectionCompareCard = memo(function SectionCompareCard({
   );
 }, areSectionCompareCardPropsEqual);
 
-/** Marks a section or course whose change is staged but not yet applied to the cart. */
-export function PendingBadge() {
-  return (
-    <Badge className="border-0 bg-amber-500/20 font-semibold text-amber-800 shadow-none dark:bg-amber-400/15 dark:text-amber-300">
-      Pending
-    </Badge>
-  );
-}
-
 /**
  * Picks one lab / recitation / problem session for a lecture. Collapsed, it
- * shows just the pick; expanded, every option.
+ * shows just the pick; expanded, every option. The "swap" variant shows the
+ * pick with a swap button and closes once another is picked.
  */
 export function LinkedMeetingPicker({
   meetings,
@@ -762,6 +754,7 @@ export function LinkedMeetingPicker({
   compact,
   defaultOpen,
   resetKey,
+  variant = "default",
 }: {
   meetings: SectionLinkedMeeting[];
   /** Class number of the picked meeting; the first one when unset. */
@@ -771,6 +764,7 @@ export function LinkedMeetingPicker({
   defaultOpen: boolean;
   /** Re-collapses (or re-opens) to `defaultOpen` when this changes. */
   resetKey?: unknown;
+  variant?: "default" | "swap";
 }) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
@@ -780,6 +774,74 @@ export function LinkedMeetingPicker({
   const activeClass = value ?? String(meetings[0]?.classNumber ?? "");
   const active =
     meetings.find((m) => String(m.classNumber) === activeClass) ?? meetings[0];
+
+  if (variant === "swap") {
+    const name = active
+      ? componentDisplayName(active.component).toLowerCase()
+      : "section";
+    return (
+      <div
+        role="group"
+        className="space-y-1.5"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {active ? (
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-label={`${open ? "Keep" : "Switch"} ${name}: ${componentDisplayName(active.component)} ${active.section ?? ""}, ${active.dayTime}`}
+            title={open ? "Keep this one" : `Switch ${name}`}
+            onClick={() => setOpen((o) => !o)}
+            className="group flex w-full items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.06] dark:border-white/10"
+          >
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium text-foreground">
+                {componentDisplayName(active.component)} · Sec{" "}
+                {active.section ?? "—"}
+              </span>
+              <span className="truncate text-xs text-muted-foreground">
+                {active.dayTime} · {active.location}
+              </span>
+            </span>
+            <span
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+                open
+                  ? "border-primary/60 bg-primary/15 text-primary"
+                  : "border-border/60 text-muted-foreground group-hover:border-primary/40 group-hover:text-primary",
+              )}
+              aria-hidden
+            >
+              <ArrowLeftRight className="size-3.5" />
+            </span>
+          </button>
+        ) : null}
+        {open ? (
+          <div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-lg border border-border/50 bg-card/40 p-1 dark:border-white/[0.08] dark:bg-[rgb(8,14,26)]/60">
+            <p className="px-1 pt-0.5 text-[11px] text-muted-foreground">
+              {meetings.length} {title.toLowerCase()}
+            </p>
+            {meetings.map((m) => (
+              <LinkedMeetingOption
+                key={m.classNumber ?? m.component}
+                meeting={m}
+                selected={String(m.classNumber) === activeClass}
+                compact
+                onClick={() => {
+                  if (m.classNumber != null) {
+                    onChange(String(m.classNumber));
+                  }
+                  setOpen(false);
+                }}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div
