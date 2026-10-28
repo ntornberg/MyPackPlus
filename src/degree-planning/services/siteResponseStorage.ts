@@ -1,4 +1,8 @@
 import {
+  filterCartCalendarSnapshot,
+  mergeCartTableSnapshot,
+} from "../../course-management/cache/cartPendingChanges";
+import {
   generateCacheKey,
   getCacheCategory,
   removeGenericCacheEntries,
@@ -185,6 +189,7 @@ async function storeResponse(
   responseType: string,
   data: unknown,
   fullSnapshot: boolean,
+  requestedAt: number | undefined,
 ) {
   const rule = RESPONSE_STORAGE_RULES[responseType];
   if (!rule) {
@@ -217,15 +222,26 @@ async function storeResponse(
       : item;
   }
 
+  // The extension's own cart changes this response may predate stay applied.
+  const stored =
+    responseType === "_getShopCartTableData"
+      ? await mergeCartTableSnapshot(entries, requestedAt)
+      : rule.category === "shopCartCalEventsData"
+        ? await filterCartCalendarSnapshot(entries, requestedAt)
+        : entries;
+
   if (replacesCartCalendar) {
-    await replaceGenericCache(rule.category, entries);
+    await replaceGenericCache(rule.category, stored);
   } else if (rule.rangeScoped) {
-    await storeCalendarRange(rule.category, items, entries, term);
+    await storeCalendarRange(rule.category, items, stored, term);
   } else {
     // Each table response is the full current list, so replace rather than
     // merge: classes dropped from the cart/schedule must disappear.
-    await replaceGenericCache(rule.category, entries);
-    if (responseType === "_getShopCartTableData" && items.length === 0) {
+    await replaceGenericCache(rule.category, stored);
+    if (
+      responseType === "_getShopCartTableData" &&
+      Object.keys(stored).length === 0
+    ) {
       // An empty cart is authoritative; nonempty rows may omit meeting details.
       await replaceGenericCache("shopCartCalEventsData", {});
     }
@@ -241,6 +257,7 @@ async function storeSiteResponse(payload: {
   data: unknown;
   url?: unknown;
   fullSnapshot?: unknown;
+  requestedAt?: unknown;
 }): Promise<void> {
   switch (payload.responseType) {
     case DEGREE_DETAILS_RESPONSE:
@@ -257,6 +274,9 @@ async function storeSiteResponse(payload: {
         payload.responseType,
         payload.data,
         payload.fullSnapshot === true,
+        typeof payload.requestedAt === "number"
+          ? payload.requestedAt
+          : undefined,
       );
   }
 }

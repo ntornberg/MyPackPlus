@@ -1,6 +1,7 @@
 import { fetchMyPackText } from "../../degree-planning/services/myPackClient";
 import { TermIdByName } from "../../generated/catalogs/termIds";
 import { AppLogger } from "../../utils/logger";
+import { withLock } from "../../utils/webLocks";
 import { selectedTermLabel } from "../utils/semester";
 
 import { generateMyPackScriptContentUrl } from "./mypackScriptUrl";
@@ -32,9 +33,9 @@ function pageTermId(): string | null {
 
 // MyPack's cart and Enrollment Wizard scripts act on the term stored in the
 // session (set by IScript_Enroll_Wizard_SETUP), not one sent with the request.
-// Everything that sets or relies on it runs here one at a time, so a lookup
-// for one term can't redirect a cart change for another.
-let queue: Promise<unknown> = Promise.resolve();
+// Everything that sets or relies on it takes this lock, in every MyPack tab
+// and frame, so a lookup for one term can't redirect a cart change for another.
+const SESSION_TERM_LOCK = "mypack-session-term";
 
 /**
  * Runs `work` with the MyPack session on term `strm`, then puts the session
@@ -61,9 +62,7 @@ export function inMyPackTerm<T>(
       }
     }
   };
-  const result = queue.then(run, run);
-  queue = result.catch(() => undefined);
-  return result;
+  return withLock(SESSION_TERM_LOCK, run);
 }
 
 export const UNKNOWN_TERM_MESSAGE =

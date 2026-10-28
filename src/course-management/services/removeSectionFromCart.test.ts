@@ -33,6 +33,7 @@ vi.mock("./myPackSession", () => ({
   inCartTerm: (term: string | undefined, work: () => Promise<unknown>) =>
     term ? work() : null,
   UNKNOWN_TERM_MESSAGE: "Unknown term.",
+  termIdOf: (term: string | undefined) => (term ? "2271" : null),
 }));
 vi.mock("./refreshCart", () => ({ refreshCart: vi.fn() }));
 vi.mock("../../utils/logger", () => ({

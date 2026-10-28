@@ -1,6 +1,7 @@
 import { trackWork } from "../../extension/pendingWork";
 import { fetchWithTimeout } from "../../utils/fetchWithTimeout";
 import { AppLogger } from "../../utils/logger";
+import { recordCartRemove } from "../cache/cartPendingChanges";
 import {
   getCacheCategory,
   removeGenericCacheEntries,
@@ -9,6 +10,13 @@ import { notifyScheduleDataChanged } from "../cache/scheduleCacheSignal";
 import type { ModifiedSection } from "../types/section";
 import { TERM_TAG_FIELD } from "../utils/semester";
 
+import {
+  COURSE_BUSY_MESSAGE,
+  courseLockKey,
+  courseLockKeyOf,
+  withCourseLock,
+  type CourseLock,
+} from "./cartLock";
 import {
   enrollNumberOf,
   resolveCartRow,
@@ -57,6 +65,9 @@ async function forgetCartRow(
     ),
   );
   const eventId = cached ? text(cached.row.eventid) : null;
+  // Journaled first, so a refresh MyPack answered before this delete can't
+  // bring the class back.
+  await recordCartRemove(enrollClassNumber, [...classNumbers]);
 
   const calendarEntries =
     (await getCacheCategory("shopCartCalEventsData")) ?? {};
@@ -86,13 +97,21 @@ async function forgetCartRow(
 export function removeSectionFromCart(
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
+  /** The course's lock, when this remove is a step of a swap that holds it. */
+  lock?: CourseLock,
 ): Promise<RemoveSectionFromCartResult> {
   const lecture = parent ?? selectedSection;
   return trackWork(() =>
-    removeCartRowNow(
-      text(lecture.classNumber),
-      [lecture.classNumber, selectedSection.classNumber],
-      lecture.term ?? selectedSection.term,
+    withCourseLock(
+      courseLockKeyOf(lecture),
+      lock,
+      () =>
+        removeCartRowNow(
+          text(lecture.classNumber),
+          [lecture.classNumber, selectedSection.classNumber],
+          lecture.term ?? selectedSection.term,
+        ),
+      () => ({ ok: false, message: COURSE_BUSY_MESSAGE }),
     ),
   );
 }
@@ -104,8 +123,16 @@ export function removeSectionFromCart(
 export function removeClassFromCart(
   classNumbers: (string | null | undefined)[],
   term?: string | null,
+  courseCode?: string,
 ): Promise<RemoveSectionFromCartResult> {
-  return trackWork(() => removeCartRowNow(null, classNumbers, term));
+  return trackWork(() =>
+    withCourseLock(
+      courseLockKey(term, courseCode),
+      undefined,
+      () => removeCartRowNow(null, classNumbers, term),
+      () => ({ ok: false, message: COURSE_BUSY_MESSAGE }),
+    ),
+  );
 }
 
 async function removeCartRowNow(

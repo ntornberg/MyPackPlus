@@ -1,6 +1,7 @@
 import { trackWork } from "../../extension/pendingWork";
 import { fetchWithTimeout } from "../../utils/fetchWithTimeout";
 import { AppLogger } from "../../utils/logger";
+import { recordCartAdd } from "../cache/cartPendingChanges";
 import { generateCacheKey, setGenericCache } from "../cache/courseRetrieval";
 import { notifyScheduleDataChanged } from "../cache/scheduleCacheSignal";
 import { parseDayTimeEvents } from "../schedule/parseScheduleDayTime";
@@ -8,6 +9,12 @@ import type { FullToCartPayload, ToCartPayload } from "../types/cart";
 import type { ModifiedSection } from "../types/section";
 import { TERM_TAG_FIELD } from "../utils/semester";
 
+import {
+  COURSE_BUSY_MESSAGE,
+  courseLockKeyOf,
+  withCourseLock,
+  type CourseLock,
+} from "./cartLock";
 import type { CartSettings } from "./cartRows";
 import { generateMyPackScriptContentUrl } from "./mypackScriptUrl";
 import { inCartTerm, UNKNOWN_TERM_MESSAGE } from "./myPackSession";
@@ -34,9 +41,35 @@ export function addSectionToCart(
   selectedSection: ModifiedSection,
   parent?: ModifiedSection,
   options: AddSectionToCartOptions = {},
+  /** The course's lock, when this add is a step of a swap that holds it. */
+  lock?: CourseLock,
 ): Promise<AddSectionToCartResult> {
-  return trackWork(() => addSectionToCartNow(selectedSection, parent, options));
+  // A double click, or two cards for one combination, sends one request.
+  const key = JSON.stringify([
+    (parent ?? selectedSection).term,
+    parent?.classNumber ?? null,
+    selectedSection.classNumber,
+    (options.extras ?? []).map((section) => section.classNumber),
+    options.payload ?? null,
+    options.settings ?? null,
+  ]);
+  const pending = pendingAdds.get(key);
+  if (pending) {
+    return pending;
+  }
+  const request = trackWork(() =>
+    withCourseLock(
+      courseLockKeyOf(parent ?? selectedSection),
+      lock,
+      () => addSectionToCartNow(selectedSection, parent, options),
+      () => ({ ok: false, message: COURSE_BUSY_MESSAGE }),
+    ),
+  ).finally(() => pendingAdds.delete(key));
+  pendingAdds.set(key, request);
+  return request;
 }
+
+const pendingAdds = new Map<string, Promise<AddSectionToCartResult>>();
 
 async function addSectionToCartNow(
   selectedSection: ModifiedSection,
@@ -134,31 +167,31 @@ async function addSectionToCartNow(
       ];
       const crseId = payload.crse_id;
       const key = await generateCacheKey(`${crseId}|${lecture.classNumber}`);
-      await setGenericCache("shopCartTableData", {
-        [key]: {
-          crse_id: crseId,
-          class_nbr: lecture.classNumber,
-          classs: courseData.code,
-          [TERM_TAG_FIELD]: selectedSection.term,
-          // What was sent, so a later swap keeps the same choices.
-          wait_list_okay: payload.wait_list_okay,
-          grading_basis: payload.grading_basis,
-          unt_taken: payload.unt_taken,
-          // Only the submitted lab belongs in the cart, not every linked option.
-          // One row per meeting, as MyPack's own cart lists them.
-          section_details: sections.flatMap((section) =>
-            parseDayTimeEvents(section.dayTime, courseData.code).map(
-              (event) => ({
-                class_nbr: section.classNumber,
-                section: section.section,
-                meet_days: event.days.map(({ day }) => day).join("/"),
-                time: event.allDay ? "" : `${event.start} - ${event.end}`,
-                type: section.component,
-              }),
-            ),
-          ),
-        },
-      });
+      const row = {
+        crse_id: crseId,
+        class_nbr: lecture.classNumber,
+        classs: courseData.code,
+        [TERM_TAG_FIELD]: selectedSection.term,
+        // What was sent, so a later swap keeps the same choices.
+        wait_list_okay: payload.wait_list_okay,
+        grading_basis: payload.grading_basis,
+        unt_taken: payload.unt_taken,
+        // Only the submitted lab belongs in the cart, not every linked option.
+        // One row per meeting, as MyPack's own cart lists them.
+        section_details: sections.flatMap((section) =>
+          parseDayTimeEvents(section.dayTime, courseData.code).map((event) => ({
+            class_nbr: section.classNumber,
+            section: section.section,
+            meet_days: event.days.map(({ day }) => day).join("/"),
+            time: event.allDay ? "" : `${event.start} - ${event.end}`,
+            type: section.component,
+          })),
+        ),
+      };
+      // Journaled first, so a refresh MyPack answered before this add can't
+      // drop the row between the two writes.
+      await recordCartAdd(key, row);
+      await setGenericCache("shopCartTableData", { [key]: row });
       await notifyScheduleDataChanged();
     } catch (error) {
       AppLogger.error(

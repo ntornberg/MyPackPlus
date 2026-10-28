@@ -106,6 +106,8 @@ describe("cart refresh through the page hook", () => {
         payload: {
           responseType: "_getShopCartTableData",
           data: [],
+          // When the replay was sent, so older snapshots can be told apart.
+          requestedAt: expect.any(Number),
           fullSnapshot: true,
         },
       },

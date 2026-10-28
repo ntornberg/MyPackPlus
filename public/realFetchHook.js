@@ -80,6 +80,9 @@
         }
 
         send(...args) {
+            // Lets the extension tell a snapshot taken before its own cart
+            // change from one taken after.
+            this._requestedAt = Date.now();
             const cartType = ["_getShopCartTableData", "_getShopCartCalEvents"]
                 .find((keyword) => this._url.includes(keyword));
             if (cartType && !this._mypackCartRefresh) {
@@ -139,6 +142,7 @@
                                 payload: {
                                     data: data,
                                     responseType: matchedKeyword,
+                                    requestedAt: this._requestedAt,
                                     ...(this._mypackCartRefresh ? { fullSnapshot: true } : {}),
                                 },
                             },

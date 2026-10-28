@@ -59,12 +59,18 @@ describe("replaceCartSection", () => {
       message: "Swapped CSC 316 (001) for CSC 316 (002).",
     });
     expect(calls).toEqual(["add", "remove"]);
-    expect(addSectionToCart).toHaveBeenCalledWith(lab, lecture, {
-      payload,
-      settings: undefined,
-    });
+    expect(addSectionToCart).toHaveBeenCalledWith(
+      lab,
+      lecture,
+      {
+        payload,
+        settings: undefined,
+      },
+      undefined,
+    );
     expect(removeSectionFromCart).toHaveBeenCalledWith(
       current.section,
+      undefined,
       undefined,
     );
   });
@@ -79,7 +85,12 @@ describe("replaceCartSection", () => {
 
     await replaceCartSection(current, next);
     expect(cartRowFor).toHaveBeenCalledWith(current.section);
-    expect(addSectionToCart).toHaveBeenCalledWith(lab, lecture, { settings });
+    expect(addSectionToCart).toHaveBeenCalledWith(
+      lab,
+      lecture,
+      { settings },
+      undefined,
+    );
   });
 
   it("leaves the cart alone when the add fails", async () => {
@@ -135,10 +146,19 @@ describe("changeCartLab", () => {
     const result = await changeCartLab(lecture, fromLab, toLab);
     expect(result.ok).toBe(true);
     expect(calls).toEqual(["remove", "add"]);
-    expect(removeSectionFromCart).toHaveBeenCalledWith(fromLab, lecture);
-    expect(addSectionToCart).toHaveBeenCalledWith(toLab, lecture, {
-      settings,
-    });
+    expect(removeSectionFromCart).toHaveBeenCalledWith(
+      fromLab,
+      lecture,
+      undefined,
+    );
+    expect(addSectionToCart).toHaveBeenCalledWith(
+      toLab,
+      lecture,
+      {
+        settings,
+      },
+      undefined,
+    );
   });
 
   it("changes nothing when it can't put the original back", async () => {
@@ -179,11 +199,16 @@ describe("changeCartLab", () => {
       partial: false,
       message: "Class is full.",
     });
-    expect(addSectionToCart).toHaveBeenLastCalledWith(fromLab, lecture, {
-      extras: undefined,
-      payload: rowPayload,
-      settings,
-    });
+    expect(addSectionToCart).toHaveBeenLastCalledWith(
+      fromLab,
+      lecture,
+      {
+        extras: undefined,
+        payload: rowPayload,
+        settings,
+      },
+      undefined,
+    );
   });
 
   it("restores the original exact payload and every related section", async () => {
@@ -218,14 +243,26 @@ describe("changeCartLab", () => {
 
     await changeCartLab(lecture, fromLab, toLab, replacement, original);
 
-    expect(addSectionToCart).toHaveBeenNthCalledWith(1, toLab, lecture, {
-      ...replacement,
-      settings,
-    });
-    expect(addSectionToCart).toHaveBeenNthCalledWith(2, fromLab, lecture, {
-      ...original,
-      settings,
-    });
+    expect(addSectionToCart).toHaveBeenNthCalledWith(
+      1,
+      toLab,
+      lecture,
+      {
+        ...replacement,
+        settings,
+      },
+      undefined,
+    );
+    expect(addSectionToCart).toHaveBeenNthCalledWith(
+      2,
+      fromLab,
+      lecture,
+      {
+        ...original,
+        settings,
+      },
+      undefined,
+    );
   });
 
   it("preserves extras without reusing the replacement payload when no original payload is available", async () => {
@@ -244,11 +281,16 @@ describe("changeCartLab", () => {
       payload: { class_nbr: "200" } as never,
     });
 
-    expect(addSectionToCart).toHaveBeenLastCalledWith(fromLab, lecture, {
-      extras,
-      payload: rowPayload,
-      settings,
-    });
+    expect(addSectionToCart).toHaveBeenLastCalledWith(
+      fromLab,
+      lecture,
+      {
+        extras,
+        payload: rowPayload,
+        settings,
+      },
+      undefined,
+    );
   });
 
   it("reports a partial change when the old lab can't be put back", async () => {
@@ -278,5 +320,63 @@ describe("changeCartLab", () => {
       message: "Session expired.",
     });
     expect(addSectionToCart).not.toHaveBeenCalled();
+  });
+});
+
+describe("course lock", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    cacheCartRow();
+  });
+
+  const termed = (classNumber: string, sectionNumber: string) =>
+    ({
+      ...section(classNumber, sectionNumber),
+      term: "2027 Spring Term",
+    }) as ModifiedSection;
+
+  it("hands the swap's lock to each step and refuses a second change meanwhile", async () => {
+    let release!: () => void;
+    vi.mocked(removeSectionFromCart).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, message: "" });
+        }),
+    );
+    vi.mocked(addSectionToCart).mockResolvedValue({ ok: true, message: "" });
+    const termedLecture = termed("200", "002");
+
+    const first = changeCartLab(
+      termedLecture,
+      termed("201", "202"),
+      termed("203", "203"),
+    );
+    await vi.waitFor(() => expect(removeSectionFromCart).toHaveBeenCalled());
+    const lock = { key: "2271|CSC 316" };
+    expect(removeSectionFromCart).toHaveBeenCalledWith(
+      expect.anything(),
+      termedLecture,
+      lock,
+    );
+
+    await expect(
+      replaceCartSection(
+        { section: termedLecture },
+        { section: termed("300", "003") },
+      ),
+    ).resolves.toEqual({
+      ok: false,
+      partial: false,
+      message: expect.stringContaining("still in progress"),
+    });
+
+    release();
+    await expect(first).resolves.toMatchObject({ ok: true });
+    expect(addSectionToCart).toHaveBeenCalledWith(
+      expect.anything(),
+      termedLecture,
+      expect.anything(),
+      lock,
+    );
   });
 });

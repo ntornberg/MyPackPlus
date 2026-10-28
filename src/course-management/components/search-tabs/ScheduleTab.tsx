@@ -59,9 +59,17 @@ import {
 import { componentDisplayName } from "../../../utils/course-search/componentNames";
 import { AppLogger } from "../../../utils/logger";
 import { fetchPlannerCourseSections } from "../../services/api/planner-search/dataService";
+import {
+  endSwap,
+  interruptedSwaps,
+  type SwapRecord,
+} from "../../services/interruptedSwaps";
 import { refreshCart } from "../../services/refreshCart";
 import { removeClassFromCart } from "../../services/removeSectionFromCart";
-import { changeCartLab } from "../../services/replaceCartSection";
+import {
+  changeCartLab,
+  restoreInterruptedSwap,
+} from "../../services/replaceCartSection";
 import type { ScheduleEvent } from "../../types/calendar";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
 import {
@@ -78,6 +86,7 @@ import {
   loadCalendarInsights,
   type CalendarInsight,
 } from "../calendar/calendarInsights";
+import { useScheduleCacheVersion } from "../calendar/CalendarView";
 import type { ScheduleData, TabUpdater } from "../tab-state/tabState";
 
 import { conflictsFor, CourseSectionsCardList } from "./CourseSectionsCardList";
@@ -130,7 +139,11 @@ function RemoveFromCartAction({
   const remove = async () => {
     setRemoving(true);
     setError(null);
-    const result = await removeClassFromCart(course.classNumbers, term);
+    const result = await removeClassFromCart(
+      course.classNumbers,
+      term,
+      course.code,
+    );
     setRemoving(false);
     setConfirming(false);
     if (!result.ok) {
@@ -602,6 +615,92 @@ function CartCourseSelection({
   );
 }
 
+/**
+ * Lab changes cut off between removing the course and adding it back (the
+ * page closed or navigated away), with a way to put the original back.
+ */
+function InterruptedSwapNotice({ recheck }: { recheck: unknown }) {
+  const [records, setRecords] = useState<SwapRecord[]>([]);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    void interruptedSwaps().then((found) => {
+      if (current) setRecords(found);
+    });
+    return () => {
+      current = false;
+    };
+  }, [recheck]);
+
+  const forget = (id: string) =>
+    setRecords((list) => list.filter((record) => record.id !== id));
+
+  const putBack = async (record: SwapRecord) => {
+    setRestoring(record.id);
+    setError(null);
+    const result = await restoreInterruptedSwap(record);
+    setRestoring(null);
+    if (result.ok) {
+      forget(record.id);
+      refreshCart();
+    } else {
+      setError(result.message);
+    }
+  };
+
+  const dismiss = async (record: SwapRecord) => {
+    await endSwap(record.id);
+    forget(record.id);
+  };
+
+  return records.map((record) => {
+    const lab =
+      `${componentDisplayName(record.fromLab.component).toLowerCase()} ${record.fromLab.section ?? ""}`.trim();
+    return (
+      <Alert key={record.id} variant="destructive">
+        <AlertTriangleIcon />
+        <AlertTitle>
+          A section swap for {record.label} was interrupted
+        </AlertTitle>
+        <AlertDescription>
+          <p>
+            The page closed after {record.label} was removed from your cart and
+            before it was added back, so it may be missing. Put it back with{" "}
+            {lab}, or check your Shopping Cart in MyPack and dismiss this if
+            it&apos;s already there.
+          </p>
+          {error ? <p className="font-medium">{error}</p> : null}
+          <div className="mt-2 flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={restoring !== null}
+              onClick={() => void putBack(record)}
+              className="gap-1.5"
+            >
+              {restoring === record.id ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : null}
+              {restoring === record.id ? "Putting back…" : "Put it back"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={restoring !== null}
+              onClick={() => void dismiss(record)}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </AlertDescription>
+      </Alert>
+    );
+  });
+}
+
 /** A cart or enrolled course; expanding it lists its other sections underneath. */
 function ScheduleCourseRow({
   course,
@@ -731,6 +830,7 @@ export default function ScheduleTab({
   const navigation = usePlannerNavigation();
   const term = scheduleData.selectedTerm;
   const schedule = useTermSchedule(term);
+  const scheduleCacheVersion = useScheduleCacheVersion();
   // A swap removes the course row before recovery finishes; keep its state here.
   const [swapping, setSwapping] = useState<string | null>(null);
   const [swapError, setSwapError] = useState<string | null>(null);
@@ -986,6 +1086,7 @@ export default function ScheduleTab({
       }
       contentClassName="space-y-4"
     >
+      <InterruptedSwapNotice recheck={`${scheduleCacheVersion}|${swapping}`} />
       {swapError ? (
         <Alert variant="destructive">
           <AlertTitle>Section swap failed</AlertTitle>

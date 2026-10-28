@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { waitForIdle } from "../../extension/pendingWork";
+import { whenNoCartWork } from "../../extension/pendingWork";
 import {
   APPLY_UPDATE_MESSAGE,
   PENDING_UPDATE_KEY,
@@ -44,14 +44,15 @@ export function usePendingUpdate() {
 
   const apply = useCallback(async () => {
     setApplying(true);
-    // Let an in-flight cart request finish before the reload drops it.
-    await waitForIdle();
-    try {
-      // The extension reloads before it can reply; the page refresh follows.
-      await chrome.runtime.sendMessage({ type: APPLY_UPDATE_MESSAGE });
-    } catch (error) {
-      AppLogger.warn("[Updates] Apply request ended without a reply", error);
-    }
+    // Let cart requests in every MyPack tab finish before the reload drops them.
+    await whenNoCartWork(async () => {
+      try {
+        // The extension reloads before it can reply; the page refresh follows.
+        await chrome.runtime.sendMessage({ type: APPLY_UPDATE_MESSAGE });
+      } catch (error) {
+        AppLogger.warn("[Updates] Apply request ended without a reply", error);
+      }
+    });
     // Normally the page refreshes first; re-enable the button if it never does.
     window.setTimeout(() => setApplying(false), 10000);
   }, []);

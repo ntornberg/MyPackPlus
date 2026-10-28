@@ -114,6 +114,7 @@ export const ToCartButtonCell = (
   const [message, setMessage] = useState("");
   const [severity, setSeverity] = useState<"success" | "error">("success");
   const [removing, setRemoving] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // MyPack's own payload carries everything the cart needs.
@@ -136,7 +137,12 @@ export const ToCartButtonCell = (
   }
 
   const handleAddToCart = async () => {
-    const data = await addSectionToCart(selectedSection, parent, cartOptions);
+    setAdding(true);
+    const data = await addSectionToCart(
+      selectedSection,
+      parent,
+      cartOptions,
+    ).finally(() => setAdding(false));
     if (data.ok) {
       AppLogger.info("Added to cart! " + data.message);
       setMessage(data.message);
@@ -251,8 +257,8 @@ export const ToCartButtonCell = (
               <span className="font-medium text-foreground">
                 {selectionLabel(replaces)}
               </span>{" "}
-              will be removed. If the add fails, your cart stays as it is.
-              Then click Enroll in MyPack to register for it.
+              will be removed. If the add fails, your cart stays as it is. Then
+              click Enroll in MyPack to register for it.
             </p>
             <div className="mt-3 flex justify-end gap-2">
               <Button
@@ -371,13 +377,17 @@ export const ToCartButtonCell = (
           type="button"
           variant="default"
           size="sm"
+          disabled={adding}
+          aria-busy={adding}
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation();
             void handleAddToCart();
           }}
           className={cartButtonClassName}
         >
-          {open && severity === "success" ? (
+          {adding ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : open && severity === "success" ? (
             <CheckCircle2 className="mpp-check-pop size-4" strokeWidth={2.25} />
           ) : (
             <ShoppingCartIcon
