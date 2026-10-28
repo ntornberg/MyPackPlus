@@ -31,10 +31,16 @@ import { SectionSortField } from "../../../ui-system/components/planner/PlannerC
 import { PlannerPanel } from "../../../ui-system/components/planner/PlannerPanel";
 import { LoadingProgress } from "../../../ui-system/components/shared/LoadingProgress";
 import { InstructorFilterCombobox } from "../../../ui-system/components/workbench/InstructorFilterCombobox";
+import { InstructorPopover } from "../../../ui-system/components/workbench/InstructorPopover";
 import { usePlannerNavigation } from "../../../ui-system/components/workbench/plannerNavigation";
 import { PlannerPreviewRail } from "../../../ui-system/components/workbench/PlannerPreviewRail";
 import { RmpStarsWithScore } from "../../../ui-system/components/workbench/PlannerSectionInsights";
-import { SectionGradeDistributionBlock } from "../../../ui-system/components/workbench/SectionCompareCard";
+import {
+  ScheduleFitIndicator,
+  SectionGradeDistributionBlock,
+  SectionMeetingList,
+  SectionMetaLine,
+} from "../../../ui-system/components/workbench/SectionCompareCard";
 import {
   buildInstructorFilterOptions,
   defaultLabClassForGroup,
@@ -82,15 +88,35 @@ import {
 import { useCourseSections } from "./useCourseSections";
 import { useMyPackPairings } from "./useMyPackPairings";
 
-/** "Lecture 001 · Mon/Wed 1:30 PM–2:45 PM" for one calendar block. */
-function meetingSummary(event: ScheduleEvent): string {
-  const what = [event.course?.component, event.course?.section]
-    .filter(Boolean)
-    .join(" ");
-  const when = event.allDay
+/** "Mon/Wed 1:30 PM–2:45 PM" for one calendar block. */
+function meetingDayTime(event: ScheduleEvent): string {
+  return event.allDay
     ? "Online / no fixed time"
     : `${event.days.map((d) => d.day).join("/")} ${event.start}–${event.end}`;
-  return what ? `${what} · ${when}` : when;
+}
+
+/** One meeting laid out like a section card: what, then when and where. */
+function ScheduleMeeting({
+  event,
+  compact,
+}: {
+  event: ScheduleEvent;
+  compact: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <SectionMetaLine
+        component={event.course?.component}
+        section={event.course?.section}
+        classNumber={event.course?.classNumber}
+      />
+      <SectionMeetingList
+        dayTime={meetingDayTime(event)}
+        location={event.course?.location}
+        compact={compact}
+      />
+    </div>
+  );
 }
 
 /** Remove, then confirm, for a cart course; the request goes by its class numbers. */
@@ -220,9 +246,12 @@ function ScheduleCourseInsights({
           className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5"
         >
           <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-            <span className="font-medium text-foreground">
+            <InstructorPopover
+              instructor={insight.professor?.instructor}
+              className="min-w-0 font-medium text-foreground"
+            >
               {formatInstructorDisplayName(insight.name)}
-            </span>
+            </InstructorPopover>
             {insight.error ? (
               <span className="text-xs text-muted-foreground">
                 Couldn&apos;t load grades and ratings.
@@ -583,7 +612,7 @@ function ScheduleCourseRow({
         expanded ? "border-primary/60" : "border-border",
       )}
     >
-      <div className="flex items-start gap-2 p-3">
+      <div className="flex items-start gap-2 p-3 pb-2">
         <button
           type="button"
           onClick={onToggle}
@@ -599,7 +628,12 @@ function ScheduleCourseRow({
           />
           <span className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">
+              <span
+                className={cn(
+                  "font-semibold text-foreground",
+                  compact ? "text-base" : "text-lg",
+                )}
+              >
                 {course.code}
               </span>
               <Badge
@@ -609,22 +643,8 @@ function ScheduleCourseRow({
               </Badge>
             </span>
             {course.title ? (
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="truncate text-sm text-muted-foreground">
                 {course.title}
-              </span>
-            ) : null}
-            {course.events.map((event) => (
-              <span
-                key={event.id}
-                className="text-xs tabular-nums text-muted-foreground"
-              >
-                {meetingSummary(event)}
-              </span>
-            ))}
-            {course.conflictsWith.length > 0 ? (
-              <span className="flex items-center gap-1 text-xs font-medium text-orange-600">
-                <AlertTriangleIcon className="size-3.5" />
-                Conflicts with {course.conflictsWith.join(", ")}
               </span>
             ) : null}
           </span>
@@ -635,6 +655,17 @@ function ScheduleCourseRow({
       </div>
       {/* Outside the toggle: the RMP score is a link. */}
       <div className="flex flex-col gap-2 px-3 pb-3 pl-9">
+        <div className={cn("flex flex-col", compact ? "gap-1.5" : "gap-2")}>
+          {course.events.map((event) => (
+            <ScheduleMeeting key={event.id} event={event} compact={compact} />
+          ))}
+        </div>
+        {course.conflictsWith.length > 0 ? (
+          <ScheduleFitIndicator
+            conflictsWith={course.conflictsWith}
+            compact={compact}
+          />
+        ) : null}
         <ScheduleCourseInsights course={course} compact={compact} />
         {selection}
         <button

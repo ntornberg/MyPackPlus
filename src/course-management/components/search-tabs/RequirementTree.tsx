@@ -608,6 +608,69 @@ export function needProgress(need: RequirementNeed): NeedProgress {
   return { text: "Not started · needs at least 1 course", fraction: null };
 }
 
+/**
+ * How much of a group is done: parts met of all its parts, with unmet parts
+ * counting what's done of them, or its unit minimum when MyPack only gives
+ * the group as a whole. Null when unknown.
+ */
+export function groupProgress(
+  met: readonly MetPart[],
+  needs: readonly RequirementNeed[],
+): NeedProgress | null {
+  if (needs.length === 1 && !needs[0].requirementId) {
+    const progress = needProgress(needs[0]);
+    return progress.fraction === null ? null : progress;
+  }
+  const total = met.length + needs.length;
+  if (needs.length === 0 || total === 0) {
+    return null;
+  }
+  // A part partway done counts for its share, so 3 of 9 hours isn't 0%.
+  const partial = needs.reduce(
+    (sum, need) => sum + (needProgress(need).fraction ?? 0),
+    0,
+  );
+  return {
+    text: `${met.length} of ${total} ${total === 1 ? "part" : "parts"} done`,
+    fraction: (met.length + partial) / total,
+  };
+}
+
+/** A filled bar with its percentage; the label is read out in its place. */
+function ProgressBar({
+  fraction,
+  label,
+  className,
+}: {
+  fraction: number;
+  label: string;
+  className?: string;
+}) {
+  return (
+    // The track needs its own contrast; bg-muted vanishes on tinted headers.
+    <span
+      className="flex shrink-0 items-center gap-1.5 text-xs"
+      role="img"
+      aria-label={label}
+    >
+      <span
+        className={cn(
+          "h-2 w-24 overflow-hidden rounded-full bg-foreground/15 ring-1 ring-foreground/25 ring-inset",
+          className,
+        )}
+      >
+        <span
+          className="block h-full rounded-full bg-emerald-500"
+          style={{ width: `${fraction * 100}%` }}
+        />
+      </span>
+      <span className="w-8 text-right font-medium text-foreground tabular-nums">
+        {Math.round(fraction * 100)}%
+      </span>
+    </span>
+  );
+}
+
 /** "Ethics · 1 of 3 credit hrs done · 2 more credit hrs needed", with a bar. */
 function NeedLabel({ need }: { need: RequirementNeed }) {
   const { text, fraction } = needProgress(need);
@@ -621,22 +684,7 @@ function NeedLabel({ need }: { need: RequirementNeed }) {
         </span>
       </span>
       {fraction !== null ? (
-        // The track needs its own contrast; bg-muted vanishes on the tinted header.
-        <span
-          className="flex shrink-0 items-center gap-1.5"
-          role="img"
-          aria-label={text}
-        >
-          <span className="h-2 w-24 overflow-hidden rounded-full bg-foreground/15 ring-1 ring-foreground/25 ring-inset">
-            <span
-              className="block h-full rounded-full bg-emerald-500"
-              style={{ width: `${fraction * 100}%` }}
-            />
-          </span>
-          <span className="w-8 text-right font-medium text-foreground tabular-nums">
-            {Math.round(fraction * 100)}%
-          </span>
-        </span>
+        <ProgressBar fraction={fraction} label={text} />
       ) : null}
     </span>
   );
@@ -793,6 +841,7 @@ function RequirementRow({
   }, [model.deferred, model.loading, onOpen, entry.requirementId]);
   const sections = needSections(courses, needs);
   const met = metParts([...courses, ...finished], needs);
+  const overall = groupProgress(met, needs);
   // Each need starts folded except the first, which shows how they open.
   const [openNeeds, setOpenNeeds] = useState<Set<number>>(() => new Set([0]));
   const toggleNeed = (index: number) =>
@@ -833,8 +882,19 @@ function RequirementRow({
               ? `${statusLabel} · `
               : ""}
             {requirementSummary(model)}
+            {/* A group-wide unit need already reads "Needs 6 credit hrs". */}
+            {overall && needs.some((need) => need.requirementId)
+              ? ` · ${overall.text}`
+              : ""}
           </span>
         </span>
+        {overall ? (
+          <ProgressBar
+            fraction={overall.fraction ?? 0}
+            label={overall.text}
+            className="w-28"
+          />
+        ) : null}
         <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
           {progress.status === "complete" ? (
             <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">

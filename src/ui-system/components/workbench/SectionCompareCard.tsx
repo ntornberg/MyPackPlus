@@ -352,7 +352,7 @@ function LinkedMeetingOption({
 }
 
 /** "Lecture · Sec 009 · #3163" */
-function SectionMetaLine({
+export function SectionMetaLine({
   component,
   section,
   classNumber,
@@ -377,7 +377,7 @@ function SectionMetaLine({
 }
 
 /** One line per meeting: when, then where. */
-function SectionMeetingList({
+export function SectionMeetingList({
   dayTime,
   location,
   compact,

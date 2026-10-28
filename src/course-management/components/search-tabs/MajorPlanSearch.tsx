@@ -1,6 +1,7 @@
-import { TriangleAlertIcon } from "lucide-react";
+import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 import { useCallback, useMemo, memo, useState, useRef, useEffect } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
@@ -8,6 +9,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 
 import catalogSources from "../../../../docs/research/ncsu-major-requirement-sources.json";
 import {
@@ -895,10 +897,13 @@ export default function MajorPlanSearch({
             setMajorPlanSearchTabData("sortMode", value)
           }
         />
-        <SearchSubmitButton
-          onClick={() => runMajorPlanSearch()}
-          disabled={isSearchDisabled}
-        />
+        {/* Your own plan searches itself; refresh lives on the tree. */}
+        {personal ? null : (
+          <SearchSubmitButton
+            onClick={() => runMajorPlanSearch()}
+            disabled={isSearchDisabled}
+          />
+        )}
         <HideEmptySectionsField
           id="hide-empty-plan"
           checked={majorPlanSearchData.hideNoSections ?? false}
@@ -907,19 +912,6 @@ export default function MajorPlanSearch({
           }
         />
       </FieldGroup>
-      <LoadingProgress
-        className="mt-3"
-        active={personal && personalBusy}
-        value={personalProgress.value}
-        label={personalProgress.label}
-        succeeded={personal && !personalError}
-        doneLabel={`Found sections for ${personalCourseCount} course${personalCourseCount === 1 ? "" : "s"}`}
-      />
-      {personalError ? (
-        <p role="alert" className="mt-3 text-sm text-destructive">
-          {personalError}
-        </p>
-      ) : null}
       <LoadingProgress
         className="mt-4"
         active={!personal && !majorPlanSearchData.isLoaded}
@@ -946,11 +938,39 @@ export default function MajorPlanSearch({
       {personal ? (
         selectedAudit ? (
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground">
-              {auditDisplayName(selectedAudit)} ·{" "}
-              {requisiteTermLabel(selectedAudit.reqTerm)} catalog · from your
-              MyPack degree audit
-            </p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                {auditDisplayName(selectedAudit)} ·{" "}
+                {requisiteTermLabel(selectedAudit.reqTerm)} catalog · from your
+                MyPack degree audit
+              </p>
+              <Button
+                type="button"
+                variant={personalError ? "outline" : "ghost"}
+                size="sm"
+                onClick={() => runMajorPlanSearch()}
+                disabled={isSearchDisabled || personalBusy}
+                className="-mt-1 h-7 shrink-0 gap-1 px-2 text-xs"
+              >
+                <RefreshCwIcon
+                  className={cn("size-3", personalBusy && "animate-spin")}
+                  aria-hidden
+                />
+                {personalError ? "Retry sections" : "Refresh sections"}
+              </Button>
+            </div>
+            <LoadingProgress
+              active={personalBusy}
+              value={personalProgress.value}
+              label={personalProgress.label}
+              succeeded={!personalError}
+              doneLabel={`Found sections for ${personalCourseCount} course${personalCourseCount === 1 ? "" : "s"}`}
+            />
+            {personalError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {personalError}
+              </p>
+            ) : null}
             {personalChoiceErrors.length > 0 ? (
               <p role="status" className="text-sm text-destructive">
                 Some approved-course lists couldn&apos;t load from MyPack.

@@ -5,6 +5,7 @@ import type { RequirementNeed } from "../../../degree-planning/services/auditReq
 import {
   buildCourseRow,
   matchesCourseQuery,
+  groupProgress,
   metParts,
   needProgress,
   needSections,
@@ -188,5 +189,34 @@ describe("metParts", () => {
     expect(
       parts.map((p) => [p.name, p.done, p.rows.map((r) => r.key)]),
     ).toEqual([["Foundations", false, ["DSA 201", "DSA 406"]]]);
+  });
+});
+
+describe("groupProgress", () => {
+  const need = (requirementId: string): RequirementNeed => ({
+    name: "Part",
+    requirementId,
+    unitsLeft: 1,
+    coursesLeft: null,
+    unitsRequired: 3,
+    coursesRequired: null,
+    unitsDone: 2,
+    coursesDone: 1,
+    courses: [],
+  });
+  const part = (name: string) => ({ name, rows: [], done: true });
+
+  it("counts parts met out of all parts", () => {
+    expect(
+      groupProgress([part("A"), part("B"), part("C"), part("D")], [need("5")]),
+    ).toEqual({ text: "4 of 5 parts done", fraction: (4 + 2 / 3) / 5 });
+  });
+
+  it("uses the unit minimum when MyPack only gives the whole group", () => {
+    expect(groupProgress([], [need("")])?.fraction).toBe(2 / 3);
+  });
+
+  it("has nothing to show for a finished group", () => {
+    expect(groupProgress([part("A")], [])).toBeNull();
   });
 });
