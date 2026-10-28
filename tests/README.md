@@ -1,5 +1,29 @@
 # Smoke tests
 
+## Cart review regressions
+
+See [cart-review-results.md](cart-review-results.md) for the finding ledger and
+authenticated-test limitations. These tests assert correct behavior and currently
+include ordinary failing reproductions. Do not change them to expected failures
+or weaken assertions to make a release green.
+
+```bash
+npx vitest run src/course-management/services/cartReview.integration.test.ts
+npx playwright test tests/smoke/cart-review.smoke.ts tests/smoke/cart-interruption.smoke.ts --workers=2
+```
+
+The integration suite uses real cart, grouping, cache and response-storage code
+with simulated network/browser boundaries. The browser suite mounts production
+components in staging using `tests/fixtures/cartReviewHarness.tsx`. Its interruption
+tests use separate page/frame contexts and mocked Chrome messaging, not an
+installed extension update. Navigation/closure tests preserve mock Chrome storage
+across documents. No test contacts the authenticated cart or submits enrollment.
+
+After a production fix, run its reproduction, then the full Vitest suite,
+`npx tsc -b`, and `npm run test:smoke`. Build before authenticated testing. Keep
+automated and authenticated results separate; injection/navigation smoke is not
+cart verification.
+
 ## Staging smoke tests
 
 These tests use deterministic fixture data and never contact MyPack:
