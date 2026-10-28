@@ -130,9 +130,13 @@ beforeEach(() => {
       messageListener = listener;
     },
   });
+  // The Enrollment Wizard's term picker shows Spring, the session's term.
   vi.stubGlobal("document", {
     querySelector: () => null,
-    querySelectorAll: () => [],
+    querySelectorAll: (selector: string) =>
+      selector === "select option:checked"
+        ? [{ textContent: "2027 Spring Term" }]
+        : [],
   });
   respond = async (url) => {
     if (url.pathname.endsWith("IScript_Enroll_Wizard_SETUP")) {
@@ -211,13 +215,13 @@ describe("cart review: term isolation (server model, requires live confirmation)
       };
       const first =
         order === "search-first"
-          ? fetchMyPackOfferings("PY 205", "2026 Fall Term", location)
+          ? fetchMyPackOfferings("PY 205", "2027 Spring Term", location)
           : addSectionToCart(newLecture);
       await entered.promise;
       const second =
         order === "search-first"
           ? addSectionToCart(newLecture)
-          : fetchMyPackOfferings("PY 205", "2026 Fall Term", location);
+          : fetchMyPackOfferings("PY 205", "2027 Spring Term", location);
       // Drain currently runnable work without deadlocking a future shared queue.
       await new Promise<void>((resolve) => setImmediate(resolve));
       release.resolve();
@@ -225,6 +229,20 @@ describe("cart review: term isolation (server model, requires live confirmation)
       expect(serverCart.has("2271:22222")).toBe(true);
     },
   );
+});
+
+describe("cart review: MyPack's own buttons keep the page's term", () => {
+  it("never switches MyPack to a term it isn't showing", async () => {
+    await expect(
+      fetchMyPackOfferings("PY 205", "2026 Fall Term", location),
+    ).resolves.toBeNull();
+    await addSectionToCart({ ...newLecture, term: "2026 Fall Term" });
+    expect(
+      requests.filter((u) => u.searchParams.get("enrollTermSelect") === "2268"),
+    ).toEqual([]);
+    expect(mutations()).toEqual([]);
+    expect(serverTerm).toBe("2271");
+  });
 });
 
 describe("cart review: real replacement and removal", () => {

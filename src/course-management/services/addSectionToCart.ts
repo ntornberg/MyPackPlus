@@ -17,7 +17,7 @@ import {
 } from "./cartLock";
 import type { CartSettings } from "./cartRows";
 import { generateMyPackScriptContentUrl } from "./mypackScriptUrl";
-import { inCartTerm, UNKNOWN_TERM_MESSAGE } from "./myPackSession";
+import { inCartTerm } from "./myPackSession";
 
 export type AddSectionToCartResult =
   | { ok: true; message: string }
@@ -138,8 +138,8 @@ async function addSectionToCartNow(
       (parent ?? selectedSection).term ?? selectedSection.term,
       () => fetchWithTimeout(fullURL, { credentials: "include" }),
     );
-    if (!sent) {
-      return { ok: false, message: UNKNOWN_TERM_MESSAGE };
+    if (typeof sent === "string") {
+      return { ok: false, message: sent };
     }
     const res = await sent;
     if (!res.ok) {

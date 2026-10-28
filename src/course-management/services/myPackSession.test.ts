@@ -73,8 +73,17 @@ describe("myPackSession", () => {
 
   it("refuses cart work for an unknown term", () => {
     const work = vi.fn(async () => "sent");
-    expect(inCartTerm("Someday", work)).toBeNull();
-    expect(inCartTerm(null, work)).toBeNull();
+    expect(inCartTerm("Someday", work)).toMatch(/which term/);
+    expect(inCartTerm(null, work)).toMatch(/which term/);
+    expect(work).not.toHaveBeenCalled();
+  });
+
+  it("refuses cart work for a term MyPack isn't showing", () => {
+    stubPage("2027 Spring Term");
+    const work = vi.fn(async () => "sent");
+    expect(inCartTerm("2026 Fall Term", work)).toBe(
+      "Nothing was changed: MyPack is showing 2027 Spring Term. Switch MyPack's term to 2026 Fall Term to change that term's cart.",
+    );
     expect(work).not.toHaveBeenCalled();
   });
 

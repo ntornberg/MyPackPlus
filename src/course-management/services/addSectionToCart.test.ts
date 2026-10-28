@@ -36,7 +36,7 @@ vi.mock("./mypackScriptUrl", () => ({
 // Term switching is covered in myPackSession.test.ts.
 vi.mock("./myPackSession", () => ({
   inCartTerm: (term: string | undefined, work: () => Promise<unknown>) =>
-    term ? work() : null,
+    term ? work() : "Unknown term.",
   UNKNOWN_TERM_MESSAGE: "Unknown term.",
   termIdOf: (term: string | undefined) => (term ? "2271" : null),
 }));

@@ -13,7 +13,7 @@ import {
 import type { ToCartPayload } from "../types/cart";
 import type { GroupedSections, ModifiedSection } from "../types/section";
 
-import { inMyPackTerm } from "./myPackSession";
+import { inMyPackTerm, pageTermId } from "./myPackSession";
 
 /**
  * One combination MyPack lets a student add to the cart: an enrollment
@@ -73,7 +73,8 @@ const inFlight = new Map<string, Promise<MyPackOffering[] | null>>();
 
 /**
  * Every offering MyPack lists for a course and term, or null when the page
- * isn't MyPack (no session to ask with) or the term is unknown.
+ * isn't MyPack (no session to ask with), the term is unknown, or MyPack isn't
+ * showing that term (cached offerings for it are still returned).
  * Sets the Enrollment Wizard's term first, as the Wizard does when switching
  * terms, and switches back to the page's term after.
  */
@@ -98,6 +99,12 @@ export function fetchMyPackOfferings(
     const cached = await getGenericCache(MY_PACK_OFFERINGS_CACHE, hash);
     if (cached) {
       return cached.combinedData as MyPackOffering[];
+    }
+    // Searching another term means switching MyPack's session to it, and
+    // MyPack's own Add or Enroll would use that term until it switches back.
+    // Other terms (or a page with no term picker) use the registrar grouping.
+    if (pageTermId() !== strm) {
+      return null;
     }
     const search = () => {
       const params = new URLSearchParams({

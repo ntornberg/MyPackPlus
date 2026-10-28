@@ -11,8 +11,11 @@ export function termIdOf(term: string | null | undefined): string | null {
   return (term && TermIdByName[term.replace(/\s+/g, " ").trim()]) || null;
 }
 
-/** The term picked on the MyPack page itself, checking same-origin frames too. */
-function pageTermId(): string | null {
+/**
+ * The term MyPack's own term picker shows ("2027 Spring Term"), checking
+ * same-origin frames too. Null on pages without one, such as View My Classes.
+ */
+export function pageTerm(): string | null {
   if (typeof document === "undefined") {
     return null;
   }
@@ -25,11 +28,13 @@ function pageTermId(): string | null {
     }
   }
   for (const doc of docs) {
-    const id = termIdOf(selectedTermLabel(doc));
-    if (id) return id;
+    const label = selectedTermLabel(doc);
+    if (termIdOf(label)) return label;
   }
   return null;
 }
+
+export const pageTermId = (): string | null => termIdOf(pageTerm());
 
 // MyPack's cart and Enrollment Wizard scripts act on the term stored in the
 // session (set by IScript_Enroll_Wizard_SETUP), not one sent with the request.
@@ -82,13 +87,24 @@ function setCartTerm(strm: string): Promise<string> {
 }
 
 /**
- * Runs a cart add or delete on `term`. Null when the term is unknown: the
- * request would land in whatever term the session was last switched to.
+ * Runs a cart add or delete on `term`, or returns why it won't:
+ * - the term is unknown, so the request would land in whatever term the
+ *   session was last switched to;
+ * - MyPack is showing another term. Switching the session for the change
+ *   would leave a moment where MyPack's own Add or Enroll acts on the wrong
+ *   term, and the extension can't hold MyPack's buttons back.
  */
 export function inCartTerm<T>(
   term: string | null | undefined,
   work: () => Promise<T>,
-): Promise<T> | null {
+): Promise<T> | string {
   const strm = termIdOf(term);
-  return strm ? inMyPackTerm(strm, setCartTerm, work) : null;
+  if (!strm) {
+    return UNKNOWN_TERM_MESSAGE;
+  }
+  const shown = pageTerm();
+  if (shown && termIdOf(shown) !== strm) {
+    return `Nothing was changed: MyPack is showing ${shown}. Switch MyPack's term to ${term} to change that term's cart.`;
+  }
+  return inMyPackTerm(strm, setCartTerm, work);
 }
