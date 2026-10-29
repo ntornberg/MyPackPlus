@@ -18,17 +18,23 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+import { useCartCoursesContext } from "../../../ui-system/components/workbench/useCartCourses";
 import { AppLogger } from "../../../utils/logger";
 import {
   addSectionToCart,
   type AddSectionToCartOptions,
 } from "../../services/addSectionToCart";
+import {
+  cartRowFor,
+  rowClassNumbers as classNumbersOfRow,
+} from "../../services/cartRows";
 import { removeSectionFromCart } from "../../services/removeSectionFromCart";
 import {
   replaceCartSection,
   type CartSelection,
 } from "../../services/replaceCartSection";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
+import { useScheduleCacheVersion } from "../calendar/CalendarView";
 
 const cartButtonClassName =
   "pointer-events-auto shrink-0 gap-2 rounded-lg border border-primary/35 bg-gradient-to-b from-primary via-primary to-primary/88 px-3.5 font-semibold text-primary-foreground shadow-sm transition-[transform,filter,box-shadow,border-color] duration-150 hover:border-primary/55 hover:brightness-[1.03] hover:shadow-md active:scale-[1.03]";
@@ -101,13 +107,25 @@ function selectionLabel({ section, parent }: CartSelection): string {
  * `replaces` (another section of the course already in the cart), it swaps
  * that one for this one.
  */
-export const ToCartButtonCell = (
-  selectedSection: ModifiedSection,
-  parent?: ModifiedSection,
+export type ToCartButtonCellProps = {
+  selectedSection: ModifiedSection;
+  parent?: ModifiedSection;
+  inCart?: boolean;
+  cartOptions?: AddSectionToCartOptions;
+  replaces?: CartSelection;
+  /** Called as the Remove confirmation opens, so its label can be refreshed. */
+  onRemoveOpen?: () => void;
+};
+
+// A component of its own, so its hooks don't count toward the caller's.
+export function ToCartButtonCell({
+  selectedSection,
+  parent,
   inCart = false,
-  cartOptions: AddSectionToCartOptions = {},
-  replaces?: CartSelection,
-) => {
+  cartOptions = {},
+  replaces,
+  onRemoveOpen,
+}: ToCartButtonCellProps) {
   const { course_id, classNumber, catalog_nbr, courseData } = selectedSection;
 
   const [open, setOpen] = useState(false);
@@ -294,6 +312,7 @@ export const ToCartButtonCell = (
           onOpenChange={(next) => {
             // Stay open while the request is in flight so the result lands in context.
             if (!removing) setConfirmOpen(next);
+            if (next) onRemoveOpen?.();
           }}
         >
           <PopoverTrigger asChild>
@@ -401,7 +420,47 @@ export const ToCartButtonCell = (
       <ToastFeedback open={open} message={message} severity={severity} />
     </div>
   );
-};
+}
+
+/**
+ * The lab the cart holds for `lecture`: from the tab's cart blocks, else the
+ * cached cart row. Undefined when it isn't in the cart or can't be told.
+ */
+function useCartLab(
+  lecture: ModifiedSection | null,
+  labs: ModifiedSection[],
+  /** Bump to read the cached cart again (e.g. as the Remove confirmation opens). */
+  recheck: number,
+): ModifiedSection | undefined {
+  const cart = useCartCoursesContext();
+  const cacheVersion = useScheduleCacheVersion();
+  const [rowClassNumbers, setRowClassNumbers] = useState<string[]>([]);
+  const lectureClass = lecture?.classNumber;
+
+  useEffect(() => {
+    if (!lecture) {
+      setRowClassNumbers([]);
+      return;
+    }
+    let current = true;
+    void cartRowFor(lecture).then((row) => {
+      if (current) setRowClassNumbers(row ? classNumbersOfRow(row) : []);
+    });
+    return () => {
+      current = false;
+    };
+    // The lecture object is rebuilt on every render; its class number isn't.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lectureClass, cacheVersion, recheck]);
+
+  if (!lecture) {
+    return undefined;
+  }
+  const listed = (lab: ModifiedSection) =>
+    Boolean(cart?.classNumbers.has(String(lab.classNumber))) ||
+    rowClassNumbers.includes(String(lab.classNumber));
+  return labs.find(listed);
+}
 
 /**
  * Picks which lab to pair with the lecture for add-to-cart.
@@ -452,25 +511,39 @@ export function ToCartGroupedSectionCell({
   inCart = false,
   replaces,
 }: ToCartGroupedSectionCellProps) {
+  const labs = (rawLabs ?? []).filter(Boolean) as ModifiedSection[];
+  const [recheck, setRecheck] = useState(0);
+  const cartLab = useCartLab(inCart ? lecture : null, labs, recheck);
+  const onRemoveOpen = () => setRecheck((count) => count + 1);
   if (!lecture) {
     return null;
   }
-  const labs = (rawLabs ?? []).filter(Boolean) as ModifiedSection[];
   if (labs.length === 0) {
-    return ToCartButtonCell(
-      lecture,
-      undefined,
-      inCart,
-      { extras, payload: cartPayloads?.[""] },
-      replaces,
+    return (
+      <ToCartButtonCell
+        selectedSection={lecture}
+        inCart={inCart}
+        cartOptions={{ extras, payload: cartPayloads?.[""] }}
+        replaces={replaces}
+      />
     );
   }
-  const selectedLab = resolveSelectedLab(labs, selectedLabClassNumber);
-  return ToCartButtonCell(
-    selectedLab,
-    lecture,
-    inCart,
-    { extras, payload: cartPayloads?.[String(selectedLab.classNumber)] },
-    replaces,
+  // Once in the cart, the button acts on (and names) the lab the cart holds,
+  // not whichever lab is picked on the card.
+  const selectedLab =
+    (inCart ? cartLab : undefined) ??
+    resolveSelectedLab(labs, selectedLabClassNumber);
+  return (
+    <ToCartButtonCell
+      selectedSection={selectedLab}
+      parent={lecture}
+      inCart={inCart}
+      cartOptions={{
+        extras,
+        payload: cartPayloads?.[String(selectedLab.classNumber)],
+      }}
+      replaces={replaces}
+      onRemoveOpen={onRemoveOpen}
+    />
   );
 }
