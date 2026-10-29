@@ -10,6 +10,8 @@ export interface CalendarCourseDetails {
   topic?: string;
   component?: string;
   location?: string;
+  /** Credit hours of the cart or enrolled class this meeting belongs to. */
+  units?: number;
   instructors: { name: string; unityId?: string }[];
   grade?: GradeData;
   professor?: MatchedRateMyProf;

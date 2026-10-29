@@ -183,15 +183,37 @@ export function groupSections(
     }
   }
 
-  if (pool.length > 0) {
+  // A special-topics lab belongs to its topic's lecture only (MSE 490's
+  // battery lab is no part of its qubits lecture); one no lecture shares
+  // stands alone.
+  const lectureTopics = new Set(
+    Object.values(groupedSections).map((group) =>
+      group.lecture && isLectureComponent(group.lecture.component)
+        ? group.lecture.topic
+        : undefined,
+    ),
+  );
+  for (const p of pool.filter(
+    (p) => p.resolved.topic && !lectureTopics.has(p.resolved.topic),
+  )) {
+    groupedSections[groupKey(p)] = { lecture: p.resolved, labs: [] };
+  }
+  const shared = pool.filter(
+    (p) => !p.resolved.topic || lectureTopics.has(p.resolved.topic),
+  );
+  if (shared.length > 0) {
     for (const group of Object.values(groupedSections)) {
       const lecture = group.lecture;
       if (!lecture || !isLectureComponent(lecture.component)) {
         continue;
       }
-      const fits = pool
+      const fits = shared
         .map((p) => p.resolved)
-        .filter((section) => !meetingsClash(lecture, section));
+        .filter(
+          (section) =>
+            (!section.topic || section.topic === lecture.topic) &&
+            !meetingsClash(lecture, section),
+        );
       const { labs, extras } = splitPool(lecture, fits);
       group.labs = [...(group.labs ?? []), ...(labs ?? [])];
       if (extras && extras.length > 0) {

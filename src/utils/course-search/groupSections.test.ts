@@ -99,6 +99,36 @@ describe("groupSections", () => {
     });
   });
 
+  it("gives a special-topics lab only to its topic's lecture (MSE 490)", () => {
+    const topic = (section: CourseSection, value: string) => ({
+      ...section,
+      topic: value,
+    });
+    const groups = groupSections([
+      topic(sec("004", "Lec", "TH 8:30 AM - 9:45 AM"), "Qubits"),
+      topic(sec("005", "Lec", "T 11:45 AM - 12:35 PM"), "Batteries"),
+      sec("501", "Lec"),
+      topic(sec("201", "Lab", "TH 3:00 PM - 5:45 PM"), "Batteries"),
+      sec("401", "Pro", "F 1:30 PM - 2:20 PM"),
+    ]);
+    expect(shape(groups)).toEqual({
+      "004": { labs: [], extras: ["401"] },
+      "005": { labs: [], extras: ["201", "401"] },
+      "501": { labs: [], extras: ["401"] },
+    });
+  });
+
+  it("keeps a topic lab no lecture shares as its own section", () => {
+    const groups = groupSections([
+      { ...sec("001", "Lec", "M 9:00 AM - 9:50 AM"), topic: "Pathology" },
+      { ...sec("205", "Lab", "T 8:30 AM - 11:15 AM"), topic: "Vegetation" },
+    ]);
+    expect(shape(groups)).toEqual({
+      "001": { labs: [], extras: [] },
+      "205": { labs: [], extras: [] },
+    });
+  });
+
   it("attaches lettered sections to their own lecture", () => {
     // CH 101 problem sessions, MA 241 labs, BIO 181 2xx labs, ST 512 7xx labs.
     expect(

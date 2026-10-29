@@ -32,6 +32,7 @@ it("preserves class metadata across table/calendar merging and conflicts", async
     {
       classs: "CSC 316",
       crse_title: "Data Structures",
+      units: "3.00",
       _mypackTerm: "2027 Spring Term",
       section_details: [
         {
@@ -62,6 +63,7 @@ it("preserves class metadata across table/calendar merging and conflicts", async
     classNumber: "123",
     title: "Data Structures",
     location: "Engineering",
+    units: 3,
     instructors: [{ name: "Teacher" }],
   });
 });

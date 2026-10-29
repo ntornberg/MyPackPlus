@@ -57,9 +57,29 @@ async function requestGrades(request: V2GradeRequest): Promise<V2CoursesData> {
   }
 }
 
+// A lecture and its lab often list the same person; keep one row each.
+function uniqueInstructors(
+  instructors: CalendarCourseDetails["instructors"],
+): CalendarCourseDetails["instructors"] {
+  const byName = new Map<string, CalendarCourseDetails["instructors"][number]>();
+  for (const instructor of instructors) {
+    const key = instructor.name.trim().toLowerCase();
+    const seen = byName.get(key);
+    if (!seen) byName.set(key, instructor);
+    else if (!seen.unityId && instructor.unityId) {
+      byName.set(key, { ...seen, unityId: instructor.unityId });
+    }
+  }
+  return [...byName.values()];
+}
+
 export async function loadCalendarInsights(
-  course: CalendarCourseDetails,
+  details: CalendarCourseDetails,
 ): Promise<CalendarInsight[]> {
+  const course = {
+    ...details,
+    instructors: uniqueInstructors(details.instructors),
+  };
   const instructors = course.instructors.length
     ? course.instructors
     : [{ name: "Instructor not assigned" }];

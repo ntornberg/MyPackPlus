@@ -70,6 +70,11 @@ it("keeps multiple instructors separate and handles missing data and failures", 
     instructors: [{ name: "A" }, { name: "B" }],
   });
   expect(results.map((r) => r.name)).toEqual(["A", "B"]);
+  const repeated = await loadCalendarInsights({
+    ...course,
+    instructors: [{ name: "Byrd,Greg" }, { name: "B" }, { name: " byrd,greg" }],
+  });
+  expect(repeated.map((r) => r.name)).toEqual(["Byrd,Greg", "B"]);
   expect(results.every((r) => !r.grade)).toBe(true);
   vi.mocked(fetchGradeCourseV2).mockRejectedValue(new Error("offline"));
   expect((await loadCalendarInsights(course))[0].error).toBe(true);

@@ -278,6 +278,7 @@ function buildEventsFromTableEntries(
       continue;
     }
 
+    const units = Number.parseFloat(scheduleEntry.units ?? "");
     for (const section of scheduleEntry.section_details) {
       const course = {
         code: scheduleEntry.classs?.trim() ?? "",
@@ -290,6 +291,7 @@ function buildEventsFromTableEntries(
         eventId: scheduleEntry.eventid ?? undefined,
         component: section.type ?? undefined,
         location: section.location ?? section.facility ?? undefined,
+        units: Number.isFinite(units) ? units : undefined,
         instructors: (section.instructors ?? []).map((name) => ({ name })),
       };
       if (

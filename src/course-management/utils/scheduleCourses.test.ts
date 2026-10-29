@@ -7,6 +7,7 @@ import {
   alternativeRows,
   heldTopics,
   scheduleCoursesFrom,
+  scheduleUnits,
 } from "./scheduleCourses";
 
 let nextId = 1;
@@ -77,6 +78,42 @@ describe("scheduleCoursesFrom", () => {
     });
   });
 
+  it("counts a row's credit hours once, across its lecture and lab", () => {
+    const courses = scheduleCoursesFrom(
+      [
+        block("PY 208", ["Mon"], "9:00 AM", "9:50 AM", {
+          eventId: "a",
+          units: 4,
+        }),
+        block("PY 208", ["Tue"], "2:00 PM", "4:00 PM", {
+          eventId: "a",
+          units: 4,
+        }),
+        block("CSC 591", ["Thu"], "1:30 PM", "2:45 PM", {
+          eventId: "b",
+          units: 3,
+        }),
+        block("CSC 591", ["Fri"], "1:30 PM", "2:45 PM", {
+          eventId: "c",
+          units: 3,
+        }),
+        block("HESF 101", ["Wed"], "8:00 AM", "8:50 AM"),
+      ],
+      [block("CSC 316", ["Wed"], "1:30 PM", "2:45 PM", { units: 3 })],
+    );
+    expect(courses.map((c) => [c.code, c.units])).toEqual([
+      ["CSC 316", 3],
+      ["CSC 591", 6],
+      ["HESF 101", undefined],
+      ["PY 208", 4],
+    ]);
+    expect(scheduleUnits(courses)).toEqual({
+      enrolled: 3,
+      cart: 10,
+      unknown: 1,
+    });
+  });
+
   it("keeps a course that is both enrolled and in the cart apart", () => {
     const courses = scheduleCoursesFrom(
       [block("CSC 316", ["Fri"], "9:00 AM", "9:50 AM", { section: "002" })],
@@ -117,5 +154,15 @@ describe("special topics alternatives", () => {
     const plain = [row("100"), row("200")];
     expect(heldTopics(plain, ["100"])).toEqual([]);
     expect(alternativeRows(plain, [])).toEqual(plain);
+  });
+
+  it("treats a course's only topic as a section label (PY 131)", () => {
+    const py131 = [
+      row("001"),
+      row("002", "Physics for Elementary Education Teachers"),
+      row("601"),
+    ];
+    const topics = heldTopics(py131, ["002"]);
+    expect(alternativeRows(py131, topics)).toEqual(py131);
   });
 });

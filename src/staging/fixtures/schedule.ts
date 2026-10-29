@@ -74,6 +74,8 @@ function tableEntry(meeting: Meeting) {
     crse_title: meeting.title,
     description: meeting.title,
     enroll_class_nbr: stagingClassNumber(meeting.code, "001"),
+    // MyPack's format; CH 101 with its lab is the 4-hour one.
+    units: meeting.lab ? "4.00" : "3.00",
     [TERM_TAG_FIELD]: DEFAULT_TERM_NAME,
     section_details: [
       {

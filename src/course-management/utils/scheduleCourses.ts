@@ -17,6 +17,8 @@ export type ScheduleCourse = {
   sections: string[];
   /** Class numbers of its meetings, enrollment section first. */
   classNumbers: string[];
+  /** Credit hours, when MyPack's cart or schedule table listed them. */
+  units?: number;
   events: ScheduleEvent[];
   /** Codes of other courses whose meetings overlap this one's. */
   conflictsWith: string[];
@@ -24,6 +26,46 @@ export type ScheduleCourse = {
 
 function unique(values: (string | undefined)[]): string[] {
   return [...new Set(values.filter((value): value is string => !!value))];
+}
+
+/**
+ * Credit hours counted once per cart or schedule row: a lecture and its lab
+ * come from one row and share its units, while two topics of one course are
+ * separate rows.
+ */
+function courseUnits(events: ScheduleEvent[]): number | undefined {
+  const byRow = new Map<string, number>();
+  for (const event of events) {
+    const units = event.course?.units;
+    if (units === undefined) {
+      continue;
+    }
+    const row = event.course?.eventId ?? "";
+    byRow.set(row, Math.max(byRow.get(row) ?? 0, units));
+  }
+  return byRow.size > 0
+    ? [...byRow.values()].reduce((sum, units) => sum + units, 0)
+    : undefined;
+}
+
+export type ScheduleUnits = {
+  enrolled: number;
+  cart: number;
+  /** Courses whose credit hours aren't known, left out of the sums. */
+  unknown: number;
+};
+
+/** Credit hours enrolled and in the cart. */
+export function scheduleUnits(courses: ScheduleCourse[]): ScheduleUnits {
+  const totals: ScheduleUnits = { enrolled: 0, cart: 0, unknown: 0 };
+  for (const course of courses) {
+    if (course.units === undefined) {
+      totals.unknown++;
+    } else {
+      totals[course.status] += course.units;
+    }
+  }
+  return totals;
 }
 
 /**
@@ -72,6 +114,7 @@ export function scheduleCoursesFrom(
       status,
       sections: unique(events.map((event) => event.course?.section)),
       classNumbers: unique(events.map((event) => event.course?.classNumber)),
+      units: courseUnits(events),
       events,
       conflictsWith: unique(
         groups
@@ -116,13 +159,16 @@ export function heldTopics(
 /**
  * Sections that can stand in for a course held as `topics`: of a special
  * topics course, only those of the same topic, since another topic is a
- * different class. Rows of a course without topics are all alternatives.
+ * different class. A course with one topic at most uses it as a section
+ * label (PY 131-002 "Physics for Elementary Education Teachers"), so all of
+ * its rows are alternatives.
  */
 export function alternativeRows(
   rows: GroupedSections[],
   topics: readonly string[],
 ): GroupedSections[] {
-  return topics.length === 1
+  const courseTopics = new Set(rows.map(rowTopic).filter(Boolean));
+  return topics.length === 1 && courseTopics.size > 1
     ? rows.filter((row) => rowTopic(row) === topics[0])
     : rows;
 }

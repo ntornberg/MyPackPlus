@@ -80,6 +80,7 @@ import {
   alternativeRows,
   heldTopics,
   scheduleCoursesFrom,
+  scheduleUnits,
   type ScheduleCourse,
 } from "../../utils/scheduleCourses";
 import { courseCodeOf } from "../../utils/scheduleFitFilter";
@@ -121,6 +122,43 @@ function ScheduleMeeting({
         location={event.course?.location}
         compact={compact}
       />
+    </div>
+  );
+}
+
+function creditHours(units: number): string {
+  return `${units} credit ${units === 1 ? "hour" : "hours"}`;
+}
+
+/** The term's credit hours, enrolled plus cart. */
+function CreditHoursSummary({ courses }: { courses: ScheduleCourse[] }) {
+  const { enrolled, cart, unknown } = scheduleUnits(courses);
+  // The split only says something when the term has both.
+  const details = [
+    enrolled && cart ? `${enrolled} enrolled · ${cart} in cart` : null,
+    unknown > 0
+      ? `${unknown} course${unknown === 1 ? "" : "s"} not counted (hours unknown)`
+      : null,
+  ].filter(Boolean);
+  return (
+    <div
+      role="status"
+      aria-label={`Total: ${creditHours(enrolled + cart)}`}
+      className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-xl border border-border bg-card px-3 py-2 ring-1 ring-foreground/5"
+    >
+      <span className="flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums text-foreground">
+          {enrolled + cart}
+        </span>
+        <span className="text-sm text-muted-foreground">
+          total credit {enrolled + cart === 1 ? "hour" : "hours"}
+        </span>
+      </span>
+      {details.length > 0 ? (
+        <span className="text-xs text-muted-foreground">
+          {details.join(" · ")}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -759,6 +797,14 @@ function ScheduleCourseRow({
               >
                 {course.status === "cart" ? "Cart" : "Enrolled"}
               </Badge>
+              {course.units !== undefined ? (
+                <span
+                  className="text-xs text-muted-foreground"
+                  title={creditHours(course.units)}
+                >
+                  {course.units} cr hrs
+                </span>
+              ) : null}
             </span>
             {course.title ? (
               <span className="whitespace-normal break-words text-sm text-muted-foreground">
@@ -1127,6 +1173,7 @@ export default function ScheduleTab({
           </AlertDescription>
         </Alert>
       ) : null}
+      {courses.length > 0 ? <CreditHoursSummary courses={courses} /> : null}
       {courses.length > 0 ? (
         <ul
           className="mpp-stagger flex flex-col gap-3"
