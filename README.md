@@ -10,6 +10,12 @@ Visit [mypackplus.me](https://mypackplus.me) for the project site.
 
 The extension is independent and is not affiliated with, endorsed by, or sponsored by NC State University.
 
+## Unreleased — October 29, 2026
+
+- Approved-course choices load progressively, with unmet requirements first and planned/enrolled alternatives available when their requirement group opens.
+- Successful results remain usable when another list fails. The planner shows list progress, identifies timeouts or expired sessions, and lets you retry failed lists separately from refreshing sections.
+- Concurrent choice requests are shared and limited to two per page. The existing 30-second timeout remains unchanged.
+
 ## Features
 
 - Search by term, subject, course number, GEP requirement, major, minor, plan, and concentration.

@@ -546,7 +546,7 @@ export const SectionCompareCard = memo(function SectionCompareCard({
   );
 
   const courseCode = section.courseData?.code ?? section.course_id ?? "";
-  const title = section.courseData?.title ?? "";
+  const title = section.offering?.title ?? section.courseData?.title ?? "";
   const [primaryInstructor, ...coInstructors] = sectionInstructorNames(
     section,
   ).map(formatInstructorDisplayName);
@@ -617,6 +617,11 @@ export const SectionCompareCard = memo(function SectionCompareCard({
           </div>
           {!compact && !alternative && title ? (
             <p className="text-sm text-muted-foreground">{title}</p>
+          ) : null}
+          {section.topic ? (
+            <p className="whitespace-normal break-words text-sm text-foreground">
+              Topic: {section.topic}
+            </p>
           ) : null}
           <SectionMetaLine
             component={section.component}

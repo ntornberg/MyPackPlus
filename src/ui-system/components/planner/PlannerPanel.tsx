@@ -37,30 +37,32 @@ export function PlannerPanel({
         className,
       )}
     >
-      <header
-        className={cn(
-          "flex flex-col",
-          actions ? "gap-3" : "gap-1",
-          headerClassName,
-        )}
-      >
-        {actions ? (
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      {eyebrow || title || description || actions ? (
+        <header
+          className={cn(
+            "flex flex-col",
+            actions ? "gap-3" : "gap-1",
+            headerClassName,
+          )}
+        >
+          {actions ? (
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <PlannerPanelTitle
+                eyebrow={eyebrow}
+                title={title}
+                description={description}
+              />
+              {actions}
+            </div>
+          ) : (
             <PlannerPanelTitle
               eyebrow={eyebrow}
               title={title}
               description={description}
             />
-            {actions}
-          </div>
-        ) : (
-          <PlannerPanelTitle
-            eyebrow={eyebrow}
-            title={title}
-            description={description}
-          />
-        )}
-      </header>
+          )}
+        </header>
+      ) : null}
       <div className={cn("min-w-0", contentClassName)}>{children}</div>
     </section>
   );
@@ -78,7 +80,7 @@ function PlannerPanelTitle({
           {eyebrow}
         </div>
       ) : null}
-      <CardTitle className="text-base">{title}</CardTitle>
+      {title ? <CardTitle className="text-base">{title}</CardTitle> : null}
       {description ? <CardDescription>{description}</CardDescription> : null}
     </div>
   );

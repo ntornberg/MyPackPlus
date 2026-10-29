@@ -182,7 +182,7 @@ describe("addSectionToCart calendar updates", () => {
       session_code: "1",
       crse_id: "018981",
       class_nbr: "12345",
-      catalog_nbr: "205",
+      catalog_nbr: "316",
       relate_class_nbr_1: "12346",
       unt_taken: "4",
       grading_basis: "GRD",
@@ -197,6 +197,14 @@ describe("addSectionToCart calendar updates", () => {
 
     const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string);
     expect(Object.fromEntries(url.searchParams)).toEqual(payload);
+  });
+
+  it("never fabricates a payload for an ID-less course even after resolving an ID", async () => {
+    expect(
+      (await addSectionToCart({ ...lecture, requiresExactCartPayload: true }))
+        .ok,
+    ).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("won't add without knowing the term", async () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CATALOG_REVISION } from "../../../../generated/catalogs/course-search/catalog";
 import { mergeData } from "../../../../utils/course-search/mergeDataUtil";
 import { v2ToBatchResponse } from "../gradesV2";
 
@@ -70,13 +71,14 @@ describe("dataService null-course cache keys", () => {
 
     expect(first).toBeNull();
     expect(mocks.setGenericCache).toHaveBeenCalledWith(
-      "nullCourses",
+      `nullCourses-v3-${CATALOG_REVISION}`,
       expect.objectContaining({
         ["hash:null-CSC 316 Fall 2024"]: expect.objectContaining({
           courseKey: "CSC 316",
           term,
         }),
       }),
+      2 * 60 * 1000,
     );
 
     mocks.getGenericCache.mockReset();
@@ -111,7 +113,7 @@ describe("dataService null-course cache keys", () => {
       "null-CSC 246 Spring 2025",
     ); // read side still checks the null cache
     expect(mocks.setGenericCache).not.toHaveBeenCalledWith(
-      "nullCourses",
+      `nullCourses-v3-${CATALOG_REVISION}`,
       expect.anything(),
     );
   });
@@ -134,7 +136,7 @@ describe("dataService null-course cache keys", () => {
     );
 
     expect(mocks.setGenericCache).not.toHaveBeenCalledWith(
-      "nullCourses",
+      `nullCourses-v3-${CATALOG_REVISION}`,
       expect.anything(),
     );
   });
@@ -169,7 +171,7 @@ describe("dataService null-course cache keys", () => {
     await fetchPlannerCourseSections("CSC", "316", "id-1", term);
 
     expect(mocks.setGenericCache).toHaveBeenCalledWith(
-      "openCourses",
+      `openCourses-v3-${CATALOG_REVISION}`,
       expect.any(Object),
       2 * 60 * 1000,
     );
@@ -452,13 +454,15 @@ describe("dataService v2 grade/RMP requests", () => {
       expect(mocks.batchSearchOpenCourses).toHaveBeenCalledTimes(1);
       expect(Object.keys(result)).toEqual(["MA 241"]);
       expect(mocks.setGenericCache).toHaveBeenCalledWith(
-        "searchedSubjects",
+        `searchedSubjects-v3-${CATALOG_REVISION}`,
         { "hash:subject-MA Spring 2027": true },
         expect.any(Number),
       );
 
       // Once the subject marker expires, the subject is searched again.
-      store.delete("searchedSubjects:hash:subject-MA Spring 2027");
+      store.delete(
+        `searchedSubjects-v3-${CATALOG_REVISION}:hash:subject-MA Spring 2027`,
+      );
       await batchFetchCoursesData([course, unoffered], "Spring 2027");
       expect(mocks.batchSearchOpenCourses).toHaveBeenCalledTimes(2);
       mocks.getGenericCache.mockReset();

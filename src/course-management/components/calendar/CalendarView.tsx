@@ -11,6 +11,7 @@ import {
   isUntimedDayTime,
   parseDayTimeEvents,
 } from "../../schedule/parseScheduleDayTime";
+import { enrichScheduleTopics } from "../../services/sectionMetadata";
 import {
   type ScheduleEvent,
   CALENDAR_COLOR_CART_CLASS,
@@ -136,6 +137,11 @@ export const mergePinnedDayTimeWithEvents = (
         ? {
             ...courseDetailsFromSection(selectedSection),
             section: m.section,
+            topic: m.topic ?? selectedSection.topic,
+            title:
+              m.offering?.title ??
+              selectedSection.offering?.title ??
+              selectedSection.courseData?.title,
             classNumber: m.classNumber,
             component: m.component,
             location: m.location,
@@ -698,7 +704,9 @@ export const loadScheduleEvents = async (): Promise<ScheduleEvent[]> => {
         ),
         calendarEvents,
       );
-      const events = mergeScheduleSources(tableEvents, calendarEvents);
+      const events = await enrichScheduleTopics(
+        mergeScheduleSources(tableEvents, calendarEvents),
+      );
       if (generation === getScheduleCacheGeneration()) {
         cachedScheduleEvents = events;
       }
@@ -742,7 +750,9 @@ export const loadCartScheduleEvents = async (): Promise<ScheduleEvent[]> => {
         ),
         calendarEvents,
       );
-      const events = mergeScheduleSources(tableEvents, calendarEvents);
+      const events = await enrichScheduleTopics(
+        mergeScheduleSources(tableEvents, calendarEvents),
+      );
       if (generation === getScheduleCacheGeneration()) {
         cachedCartEvents = events;
       }

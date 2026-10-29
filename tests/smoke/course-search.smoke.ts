@@ -28,6 +28,66 @@ test.beforeEach(async ({ page }) => {
 const finder = (page: Page) =>
   page.getByRole("combobox", { name: "Find a course", exact: true });
 
+test("catalog additions load without IDs and historical courses remain labeled", async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.route(
+    "https://cloudflareworker.nicktornberg12.workers.dev/**",
+    (route) => route.fulfill({ json: { html: "" } }),
+  );
+  await page.route(endpoint, (route) =>
+    route.fulfill(registrarResponse(route)),
+  );
+  await page.goto("/planner-staging.html?network=real&course-search");
+  await select(page, "CSC 491");
+  await expect(
+    page
+      .getByRole("listbox", { name: "Course sections" })
+      .getByRole("option")
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry registration details" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add to cart", exact: true }).first(),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Retry registration details" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Retry registration details" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("csc-491-no-id.png"),
+    fullPage: true,
+  });
+  await select(page, "ITAO 511");
+  await expect(
+    page
+      .getByRole("listbox", { name: "Course sections" })
+      .getByRole("option")
+      .filter({ hasText: "ITAO 511" }),
+  ).toBeVisible();
+  await page
+    .getByRole("radio", { name: "Browse by subject", exact: true })
+    .click();
+  await expect(
+    page.getByRole("combobox", { name: "Course", exact: true }),
+  ).toHaveValue(/ITAO-511/);
+  await page.getByRole("radio", { name: "Find a course", exact: true }).click();
+  await select(page, "CSC 495");
+  await expect(finder(page)).toHaveValue(/Not in current catalog/);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 async function select(page: Page, query: string, key = "Enter") {
   await finder(page).click();
   await finder(page).fill(query);

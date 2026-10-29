@@ -120,7 +120,7 @@ test("lists the schedule and replaces a cart section", async ({ page }) => {
     .getByRole("listitem")
     .filter({ has: page.getByText("ENG 331", { exact: true }) })
     .first();
-  await eng.getByRole("button", { name: "Show other sections" }).click();
+  await eng.getByRole("button", { name: "Show alternative sections" }).click();
   await expect(
     eng.getByRole("button", { name: "Replace", exact: true }).first(),
   ).toBeVisible();

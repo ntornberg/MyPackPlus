@@ -2,6 +2,7 @@ import type { RequiredCourse } from "../types/Plans";
 
 import {
   isRequirementGroup,
+  hasBrowsableChoices,
   isUnmetLine,
   type DegreeAudit,
   type DegreeAuditGroup,
@@ -22,6 +23,14 @@ export type AuditRequirementEntry = {
   courses: RequiredCourse[];
   /** What MyPack still marks unmet in this group; empty when nothing is. */
   needs: RequirementNeed[];
+  alternatives: RequirementAlternative[];
+};
+
+export type RequirementAlternative = {
+  key: string;
+  name: string;
+  courses: NeedCourse[];
+  error?: string;
 };
 
 /** An unmet requirement and how much of it is left, when MyPack says. */
@@ -168,8 +177,8 @@ export function plannedAuditCourses(audit: DegreeAudit): RequiredCourse[] {
 
 /**
  * Requirement groups straight from the student's audit. Each lists the
- * courses MyPack applied to it and, for requirements MyPack marks unmet,
- * the approved choices it offers. Nothing comes from the
+ * courses MyPack applied to it and approved choices for unmet, planned,
+ * or enrolled requirements. Nothing comes from the
  * bundled catalog, so concentrations and catalog years follow the audit.
  */
 export function auditRequirementEntries(
@@ -195,16 +204,39 @@ export function auditRequirementEntries(
         course_descrip: line.title,
       });
     }
+    const choiceRefs = new Map(
+      group.lines
+        .filter((line) => line.requirementId && hasBrowsableChoices(line))
+        .map(
+          (line) =>
+            [
+              requirementChoiceKey(
+                line.requirementId,
+                line.isExceptionRequirement,
+              ),
+              line,
+            ] as const,
+        ),
+    );
     const unmetRefs = new Set(
       group.lines
-        .filter((line) => line.requirementId && isUnmetLine(line))
+        .filter(isUnmetLine)
         .map((line) =>
           requirementChoiceKey(line.requirementId, line.isExceptionRequirement),
         ),
     );
-    for (const ref of unmetRefs) {
+    const alternatives: RequirementAlternative[] = [];
+    for (const [ref, line] of choiceRefs) {
       for (const choiceGroup of results[ref]?.list?.groups ?? []) {
         choiceGroup.courses.forEach(add);
+      }
+      if (!unmetRefs.has(ref)) {
+        alternatives.push({
+          key: ref,
+          name: results[ref]?.list?.name || line.requirement || line.title,
+          courses: listCourses(results[ref]?.list),
+          error: results[ref]?.error,
+        });
       }
     }
     // Two groups can share a name; the tree keys rows by it.
@@ -217,6 +249,7 @@ export function auditRequirementEntries(
       requirementId: group.id,
       courses: [...courses.values()],
       needs: requirementNeeds(group, results),
+      alternatives,
     };
   });
 }

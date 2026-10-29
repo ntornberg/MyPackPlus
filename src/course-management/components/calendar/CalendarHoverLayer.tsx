@@ -407,7 +407,12 @@ function CourseCard({ event }: { event: ScheduleEvent }) {
           {course.code}
           {course.section ? ` (${course.section})` : ""}
         </h3>
-        {course.title && <p>{course.title}</p>}
+        {course.title && (
+          <p className="whitespace-normal break-words">{course.title}</p>
+        )}
+        {course.topic && (
+          <p className="whitespace-normal break-words">Topic: {course.topic}</p>
+        )}
         <p className="text-xs text-muted-foreground">
           {[
             course.component,

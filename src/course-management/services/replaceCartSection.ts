@@ -101,6 +101,17 @@ export function changeCartLab(
   /** The original combination, never the replacement's exact payload. */
   restoreOptions: AddSectionToCartOptions = { extras: options.extras },
 ): Promise<ReplaceCartSectionResult> {
+  if (
+    (lecture.requiresExactCartPayload || toLab.requiresExactCartPayload) &&
+    !options.payload
+  ) {
+    return Promise.resolve({
+      ok: false,
+      partial: false,
+      message:
+        "Registration details unavailable for this combination. Retry registration details before changing labs.",
+    });
+  }
   const current = { section: fromLab, parent: lecture };
   const next = { section: toLab, parent: lecture };
   return withCourseOf(lecture, async (lock) => {

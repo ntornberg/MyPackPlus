@@ -81,7 +81,7 @@ describe("auditRequirementEntries", () => {
     ]);
   });
 
-  it("skips choices when nothing is unmet, and summary groups", () => {
+  it("includes covered alternatives without changing progress, and skips summary groups", () => {
     const groups: DegreeAuditGroup[] = personalAuditFixture.groups.map(
       (group) => ({
         ...group,
@@ -103,8 +103,50 @@ describe("auditRequirementEntries", () => {
     };
     expect(codes(audit, choices(audit))).toEqual({
       Core: ["TST 101"],
-      "Other Electives": ["TST 297", "TST 406", "TST 301", "TST 471"],
+      "Other Electives": [
+        "TST 297",
+        "TST 406",
+        "TST 301",
+        "TST 471",
+        "TST 499",
+        "TST 440",
+        "TST 540",
+        "OTH 540",
+      ],
     });
+    const entry = auditRequirementEntries(audit, choices(audit))[1];
+    expect(entry.needs).toEqual([]);
+    expect(entry.alternatives.map((a) => a.key)).toEqual([
+      "000001|",
+      "000002|",
+    ]);
+    expect(
+      entry.alternatives[0].courses.some((c) => c.catalog_num === "499"),
+    ).toBe(true);
+    expect(entry.alternatives[1].error).toContain("session expired");
+    const before = requirementProgress(
+      "200",
+      [],
+      auditGroupsById([audit]),
+      null,
+    );
+    const after = requirementProgress(
+      "200",
+      entry.courses,
+      auditGroupsById([audit]),
+      null,
+    );
+    expect([
+      after.status,
+      after.completed,
+      after.enrolled,
+      after.planned,
+    ]).toEqual([
+      before.status,
+      before.completed,
+      before.enrolled,
+      before.planned,
+    ]);
   });
 });
 

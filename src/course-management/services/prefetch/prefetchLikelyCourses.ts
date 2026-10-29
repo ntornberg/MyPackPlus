@@ -4,7 +4,6 @@ import {
   loadPlannerTerms,
   plannerCourseCode,
 } from "../../../degree-planning/services/packPlanner";
-import type { RequiredCourse } from "../../../degree-planning/types/Plans";
 import { TermIdByName } from "../../../generated/catalogs/termIds";
 import { AppLogger } from "../../../utils/logger";
 import { courseDetailsFromLabel } from "../../components/calendar/calendarCourseDetails";
@@ -13,6 +12,7 @@ import {
   loadScheduleEvents,
 } from "../../components/calendar/CalendarView";
 import type { ScheduleEvent } from "../../types/calendar";
+import type { CourseQuery } from "../../types/courseQuery";
 import {
   getCourseSearchIndex,
   type SearchCourse,
@@ -63,7 +63,7 @@ function scheduleCandidates(
  */
 export async function collectLikelyCourses(
   term: string,
-): Promise<RequiredCourse[]> {
+): Promise<CourseQuery[]> {
   const semester = semesterOfTermName(term);
   const [plannerTerms, audits, cart, schedule] = await Promise.all([
     loadPlannerTerms(),
@@ -88,7 +88,7 @@ export async function collectLikelyCourses(
     ...scheduleCandidates(schedule, semester),
   ];
 
-  const courses = new Map<string, RequiredCourse>();
+  const courses = new Map<string, CourseQuery>();
   for (const { subject, catalogNum } of candidates) {
     if (courses.size >= PREFETCH_COURSE_LIMIT) break;
     const course = catalogCourse(subject, catalogNum);

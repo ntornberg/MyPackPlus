@@ -126,7 +126,7 @@ export function CourseFinder({
         showClear
         className={
           showSelection
-            ? "h-auto w-full [&>input]:absolute [&>input]:inset-0 [&>input]:h-full [&>input]:pr-10 [&>input]:text-transparent [&>input:focus]:text-foreground [&>[data-slot=input-group-addon]]:relative"
+            ? "h-auto w-full [&>input]:absolute [&>input]:inset-0 [&>input]:h-full [&>input]:pr-10 [&>input]:opacity-0 [&>input:focus]:opacity-100 [&>[data-slot=input-group-addon]]:relative"
             : "w-full"
         }
         onKeyDownCapture={(event) => {
@@ -196,6 +196,11 @@ export function CourseFinder({
                 <strong>{course.code}</strong>
                 <span className="min-w-0 break-words">
                   {course.title}
+                  {course.currentCatalog === false ? (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      Not in current catalog
+                    </span>
+                  ) : null}
                   {isCourseInCart(cart, course.code) ? (
                     <InCartBadge className="ml-2 align-middle" />
                   ) : null}

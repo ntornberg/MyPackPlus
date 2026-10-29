@@ -92,7 +92,16 @@ async function addSectionToCartNow(
 
   if (
     !courseData ||
-    (!exactPayload && (!course_id || !classNumber || !catalog_nbr))
+    (!exactPayload &&
+      (selectedSection.requiresExactCartPayload ||
+        parent?.requiresExactCartPayload ||
+        !course_id ||
+        !classNumber ||
+        !catalog_nbr)) ||
+    (exactPayload &&
+      (!exactPayload.crse_id ||
+        exactPayload.class_nbr !== (parent ?? selectedSection).classNumber ||
+        exactPayload.catalog_nbr !== catalog_nbr))
   ) {
     return {
       ok: false,

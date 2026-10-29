@@ -1,4 +1,8 @@
 import { SUPABASE_URL } from "../config/supabase";
+import {
+  parseRegistrarSearch,
+  SEARCH_COURSES_MESSAGE,
+} from "../course-management/services/api/planner-search/searchService";
 import type { V2GradeRequest } from "../types/api";
 import { STATUS_WORKER_ORIGIN } from "../user-experience/status/statusWorker";
 
@@ -45,9 +49,8 @@ async function fetchRegistrar(url: string, formData: string) {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: formData,
     });
-    const data = await res.text();
     return res.ok
-      ? { success: true, data }
+      ? { success: true, courses: parseRegistrarSearch(await res.text()) }
       : { success: false, error: `HTTP ${res.status} ${res.statusText}` };
   } catch (error) {
     return { success: false, error: String(error) };
@@ -74,7 +77,7 @@ function installChromeStub(
       message: { type: string; url?: string; formData?: string },
       callback?: (result: unknown) => void,
     ) => {
-      if (message.type === "fetchData" && realNetwork) {
+      if (message.type === SEARCH_COURSES_MESSAGE && realNetwork) {
         void fetchRegistrar(message.url ?? "", message.formData ?? "").then(
           (response) => callback?.(response),
         );
@@ -84,10 +87,12 @@ function installChromeStub(
         success: false,
         error: "Not available in staging",
       };
-      if (message.type === "fetchData") {
+      if (message.type === SEARCH_COURSES_MESSAGE) {
         response = {
           success: true,
-          data: stagingRegistrarResponse(message.formData ?? ""),
+          courses: parseRegistrarSearch(
+            stagingRegistrarResponse(message.formData ?? ""),
+          ),
         };
       } else if (message.type === "status_worker_fetch") {
         response = {
@@ -115,8 +120,11 @@ function installChromeStub(
               keys && typeof keys === "object" && !Array.isArray(keys)
                 ? (keys as Record<string, unknown>)
                 : {};
-            return Object.fromEntries(
-              wanted.map((key) => [key, stored[key] ?? defaults[key]]),
+            // Chrome returns a structured clone, never live references to storage.
+            return structuredClone(
+              Object.fromEntries(
+                wanted.map((key) => [key, stored[key] ?? defaults[key]]),
+              ),
             );
           },
           set: async (items: Record<string, unknown>) => {

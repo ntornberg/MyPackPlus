@@ -8,6 +8,8 @@ import type { ToCartPayload } from "./cart";
 
 /** Additional meeting rows for the same enrollment (e.g. lab with lecture). */
 export type SectionLinkedMeeting = {
+  topic?: CourseSection["topic"];
+  offering?: CourseSection["offering"];
   instructor_name?: string[];
   instructor_unity_ids?: string[];
   dayTime: string;
@@ -22,6 +24,8 @@ export type ModifiedSection = CourseSection & {
   professor_rating?: MatchedRateMyProf;
   // Cart functionality fields
   course_id?: string;
+  /** No legacy identity: registration requires the exact MyPack combination. */
+  requiresExactCartPayload?: boolean;
   catalog_nbr?: string;
   course_career?: string;
   session_code?: string;

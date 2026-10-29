@@ -1,13 +1,16 @@
+import { FetchTimeoutError } from "../../utils/fetchWithTimeout";
 import type { RequiredCourse } from "../types/Plans";
 
 import {
   auditKey,
   isRequirementGroup,
   isUnmetLine,
+  hasBrowsableChoices,
   type DegreeAudit,
 } from "./degreeAudit";
 import {
   fetchMyPackText,
+  MyPackSessionExpiredError,
   peopleSoftScriptBase,
   PLANNING_SYNC_MAX_AGE,
 } from "./myPackClient";
@@ -41,6 +44,12 @@ export type RequirementChoiceList = {
 export type RequirementChoiceResult = {
   list?: RequirementChoiceList;
   error?: string;
+  errorKind?:
+    | "timeout"
+    | "session-expired"
+    | "http"
+    | "invalid-response"
+    | "network";
   capturedAt?: number;
 };
 export type RequirementChoices = {
@@ -141,49 +150,160 @@ export async function loadStoredRequirementChoices(): Promise<StoredRequirementC
   ) as StoredRequirementChoices;
 }
 
-const inflight = new Map<string, Promise<RequirementChoices>>();
-let storageQueue: Promise<void> = Promise.resolve();
+export type RequirementChoicesProgress = {
+  total: number;
+  settled: number;
+  successful: number;
+  failed: number;
+  snapshot: RequirementChoices;
+};
 
-export function loadRequirementChoices(
+/** Without a group selection, only unmet lists are fetched. */
+export function requirementChoiceKeys(
+  audit: DegreeAudit,
+  groupId?: string,
+): string[] {
+  return [
+    ...new Set(
+      audit.groups
+        .filter(isRequirementGroup)
+        .filter((group) => groupId === undefined || group.id === groupId)
+        .flatMap((group) => group.lines)
+        .filter(
+          (line) =>
+            line.requirementId &&
+            (groupId === undefined
+              ? isUnmetLine(line)
+              : hasBrowsableChoices(line)),
+        )
+        .map((line) =>
+          requirementChoiceKey(line.requirementId, line.isExceptionRequirement),
+        ),
+    ),
+  ];
+}
+
+// These coordinate content-script callers in this page, not service-worker state.
+const inflight = new Map<string, Promise<RequirementChoiceResult>>();
+const runs = new Map<string, { users: number; expired: boolean }>();
+let storageQueue: Promise<void> = Promise.resolve();
+let active = 0;
+const waiting: (() => void)[] = [];
+
+async function limited<T>(work: () => Promise<T>): Promise<T> {
+  if (active >= 2) await new Promise<void>((resolve) => waiting.push(resolve));
+  else active++;
+  try {
+    return await work();
+  } finally {
+    const next = waiting.shift();
+    if (next)
+      next(); // Transfer the slot rather than making it available twice.
+    else active--;
+  }
+}
+
+async function storeResult(
+  audit: DegreeAudit,
+  ref: string,
+  result: RequirementChoiceResult,
+  now: () => number,
+) {
+  if (typeof chrome === "undefined" || !chrome.storage?.local) return;
+  const write = storageQueue.then(async () => {
+    const key = auditKey(audit);
+    const latest = await loadStoredRequirementChoices();
+    const previous = latest[key];
+    if (previous && previous.auditCapturedAt > audit.capturedAt) return;
+    await chrome.storage.local.set({
+      [REQUIREMENT_CHOICES_STORAGE_KEY]: {
+        ...latest,
+        [key]: {
+          auditCapturedAt: audit.capturedAt,
+          capturedAt: now(),
+          results: {
+            ...(previous?.auditCapturedAt === audit.capturedAt
+              ? previous.results
+              : {}),
+            [ref]: result,
+          },
+        },
+      },
+    });
+  });
+  storageQueue = write.catch(() => undefined);
+  await write;
+}
+
+export async function loadRequirementChoices(
   audit: DegreeAudit,
   {
     force = false,
+    requirementKeys = requirementChoiceKeys(audit),
+    onProgress,
     location = typeof window !== "undefined" ? window.location : undefined,
     now = Date.now,
   }: {
     force?: boolean;
+    requirementKeys?: readonly string[];
+    onProgress?: (progress: RequirementChoicesProgress) => void;
     location?: Pick<Location, "hostname" | "pathname">;
     now?: () => number;
   } = {},
 ): Promise<RequirementChoices> {
-  const key = auditKey(audit);
-  // A refresh of this audit must not share an older audit's pending request.
-  const requestKey = `${key}|${audit.capturedAt}|${force}`;
-  const existing = inflight.get(requestKey);
-  if (existing) return existing;
-  const request = (async () => {
-    const stored = await loadStoredRequirementChoices();
-    const cached = stored[key];
-    const sameAudit = cached?.auditCapturedAt === audit.capturedAt;
-    // Only unmet requirements need alternatives. Approved lists run to
-    // hundreds of courses, and a requirement filled by planned or enrolled
-    // courses doesn't need any.
+  const base = location ? peopleSoftScriptBase(location) : null;
+  const scope = JSON.stringify([base, auditKey(audit), audit.capturedAt]);
+  const run = runs.get(scope) ?? { users: 0, expired: false };
+  run.users++;
+  runs.set(scope, run);
+  try {
+    const cached = (await loadStoredRequirementChoices())[auditKey(audit)];
+    const results = {
+      ...(cached?.auditCapturedAt === audit.capturedAt ? cached.results : {}),
+    };
+    const selected = new Set(requirementKeys);
     const refs = new Map(
       audit.groups
         .filter(isRequirementGroup)
         .flatMap((group) => group.lines)
-        .filter((line) => line.requirementId && isUnmetLine(line))
-        .map((line) => [
-          requirementChoiceKey(line.requirementId, line.isExceptionRequirement),
-          line,
-        ]),
+        .filter((line) => line.requirementId && hasBrowsableChoices(line))
+        .map(
+          (line) =>
+            [
+              requirementChoiceKey(
+                line.requirementId,
+                line.isExceptionRequirement,
+              ),
+              line,
+            ] as const,
+        )
+        .filter(([ref]) => selected.has(ref)),
     );
-    const base = location ? peopleSoftScriptBase(location) : null;
-    const results: RequirementChoices["results"] = {};
+    let settled = 0;
+    let failed = 0;
+    const snapshot = (): RequirementChoices => ({
+      auditCapturedAt: audit.capturedAt,
+      capturedAt: now(),
+      results: { ...results },
+    });
+    const report = () =>
+      onProgress?.({
+        total: refs.size,
+        settled,
+        successful: settled - failed,
+        failed,
+        snapshot: snapshot(),
+      });
+    report();
     await Promise.all(
       [...refs].map(async ([ref, line]) => {
-        const previous = sameAudit ? cached.results[ref] : undefined;
+        const requestKey = JSON.stringify([scope, ref]);
+        const previous = results[ref];
+        // Join first, even if this caller has a fresh cached list.
+        let request = inflight.get(requestKey);
+        // A stored failure is retried: a timeout or expired session is usually transient.
         if (
+          !request &&
           !force &&
           previous?.list &&
           !previous.error &&
@@ -191,53 +311,67 @@ export function loadRequirementChoices(
           now() - previous.capturedAt < PLANNING_SYNC_MAX_AGE
         ) {
           results[ref] = previous;
-          return;
+        } else {
+          if (!request) {
+            request = limited(async (): Promise<RequirementChoiceResult> => {
+              let errorKind: RequirementChoiceResult["errorKind"] = "network";
+              try {
+                if (run.expired) throw new MyPackSessionExpiredError();
+                if (!base)
+                  throw new Error(
+                    "Open MyPack and sign in to load approved choices.",
+                  );
+                const params = new URLSearchParams({
+                  requirement: line.requirementId,
+                  isExcReq: line.isExceptionRequirement,
+                });
+                const body = await fetchMyPackText(
+                  `${base}WEBLIB_DEGAUDIT.ISCRIPT1.FieldFormula.IScript_getRequirementList?${params}`,
+                );
+                errorKind = "invalid-response";
+                return {
+                  list: parseRequirementChoices(
+                    JSON.parse(body),
+                    line.requirementId,
+                  ),
+                  capturedAt: now(),
+                };
+              } catch (error) {
+                if (error instanceof MyPackSessionExpiredError) {
+                  run.expired = true;
+                  errorKind = "session-expired";
+                } else if (error instanceof FetchTimeoutError)
+                  errorKind = "timeout";
+                else if (
+                  error instanceof Error &&
+                  /^\d{3} from /.test(error.message)
+                )
+                  errorKind = "http";
+                return {
+                  ...(previous?.list
+                    ? { list: previous.list, capturedAt: previous.capturedAt }
+                    : {}),
+                  error: `Choices unavailable: ${error instanceof Error ? error.message : String(error)}`,
+                  errorKind,
+                };
+              }
+            })
+              .then(async (result) => {
+                await storeResult(audit, ref, result, now);
+                return result;
+              })
+              .finally(() => inflight.delete(requestKey));
+            inflight.set(requestKey, request);
+          }
+          results[ref] = await request;
         }
-        try {
-          if (!base)
-            throw new Error(
-              "Open MyPack and sign in to load approved choices.",
-            );
-          const params = new URLSearchParams({
-            requirement: line.requirementId,
-            isExcReq: line.isExceptionRequirement,
-          });
-          const body = await fetchMyPackText(
-            `${base}WEBLIB_DEGAUDIT.ISCRIPT1.FieldFormula.IScript_getRequirementList?${params}`,
-          );
-          results[ref] = {
-            list: parseRequirementChoices(JSON.parse(body), line.requirementId),
-            capturedAt: now(),
-          };
-        } catch (error) {
-          results[ref] = {
-            ...(previous?.list
-              ? { list: previous.list, capturedAt: previous.capturedAt }
-              : {}),
-            error: `Choices unavailable: ${error instanceof Error ? error.message : String(error)}`,
-          };
-        }
+        settled++;
+        if (results[ref].error) failed++;
+        report();
       }),
     );
-    const snapshot = {
-      auditCapturedAt: audit.capturedAt,
-      capturedAt: now(),
-      results,
-    };
-    if (typeof chrome !== "undefined" && chrome.storage?.local) {
-      const write = storageQueue.then(async () => {
-        const latest = await loadStoredRequirementChoices();
-        if (!latest[key] || latest[key].auditCapturedAt <= audit.capturedAt) {
-          await chrome.storage.local.set({
-            [REQUIREMENT_CHOICES_STORAGE_KEY]: { ...latest, [key]: snapshot },
-          });
-        }
-      });
-      storageQueue = write.catch(() => undefined);
-      await write;
-    }
-    return snapshot;
-  })().finally(() => inflight.delete(requestKey));
-  inflight.set(requestKey, request);
-  return request;
+    return snapshot();
+  } finally {
+    if (--run.users === 0) runs.delete(scope);
+  }
 }

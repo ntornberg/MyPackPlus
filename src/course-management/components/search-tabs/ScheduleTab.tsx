@@ -48,7 +48,6 @@ import {
   groupedSectionForPreview,
   groupRowSections,
 } from "../../../ui-system/components/workbench/sectionCompareUtils";
-import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import { CartCoursesContext } from "../../../ui-system/components/workbench/useCartCourses";
 import { useOverlayPortalContainer } from "../../../ui-system/components/workbench/useOverlayPortalContainer";
 import { useTermSchedule } from "../../../ui-system/components/workbench/useTermSchedule";
@@ -78,6 +77,8 @@ import {
 } from "../../utils/cartCourses";
 import { getCourseSearchIndex } from "../../utils/courseSearchIndex";
 import {
+  alternativeRows,
+  heldTopics,
   scheduleCoursesFrom,
   type ScheduleCourse,
 } from "../../utils/scheduleCourses";
@@ -410,9 +411,9 @@ function SessionSwapPicker({
   };
 
   return (
-    <section aria-label={`Your ${name.toLowerCase()}`} className="space-y-1">
+    <section aria-label={`Current ${name.toLowerCase()}`} className="space-y-1">
       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Your {name.toLowerCase()}
+        Current {name.toLowerCase()}
       </h4>
       <button
         type="button"
@@ -760,10 +761,18 @@ function ScheduleCourseRow({
               </Badge>
             </span>
             {course.title ? (
-              <span className="truncate text-sm text-muted-foreground">
+              <span className="whitespace-normal break-words text-sm text-muted-foreground">
                 {course.title}
               </span>
             ) : null}
+            {course.topics.map((topic) => (
+              <span
+                key={topic}
+                className="whitespace-normal break-words text-sm"
+              >
+                Topic — {topic}
+              </span>
+            ))}
           </span>
         </button>
         {course.status === "cart" ? (
@@ -792,7 +801,7 @@ function ScheduleCourseRow({
           aria-controls={regionId}
           className="self-start text-xs font-medium text-primary hover:underline"
         >
-          {expanded ? "Hide other sections" : "Show other sections"}
+          {expanded ? "Hide alternative sections" : "Show alternative sections"}
         </button>
       </div>
       {expanded ? (
@@ -894,10 +903,19 @@ export default function ScheduleTab({
     term,
     loadSections,
   );
-  const sectionsArray = useMemo(
+  const allSections = useMemo(
     (): GroupedSections[] =>
       courseData?.sections ? Object.values(courseData.sections) : [],
     [courseData?.sections],
+  );
+  // Special topics: each topic is its own class, so only the same topic replaces it.
+  const topics = useMemo(
+    () => heldTopics(allSections, selectedCourse?.classNumbers ?? []),
+    [allSections, selectedCourse?.classNumbers],
+  );
+  const sectionsArray = useMemo(
+    () => alternativeRows(allSections, topics),
+    [allSections, topics],
   );
   const instructorOptions = useMemo(
     () => buildInstructorFilterOptions(sectionsArray.flatMap(groupRowSections)),
@@ -937,17 +955,21 @@ export default function ScheduleTab({
     (row) =>
       row.lecture && !excludeClassNumbers.has(String(row.lecture.classNumber)),
   ).length;
+  // Several topics of one course in the cart: which one a Replace swaps is ambiguous.
+  const severalTopics = topics.length > 1;
   // Only cart courses change here; enrolled ones swap in MyPack.
-  const canChange = selectedCourse?.status === "cart";
+  const canChange = selectedCourse?.status === "cart" && !severalTopics;
   // Fit is judged against everything but the course being changed.
   const otherCoursesBackground = useMemo(
     () =>
-      (background ?? []).filter(
-        (event) =>
-          normalizeCourseCode(event.course?.code || event.subj) !==
-          selectedCourse?.code,
-      ),
-    [background, selectedCourse?.code],
+      severalTopics
+        ? (background ?? [])
+        : (background ?? []).filter(
+            (event) =>
+              normalizeCourseCode(event.course?.code || event.subj) !==
+              selectedCourse?.code,
+          ),
+    [background, selectedCourse?.code, severalTopics],
   );
 
   const defaultLabClassFor = useCallback(
@@ -962,7 +984,7 @@ export default function ScheduleTab({
       instructorFilter: null,
     });
 
-  const hasSectionResults = sectionsArray.length > 0;
+  const hasSectionResults = allSections.length > 0;
   const emptyStateMessage = error
     ? "Could not load sections. Please retry."
     : isLoading
@@ -985,8 +1007,15 @@ export default function ScheduleTab({
         value={progress}
         label={progressLabel}
         succeeded={!error && hasSectionResults}
-        doneLabel={`Loaded ${sectionsArray.length} section${sectionsArray.length === 1 ? "" : "s"}`}
+        doneLabel={`Loaded ${allSections.length} section${allSections.length === 1 ? "" : "s"}`}
       />
+      {severalTopics && selectedCourse.status === "cart" && (
+        <p className="text-xs text-muted-foreground">
+          Your cart has {topics.length} topics of {selectedCourse.code}. Each
+          topic is its own class, so remove the one you don&apos;t want instead
+          of replacing it.
+        </p>
+      )}
       {error ? (
         <div role="alert" className="space-y-2 text-sm text-destructive">
           <p>Error: {error.message}</p>
@@ -998,7 +1027,8 @@ export default function ScheduleTab({
           <section aria-label="Other sections" className="space-y-2">
             {alternativeCount === 0 ? (
               <p className="text-sm text-muted-foreground">
-                {selectedCourse.code} has no other sections in {term}.
+                {selectedCourse.code} has no other sections
+                {topics.length === 1 ? ` of ${topics[0]}` : ""} in {term}.
               </p>
             ) : (
               <>
@@ -1065,12 +1095,6 @@ export default function ScheduleTab({
       }
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <SectionDensityToggle
-            value={scheduleData.compactSections ? "compact" : "comfy"}
-            onValueChange={(value) =>
-              setScheduleTabData("compactSections", value === "compact")
-            }
-          />
           <Button
             type="button"
             variant="outline"
@@ -1171,11 +1195,6 @@ export default function ScheduleTab({
               selectedPreview={selectedPreview}
               isOpen={isOpen}
               backgroundEvents={calendarEvents}
-              emptyDescription={
-                term
-                  ? `Your week for ${term}. Pick a section to see it in place of the one you have.`
-                  : "Choose a term to see your week."
-              }
             />
           </div>
         </div>

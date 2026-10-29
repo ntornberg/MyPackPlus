@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AppLogger } from "../../../utils/logger";
 import {
@@ -35,9 +35,16 @@ function courseAndTerm(
 export function useMyPackPairings(
   sections: GroupedSections[],
 ): GroupedSections[] {
+  return useMyPackPairingsState(sections).sections;
+}
+
+export function useMyPackPairingsState(sections: GroupedSections[]) {
   const target = useMemo(() => courseAndTerm(sections), [sections]);
   const code = target?.code;
   const term = target?.term;
+  const [attempt, setAttempt] = useState(0);
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
   const [loaded, setLoaded] = useState<{
     key: string;
     offerings: MyPackOffering[];
@@ -48,7 +55,9 @@ export function useMyPackPairings(
       return;
     }
     let cancelled = false;
-    fetchMyPackOfferings(code, term)
+    const key = `${code}|${term}`;
+    setLoadingKey(key);
+    fetchMyPackOfferings(code, term, undefined, attempt > 0)
       .then((offerings) => {
         if (!cancelled && offerings) {
           setLoaded({ key: `${code}|${term}`, offerings });
@@ -56,17 +65,21 @@ export function useMyPackPairings(
       })
       .catch((error: unknown) => {
         AppLogger.warn("MyPack pairings unavailable for", code, error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingKey(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [code, term]);
+  }, [code, term, attempt]);
 
-  return useMemo(
+  const paired = useMemo(
     () =>
       loaded && loaded.key === `${code}|${term}`
         ? applyOfferings(sections, loaded.offerings)
         : sections,
     [sections, loaded, code, term],
   );
+  return { sections: paired, loading: loadingKey === `${code}|${term}`, retry };
 }

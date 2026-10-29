@@ -7,7 +7,14 @@ import type { Element as DomHandlerElement, Text } from "domhandler";
 import { TermIdByName } from "../../generated/catalogs/termIds";
 import { AppLogger } from "../logger";
 
+export type OfferingMetadata = Pick<
+  CourseData,
+  "title" | "description" | "units" | "prerequisite"
+>;
+
 export interface CourseSection {
+  topic?: string;
+  offering?: OfferingMetadata;
   id: string;
   section: string;
   component: string;
@@ -67,6 +74,10 @@ function ParseCourseElement(
   const description = courseSection.find("p").first().text().trim();
   const prerequisite = courseSection.find("p").eq(1).text().trim();
   const sections: CourseSection[] = [];
+  const headers = courseSection.find("table.section-table thead th").toArray();
+  const topicColumn = headers.findIndex(
+    (header) => $(header).text().trim().toLowerCase() === "topic",
+  );
   // NC State often omits <tbody>; rows sit directly under <table> after <thead>/<tfoot>.
   courseSection
     .find("table.section-table tr")
@@ -139,6 +150,16 @@ function ParseCourseElement(
           ? notes_clean.replace(/^\s*<br>|<\/br>$/g, "")
           : null;
         sections.push({
+          topic:
+            (topicColumn >= 0
+              ? $cells.eq(topicColumn).text()
+              : headers.length === 0 && $cells.length >= 10
+                ? $cells.eq(8).text()
+                : ""
+            )
+              .replace(/\s+/g, " ")
+              .trim() || undefined,
+          offering: { title, description, units, prerequisite },
           id: `${section}-${classNumber}`,
           section,
           component,
@@ -219,14 +240,14 @@ export function formCourseURL(
     AppLogger.error("Unknown term", { term });
     return null;
   }
-  const parsedCatalogNum = catalog_num ? parseInt(catalog_num, 10) : 0;
-  if (Number.isNaN(parsedCatalogNum)) {
+  const parsedCatalogNum = catalog_num ? catalog_num.trim().toUpperCase() : "0";
+  if (!/^\d+[A-Z]?$/.test(parsedCatalogNum)) {
     AppLogger.error("Invalid catalog number", { catalog_num });
     return null;
   }
   const formData = new URLSearchParams();
   formData.append("term", term_id);
-  formData.append("subject", course_abr);
+  formData.append("subject", course_abr.split(" - ")[0]!.trim().toUpperCase());
   const inequality = catalog_num ? "=" : ">=";
   formData.append("course-inequality", inequality);
   formData.append("course-number", parsedCatalogNum.toString());

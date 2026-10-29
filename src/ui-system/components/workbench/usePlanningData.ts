@@ -125,10 +125,12 @@ export function usePlanningData(): PlanningData {
 
   useEffect(() => {
     let cancelled = false;
+    let reloadVersion = 0;
     const refreshFromStorage = () => {
+      const version = ++reloadVersion;
       reload()
         .then((loaded) => {
-          if (!cancelled) {
+          if (!cancelled && version === reloadVersion) {
             setAudits(loaded.audits);
             setChoices(loaded.choices);
             setPlannerTerms(loaded.terms);

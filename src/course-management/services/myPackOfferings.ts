@@ -46,7 +46,18 @@ export function reduceOfferings(
   const offerings: MyPackOffering[] = [];
   for (const row of rows) {
     const payload = row.add_to_cart_data?.[0];
-    if (row.classs?.replace(/\s+/g, " ").trim() !== code || !payload) {
+    if (
+      row.classs?.replace(/\s+/g, " ").trim() !== code ||
+      !payload ||
+      !payload.crse_id ||
+      !payload.class_nbr ||
+      !payload.catalog_nbr ||
+      payload.catalog_nbr !== code.split(" ")[1] ||
+      !payload.course_career ||
+      !payload.session_code ||
+      !payload.unt_taken ||
+      !payload.grading_basis
+    ) {
       continue;
     }
     const enroll = payload.class_nbr || row.enroll_class_nbr;
@@ -82,6 +93,7 @@ export function fetchMyPackOfferings(
   courseCode: string,
   term: string,
   location: Pick<Location, "hostname" | "pathname"> = window.location,
+  force = false,
 ): Promise<MyPackOffering[] | null> {
   const base = peopleSoftScriptBase(location);
   const strm = TermIdByName[term];
@@ -97,7 +109,7 @@ export function fetchMyPackOfferings(
   const request = (async () => {
     const hash = await generateCacheKey(key);
     const cached = await getGenericCache(MY_PACK_OFFERINGS_CACHE, hash);
-    if (cached) {
+    if (cached && !force) {
       return cached.combinedData as MyPackOffering[];
     }
     // Searching another term means switching MyPack's session to it, and
@@ -183,7 +195,7 @@ function groupFromOfferings(
     // A copy, so the fallback grouping's lecture keeps its own meetings.
     lecture: {
       ...lecture,
-      course_id: lecture.course_id ?? offerings[0]!.payload.crse_id,
+      course_id: offerings[0]!.payload.crse_id,
     },
     labs: resolve(varying),
     cartPayloads,

@@ -24,8 +24,6 @@ type PlannerPreviewRailProps = {
   };
   /** Draw these instead of every cached cart/enrolled block (e.g. one term's). */
   backgroundEvents?: ScheduleEvent[];
-  /** Replaces the hint shown while no section is pinned. */
-  emptyDescription?: string;
 };
 
 const normalizeRichText = (value: string | null | undefined): string | null => {
@@ -45,7 +43,6 @@ export function PlannerPreviewRail({
   isOpen: _isOpen,
   stagingOptions,
   backgroundEvents,
-  emptyDescription,
 }: PlannerPreviewRailProps) {
   const selectedSection = selectedPreview?.section;
   const calendarEvents = backgroundEvents ?? stagingOptions?.calendarEvents;
@@ -55,25 +52,32 @@ export function PlannerPreviewRail({
     [selectedSection?.notes],
   );
   const selectedRequisites = useMemo(
-    () => normalizeRichText(selectedSection?.requisites),
-    [selectedSection?.requisites],
+    () =>
+      normalizeRichText(
+        selectedSection?.requisites ??
+          selectedSection?.offering?.prerequisite ??
+          selectedSection?.courseData?.prerequisite,
+      ),
+    [
+      selectedSection?.requisites,
+      selectedSection?.offering?.prerequisite,
+      selectedSection?.courseData?.prerequisite,
+    ],
   );
 
   return (
     <section className="flex min-w-0 flex-col gap-4 text-sm text-card-foreground">
-      <header className="flex flex-col gap-2">
-        <CardTitle className="text-base font-semibold">
-          {selectedPreview ? "Selected Section" : "Calendar"}
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {selectedPreview
-            ? "Schedule, class notes, and prerequisites for the pinned section (grades and instructor stay on each row card)."
-            : (emptyDescription ??
-              (stagingOptions
-                ? "Select a row to pin schedule context, notes, and prerequisites here."
-                : "Choose a section row to pin schedule, notes, and prerequisites while you browse."))}
-        </p>
-      </header>
+      {selectedPreview ? (
+        <header className="flex flex-col gap-2">
+          <CardTitle className="text-base font-semibold">
+            Selected Section
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Schedule, class notes, and prerequisites for the pinned section
+            (grades and instructor stay on each row card).
+          </p>
+        </header>
+      ) : null}
       <div className="flex min-w-0 flex-col gap-4">
         {selectedPreview ? (
           <div className="min-w-0 rounded-xl border border-border bg-background/55 p-3 sm:p-4">
@@ -88,6 +92,17 @@ export function PlannerPreviewRail({
               />
             </div>
             <ScheduleCalendarLegend className="mt-2 px-0.5" />
+            {selectedSection?.topic ? (
+              <p className="mt-3 whitespace-normal break-words">
+                Topic: {selectedSection.topic}
+              </p>
+            ) : null}
+            {selectedSection?.courseData?.description ? (
+              <p className="mt-3 whitespace-normal break-words">
+                {selectedSection.offering?.description ??
+                  selectedSection.courseData.description}
+              </p>
+            ) : null}
 
             {selectedNotes ? (
               <div className="mt-4 flex flex-col gap-1 rounded-lg border border-border/60 bg-background/45 p-3">
@@ -109,14 +124,6 @@ export function PlannerPreviewRail({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <div>
-              <div className="text-sm font-semibold">Schedule Preview</div>
-              <p className="text-sm text-muted-foreground">
-                {stagingOptions
-                  ? "Sample schedule for this preview."
-                  : "Live context from your current schedule."}
-              </p>
-            </div>
             <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
               <CalendarView
                 selectedSection={selectedSection}

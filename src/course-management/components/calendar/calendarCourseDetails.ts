@@ -24,7 +24,8 @@ export function courseDetailsFromSection(
   return {
     code: section.courseData?.code ?? "",
     term: semesterOfTermName(section.term) ?? undefined,
-    title: section.courseData?.title,
+    title: section.offering?.title ?? section.courseData?.title,
+    topic: section.topic,
     section: section.section,
     classNumber: section.classNumber,
     component: section.component,

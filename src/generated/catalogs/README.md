@@ -1,49 +1,27 @@
-# Generated Catalog Data
+# Generated catalog data
 
-This folder contains generated/static catalog data used by planner search:
+Course search uses course-search/catalog.json as its canonical bundled snapshot. catalog.ts supplies typed access; departmentCourses.typed.ts and subjectSearchValues.ts are derived compatibility views. Other GEP, degree-plan, and term datasets remain separate.
 
-- `course-search/departmentCourses.typed.ts`
-- `course-search/courseDescriptions.json`
-- `gep-search/gepCourses.typed.ts`
-- `major-plan-search/majorPlans.ts`
-- `major-plan-search/minorPlans.ts`
-- `subjectSearchValues.ts`
-- `termIds.ts`
+## Refresh and release
 
-These files are intentionally separated from feature code because they are large
-reference datasets, not hand-authored UI or domain logic.
+- Run npm run catalog:refresh to collect every subject page from https://catalog.ncsu.edu/course-descriptions/.
+- Review outputs/catalog-refresh-report.json and the generated diff. The collector updates codes, titles, descriptions and subjects, preserves exact-code legacy IDs, and retains historical entries. No IDs are inferred from titles or renumbering.
+- Run npm run catalog:check and npm run test:catalog for offline validation.
+- Run npm run catalog:verify-live to verify against a fresh complete collection without changing the bundle. Production builds and packaging require this check.
+- Run npm run build for normal offline development builds.
 
-Regeneration source and commands should be documented here when the catalog
-refresh process is automated. Until then, keep edits focused and review changes
-as generated-data updates rather than feature refactors.
+Collection uses four concurrent requests, three attempts per page, and 30-second timeouts. It validates every heading and title, rejects conflicting primary listings, and publishes the single artifact by rename only after validation. A disappeared subject page blocks refresh pending source investigation. Sources, hashes, edition and retrieval time remain in the artifact; they are never included in search text. Metadata comparisons ignore retrieval timestamps and page hashes.
 
-## Course descriptions
+The catalog lists courses, not term offerings. Missing registration IDs do not block discovery, public sections, or previews. Newly discovered courses require exact MyPack cart payloads before cart actions become available. Existing IDs remain explicitly legacy metadata. Historical entries display “Not in current catalog” and stay searchable. Wildcard historical placeholders cannot be submitted as exact course searches.
 
-Run `node scripts/collect-course-descriptions.mjs` with Node 24 or later to
-collect descriptions from https://catalog.ncsu.edu/course-descriptions/.
-The collector discovers subject links, fetches at most four pages concurrently,
-and joins normalized course codes to the existing department catalog. It never
-changes course IDs or titles. Cross-listed descriptions are assigned to each code.
+Search stays local and deterministic, including code aliases and title/description ranking. The refresh has no remote runtime service or AI dependency. Special-topic section-title search is not included.
 
-The generated file records retrieval time, source URLs, and unmatched codes.
-Unmatched courses remain searchable by code and title. A failed fetch or invalid
-page structure aborts publication and preserves the previous dataset. The initial
-collection matched 7,222 of 7,677 entries; missing descriptions include placeholders
-and courses absent from the current public catalog. The snapshot does not establish
-whether a course is offered in the selected term; section lookup does that.
+## Verification
 
-Run `node --test scripts/collect-course-descriptions.check.mjs` to check collection
-and failure handling. The description snapshot ships with the extension; typing
-does not contact the catalog or an AI service.
+Use /planner-staging.html?course-search for the actual Course Search component with synthetic section responses. Smoke checks live in tests/smoke/course-search.smoke.ts. Keep raw catalog downloads and audit evidence under outputs, outside extension bundles. An authenticated read-only check can validate MyPack payload retrieval; actual cart changes require a separate intentional verification action.
 
-Numbered queries recognize subject names and prefixes (for example `chem 101`
-and `comp sci 246`) and only match course numbers, not numbers mentioned in
-descriptions. Topic queries search titles first, then descriptions.
+## Recover registrar IDs
 
-For the real Course Search component with synthetic section responses, open
-`/planner-staging.html?course-search` using the staging dev server. Interaction
-coverage is in `tests/smoke/course-search.smoke.ts`.
-# Static course search shortcuts
+Run `node scripts/fetch-registrar-ids.mjs` to query the registrar public course directory for subjects containing unresolved courses. It uses four concurrent requests and saves raw responses plus a match report under `outputs/registrar-ids/`. Existing response files are reused; remove those specific cached evidence files before requesting a fresh lookup.
 
-Course search uses locally bundled catalog text, with no embedding model or inference service. Exact course codes and subject/number queries take priority. Explicit shortcuts expand `OS` to `operating systems`, `AI` to `artificial intelligence`, `ML` to `machine learning`, `cs 246` to `CSC-246`, and `math 241` to `MA-241`. Complete titles rank ahead of longer title phrases, followed by title-word prefixes and description-word prefixes. Every query word is required; long title words retain the existing one-edit typo fallback.
-
+Review `matches.json`, then run `node scripts/import-registrar-ids.mjs`. The importer checks the response key, subject, full catalog number, and numeric course ID, and only fills absent IDs. It records `registrar-directory` provenance, source URL, and verification time. Catalog refresh preserves this provenance. A directory ID does not replace the exact MyPack payload required for the newly recovered courses' cart actions.

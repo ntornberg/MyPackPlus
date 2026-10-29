@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import type {
   NeedCourse,
   RequirementNeed,
+  RequirementAlternative,
 } from "../../../degree-planning/services/auditRequirements";
 import {
   stripLeadingZeros,
@@ -70,6 +71,7 @@ export type RequirementTreeEntry = {
   courses: readonly RequiredCourse[];
   /** What the audit still marks unmet; only known for a live audit. */
   needs?: readonly RequirementNeed[];
+  alternatives?: readonly RequirementAlternative[];
 };
 
 export type CourseRowModel = {
@@ -816,14 +818,36 @@ function RequirementRow({
   onToggleCourse,
   renderSections,
   onOpen,
+  showAlternatives,
 }: {
   model: RequirementModel;
   expandedCourses: Set<string>;
   onToggleCourse: (id: string) => void;
   renderSections: (course: RequiredCourse) => ReactNode;
   onOpen?: (requirementId: string) => void;
+  showAlternatives: boolean;
 }) {
-  const { entry, progress, courses, finished } = model;
+  const { entry, progress, finished } = model;
+  const alternativeCodes = new Set(
+    entry.alternatives?.flatMap((alternative) =>
+      alternative.courses.map((course) =>
+        plannerCourseCode(course.course_abr, course.catalog_num),
+      ),
+    ),
+  );
+  const neededCodes = new Set(
+    entry.needs?.flatMap((need) =>
+      need.courses.map((course) =>
+        plannerCourseCode(course.course_abr, course.catalog_num),
+      ),
+    ),
+  );
+  const courses = model.courses.filter(
+    (row) =>
+      !isNeeded(row) ||
+      !alternativeCodes.has(rowCode(row)) ||
+      neededCodes.has(rowCode(row)),
+  );
   const meta = STATUS_META[progress.status];
   const StatusIcon = meta.icon;
   const needs = progress.status === "complete" ? [] : (entry.needs ?? []);
@@ -832,6 +856,8 @@ function RequirementRow({
       ? (totalLeft(needs) ?? meta.label)
       : meta.label;
   const [showFinished, setShowFinished] = useState(false);
+  // A closed group renders only its summary; long option lists cost every render.
+  const [isOpen, setIsOpen] = useState(false);
   // A group left open while a new search deferred it loads right away.
   const detailsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -858,9 +884,9 @@ function RequirementRow({
       ref={detailsRef}
       className="plan-req-disclosure overflow-hidden rounded-lg border border-border bg-card/50 shadow-sm"
       onToggle={(event) => {
-        if (event.currentTarget.open && model.deferred) {
-          onOpen?.(entry.requirementId);
-        }
+        if (event.target !== event.currentTarget) return;
+        setIsOpen(event.currentTarget.open);
+        if (event.currentTarget.open) onOpen?.(entry.requirementId);
       }}
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
@@ -903,7 +929,7 @@ function RequirementRow({
           ) : model.loading ? (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="size-3 animate-spin" aria-hidden />
-              Loading sections…
+              Loading choices and sections…
             </span>
           ) : model.deferred ? (
             <Badge variant="outline" className="font-normal">
@@ -912,153 +938,207 @@ function RequirementRow({
           ) : null}
         </span>
       </summary>
-      <div className="border-t border-border">
-        {met.map((part) => (
-          <div
-            key={`met:${part.name}`}
-            className="flex items-center gap-2 border-t border-border bg-emerald-500/5 px-4 py-2 text-xs first:border-t-0"
-          >
-            <span className="size-3.5 shrink-0" aria-hidden />
-            {part.done ? (
-              <CheckCircle2
-                className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400"
-                aria-label="Done"
-              />
-            ) : (
-              <CircleDot
-                className="size-3 shrink-0 text-primary"
-                aria-label="In progress"
-              />
-            )}
-            <span className="min-w-0 flex-1">
-              <span className="font-medium text-foreground">{part.name}</span>
-              <span className="text-muted-foreground">
-                {part.done ? " · done with " : " · filled by "}
-                {part.rows
-                  .map(
-                    (row) =>
-                      `${row.course.course_abr} ${stripLeadingZeros(row.course.catalog_num)}`,
-                  )
-                  .join(", ")}
-              </span>
-            </span>
-          </div>
-        ))}
-        {sections ? (
-          sections.map(({ need, rows }, index) => {
-            const open = openNeeds.has(index);
-            return (
-              <Fragment key={`${need?.name ?? "other"}:${index}`}>
-                <button
-                  type="button"
-                  onClick={() => toggleNeed(index)}
-                  aria-expanded={open}
-                  className="flex w-full items-center gap-2 border-t border-border bg-amber-500/5 px-4 py-2 text-left text-xs transition-colors first:border-t-0 hover:bg-amber-500/10"
-                >
-                  <ChevronRight
-                    className={cn(
-                      "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
-                      open && "rotate-90",
+      {isOpen ? (
+        <div className="border-t border-border">
+          {showAlternatives
+            ? entry.alternatives?.map((alternative) => {
+                const codes = new Set(
+                  alternative.courses.map((course) =>
+                    plannerCourseCode(course.course_abr, course.catalog_num),
+                  ),
+                );
+                const rows = model.courses.filter(
+                  (row) =>
+                    codes.has(rowCode(row)) &&
+                    (isNeeded(row) ||
+                      row.audit?.elsewhere ||
+                      row.audit?.fromPlanner),
+                );
+                return (
+                  <div key={alternative.key} className="border-b border-border">
+                    <p className="bg-muted/50 px-4 py-2 text-xs font-medium">
+                      Approved alternatives · {alternative.name}
+                    </p>
+                    {alternative.error ? (
+                      <p
+                        role="status"
+                        className="px-4 py-2 text-xs text-destructive"
+                      >
+                        Approved choices couldn&apos;t load. Use Retry failed
+                        lists above.
+                      </p>
+                    ) : null}
+                    {rows.length ? (
+                      <OptionList
+                        rows={rows}
+                        label={alternative.name}
+                        idPrefix={`${entry.requirementKey}|alternative|${alternative.key}`}
+                        expandedCourses={expandedCourses}
+                        onToggleCourse={onToggleCourse}
+                        renderSections={renderSections}
+                      />
+                    ) : (
+                      <p className="px-4 py-2 text-xs text-muted-foreground">
+                        {alternative.error
+                          ? "Approved alternatives are unavailable."
+                          : model.loading || model.deferred
+                            ? "Approved alternatives have not finished loading."
+                            : alternative.courses.length
+                              ? "No options match the current filters."
+                              : "No approved alternatives available from MyPack."}
+                      </p>
                     )}
-                    aria-hidden
-                  />
-                  {need ? (
-                    <>
+                  </div>
+                );
+              })
+            : null}
+          {met.map((part) => (
+            <div
+              key={`met:${part.name}`}
+              className="flex items-center gap-2 border-t border-border bg-emerald-500/5 px-4 py-2 text-xs first:border-t-0"
+            >
+              <span className="size-3.5 shrink-0" aria-hidden />
+              {part.done ? (
+                <CheckCircle2
+                  className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400"
+                  aria-label="Done"
+                />
+              ) : (
+                <CircleDot
+                  className="size-3 shrink-0 text-primary"
+                  aria-label="In progress"
+                />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="font-medium text-foreground">{part.name}</span>
+                <span className="text-muted-foreground">
+                  {part.done ? " · done with " : " · filled by "}
+                  {part.rows
+                    .map(
+                      (row) =>
+                        `${row.course.course_abr} ${stripLeadingZeros(row.course.catalog_num)}`,
+                    )
+                    .join(", ")}
+                </span>
+              </span>
+            </div>
+          ))}
+          {sections ? (
+            sections.map(({ need, rows }, index) => {
+              const open = openNeeds.has(index);
+              return (
+                <Fragment key={`${need?.name ?? "other"}:${index}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleNeed(index)}
+                    aria-expanded={open}
+                    className="flex w-full items-center gap-2 border-t border-border bg-amber-500/5 px-4 py-2 text-left text-xs transition-colors first:border-t-0 hover:bg-amber-500/10"
+                  >
+                    <ChevronRight
+                      className={cn(
+                        "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+                        open && "rotate-90",
+                      )}
+                      aria-hidden
+                    />
+                    {need ? (
+                      <>
+                        <Circle
+                          className="size-3 shrink-0 text-amber-600 dark:text-amber-400"
+                          aria-hidden
+                        />
+                        <NeedLabel need={need} />
+                      </>
+                    ) : (
+                      <span className="min-w-0 flex-1 text-muted-foreground">
+                        Other courses in this group
+                      </span>
+                    )}
+                  </button>
+                  {open && need && rows.length === 0 ? (
+                    <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+                      {need.courses.length > 0
+                        ? "No options match the current filters."
+                        : "MyPack didn't list options for this one."}
+                    </p>
+                  ) : null}
+                  {open ? (
+                    <OptionList
+                      rows={rows}
+                      label={need?.name ?? entry.requirementKey}
+                      idPrefix={`${entry.requirementKey}|${index}`}
+                      units={choiceUnits(need)}
+                      expandedCourses={expandedCourses}
+                      onToggleCourse={onToggleCourse}
+                      renderSections={renderSections}
+                    />
+                  ) : null}
+                </Fragment>
+              );
+            })
+          ) : (
+            <>
+              {needs.length > 0 ? (
+                <div className="flex flex-col gap-1 bg-amber-500/5 px-4 py-2 text-xs">
+                  <span className="font-medium text-amber-700 dark:text-amber-300">
+                    Still needed to finish
+                  </span>
+                  {needs.map((need, index) => (
+                    <div
+                      key={`${need.name}:${index}`}
+                      className="flex items-start gap-2"
+                    >
                       <Circle
-                        className="size-3 shrink-0 text-amber-600 dark:text-amber-400"
+                        className="mt-0.5 size-3 shrink-0 text-amber-600 dark:text-amber-400"
                         aria-hidden
                       />
                       <NeedLabel need={need} />
-                    </>
-                  ) : (
-                    <span className="min-w-0 flex-1 text-muted-foreground">
-                      Other courses in this group
-                    </span>
-                  )}
-                </button>
-                {open && need && rows.length === 0 ? (
-                  <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-                    {need.courses.length > 0
-                      ? "No options match the current filters."
-                      : "MyPack didn't list options for this one."}
-                  </p>
-                ) : null}
-                {open ? (
-                  <OptionList
-                    rows={rows}
-                    label={need?.name ?? entry.requirementKey}
-                    idPrefix={`${entry.requirementKey}|${index}`}
-                    units={choiceUnits(need)}
-                    expandedCourses={expandedCourses}
-                    onToggleCourse={onToggleCourse}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {needs.length > 0 && courses.length > 0 ? (
+                <div className="border-t border-border px-4 py-1.5 text-xs text-muted-foreground">
+                  Courses that can count toward it
+                </div>
+              ) : null}
+              <OptionList
+                rows={courses}
+                label={entry.requirementKey}
+                idPrefix={entry.requirementKey}
+                expandedCourses={expandedCourses}
+                onToggleCourse={onToggleCourse}
+                renderSections={renderSections}
+              />
+            </>
+          )}
+          {showFinished
+            ? finished.map((row) => {
+                const id = `${entry.requirementKey}|${row.id}`;
+                return (
+                  <CourseRow
+                    key={id}
+                    row={row}
+                    expanded={expandedCourses.has(id)}
+                    onToggle={() => onToggleCourse(id)}
                     renderSections={renderSections}
                   />
-                ) : null}
-              </Fragment>
-            );
-          })
-        ) : (
-          <>
-            {needs.length > 0 ? (
-              <div className="flex flex-col gap-1 bg-amber-500/5 px-4 py-2 text-xs">
-                <span className="font-medium text-amber-700 dark:text-amber-300">
-                  Still needed to finish
-                </span>
-                {needs.map((need, index) => (
-                  <div
-                    key={`${need.name}:${index}`}
-                    className="flex items-start gap-2"
-                  >
-                    <Circle
-                      className="mt-0.5 size-3 shrink-0 text-amber-600 dark:text-amber-400"
-                      aria-hidden
-                    />
-                    <NeedLabel need={need} />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {needs.length > 0 && courses.length > 0 ? (
-              <div className="border-t border-border px-4 py-1.5 text-xs text-muted-foreground">
-                Courses that can count toward it
-              </div>
-            ) : null}
-            <OptionList
-              rows={courses}
-              label={entry.requirementKey}
-              idPrefix={entry.requirementKey}
-              expandedCourses={expandedCourses}
-              onToggleCourse={onToggleCourse}
-              renderSections={renderSections}
-            />
-          </>
-        )}
-        {showFinished
-          ? finished.map((row) => {
-              const id = `${entry.requirementKey}|${row.id}`;
-              return (
-                <CourseRow
-                  key={id}
-                  row={row}
-                  expanded={expandedCourses.has(id)}
-                  onToggle={() => onToggleCourse(id)}
-                  renderSections={renderSections}
-                />
-              );
-            })
-          : null}
-        {finished.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setShowFinished((shown) => !shown)}
-            className="w-full border-t border-border px-4 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50"
-          >
-            {showFinished
-              ? "Hide completed and enrolled"
-              : `Show ${finished.length} completed or enrolled`}
-          </button>
-        ) : null}
-      </div>
+                );
+              })
+            : null}
+          {finished.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowFinished((shown) => !shown)}
+              className="w-full border-t border-border px-4 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50"
+            >
+              {showFinished
+                ? "Hide completed and enrolled"
+                : `Show ${finished.length} completed or enrolled`}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </details>
   );
 }
@@ -1335,6 +1415,8 @@ export function RequirementTree({
   onFilterChange,
   renderSections,
   deferredRequirements,
+  unresolvedRequirements,
+  searchedCourseKeys,
   loadingRequirements,
   onLoadRequirement,
 }: {
@@ -1358,6 +1440,8 @@ export function RequirementTree({
   renderSections: (course: RequiredCourse) => ReactNode;
   /** Requirement ids whose options weren't searched yet. */
   deferredRequirements?: ReadonlySet<string>;
+  unresolvedRequirements?: ReadonlySet<string>;
+  searchedCourseKeys?: ReadonlySet<string>;
   loadingRequirements?: ReadonlySet<string>;
   /** Searches a deferred requirement's options, called when it's opened. */
   onLoadRequirement?: (requirementId: string) => void;
@@ -1403,7 +1487,9 @@ export function RequirementTree({
               progress.courses.get(courseKeyOf(course)) ?? null,
               openCourses,
               scheduleBackground,
-              searched,
+              searchedCourseKeys
+                ? searchedCourseKeys.has(courseKeyOf(course))
+                : searched,
             ),
           ),
           ...progress.extraCourses.map((line, index) =>
@@ -1413,7 +1499,9 @@ export function RequirementTree({
               auditLineState(line),
               openCourses,
               scheduleBackground,
-              searched,
+              searchedCourseKeys
+                ? searchedCourseKeys.has(courseKeyOf(auditLineCourse(line)))
+                : searched,
             ),
           ),
         ]
@@ -1438,6 +1526,7 @@ export function RequirementTree({
       openCourses,
       scheduleBackground,
       sectionsSearched,
+      searchedCourseKeys,
       sectionsLoading,
       deferredRequirements,
       loadingRequirements,
@@ -1487,9 +1576,11 @@ export function RequirementTree({
         .filter(
           (model) =>
             model.courses.length > 0 ||
+            model.deferred ||
+            unresolvedRequirements?.has(model.entry.requirementId) ||
             (filter === "needed" && model.finished.length > 0),
         ),
-    [models, filter, hideNoSections],
+    [models, filter, hideNoSections, unresolvedRequirements],
   );
 
   const known = models.filter((m) => m.progress.status !== "unknown");
@@ -1573,6 +1664,7 @@ export function RequirementTree({
               onToggleCourse={toggleCourse}
               renderSections={renderSections}
               onOpen={onLoadRequirement}
+              showAlternatives={filter !== "needed"}
             />
           ))}
         </div>
@@ -1581,7 +1673,13 @@ export function RequirementTree({
           {filter === "fits"
             ? "No remaining courses have a section that fits your schedule."
             : filter === "needed" && hasAudit
-              ? "Every requirement in this plan is complete."
+              ? known.some(
+                  (model) =>
+                    model.progress.status !== "complete" &&
+                    model.progress.status !== "enrolled",
+                )
+                ? "No courses match the current filters. Some requirements still need courses."
+                : "Every requirement in this plan is complete."
               : "No courses match the current filters."}
         </p>
       )}

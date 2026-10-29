@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { CATALOG_REVISION } from "../../../generated/catalogs/course-search/catalog";
 import { GRADE_DATA_CACHE_VERSION } from "../../cache/courseRetrieval";
 import { fetchPlannerCourseSections } from "../../services/api/planner-search/dataService";
 import type { MergedCourseData } from "../../types/section";
@@ -64,8 +65,8 @@ export function useCourseSections(
   load = fetchPlannerCourseSections,
 ) {
   const key =
-    subject && catalogNum && id && term
-      ? `mypack-course-sections-v1:${GRADE_DATA_CACHE_VERSION}:${term}\u001f${subject}\u001f${id}`
+    subject && catalogNum && /^\d+[A-Za-z]?$/.test(catalogNum) && term
+      ? `mypack-course-sections-v2:${CATALOG_REVISION}:${GRADE_DATA_CACHE_VERSION}:${term}\u001f${subject}\u001f${catalogNum}`
       : "";
   const [result, setResult] = useState<Result>(empty);
   const [attempt, setAttempt] = useState(0);
@@ -76,7 +77,7 @@ export function useCourseSections(
 
   useEffect(() => {
     let active = true;
-    if (!key || !subject || !catalogNum || !id || !term) {
+    if (!key || !subject || !catalogNum || !term) {
       setResult(empty);
       return;
     }

@@ -1,7 +1,5 @@
-import type {
-  RequiredCourse,
-  Requirement,
-} from "../../../../degree-planning/types/Plans";
+import type { Requirement } from "../../../../degree-planning/types/Plans";
+import { CATALOG_REVISION } from "../../../../generated/catalogs/course-search/catalog";
 import type {
   BatchDataRequestResponse,
   GradeData,
@@ -17,7 +15,9 @@ import {
   getGenericCacheMany,
   setGenericCache,
 } from "../../../cache/courseRetrieval";
+import type { CourseQuery } from "../../../types/courseQuery";
 import type { MergedCourseData } from "../../../types/section";
+import { REGISTRAR_COURSE_CACHE } from "../../sectionMetadata";
 import { fetchGradesBatchV2, v2ToBatchResponse } from "../gradesV2";
 
 import {
@@ -29,10 +29,10 @@ import {
  * Constants for cache namespaces
  */
 const CACHE_KEYS = {
-  OPEN_COURSES: "openCourses",
+  OPEN_COURSES: REGISTRAR_COURSE_CACHE,
   GRADE_PROF: "gradeProfData",
-  NULL_COURSES: "nullCourses", // Cache for courses that return no data
-  SEARCHED_SUBJECTS: "searchedSubjects", // Subjects whose open courses are all cached
+  NULL_COURSES: `nullCourses-v3-${CATALOG_REVISION}`, // Cache for courses that return no data
+  SEARCHED_SUBJECTS: `searchedSubjects-v3-${CATALOG_REVISION}`, // Subjects whose open courses are all cached
 };
 const OPEN_COURSES_CACHE_TTL_MS = 2 * 60 * 1000;
 
@@ -288,7 +288,7 @@ const inflightCourses = new Map<string, Promise<MergedCourseData | null>>();
 export function fetchPlannerCourseSections(
   courseAbr: string,
   catalogNum: string,
-  course_id: string,
+  course_id: string | undefined,
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
 ): Promise<MergedCourseData | null> {
@@ -311,7 +311,7 @@ export function fetchPlannerCourseSections(
 async function loadPlannerCourseSections(
   courseAbr: string,
   catalogNum: string,
-  course_id: string,
+  course_id: string | undefined,
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
 ): Promise<MergedCourseData | null> {
@@ -355,7 +355,7 @@ async function loadPlannerCourseSections(
   );
 
   // Define course object for API calls
-  const course: RequiredCourse = {
+  const course: CourseQuery = {
     course_abr: courseAbr,
     catalog_num: catalogNum,
     course_descrip: "",
@@ -396,13 +396,13 @@ async function loadPlannerCourseSections(
       AppLogger.error("No open courses data returned for", courseKey);
 
       // Cache null result to avoid future API calls
-      await setGenericCache(CACHE_KEYS.NULL_COURSES, {
-        [nullHashKey]: {
-          courseKey,
-          term,
-          reason: "API returned null",
+      await setGenericCache(
+        CACHE_KEYS.NULL_COURSES,
+        {
+          [nullHashKey]: { courseKey, term, reason: "API returned null" },
         },
-      });
+        OPEN_COURSES_CACHE_TTL_MS,
+      );
 
       onProgress?.(100, `No open courses data found for ${courseKey}`);
       return null;
@@ -439,7 +439,7 @@ async function loadPlannerCourseSections(
 
   // Merge data
   onProgress?.(90, `Merging data for ${courseKey}`);
-  const courseInfoMap: Record<string, RequiredCourse> = {
+  const courseInfoMap: Record<string, CourseQuery> = {
     [courseKey]: course,
   };
   const mergedData = mergeData(
@@ -459,13 +459,13 @@ async function loadPlannerCourseSections(
  * Batch processes multiple courses with separate caching phases for open courses and grade/professor data.
  * Caches partial results at granular keys to improve reuse across different searches.
  *
- * @param {RequiredCourse[]} courses Array of required courses to fetch data for
+ * @param {CourseQuery[]} courses Array of required courses to fetch data for
  * @param {string} term Academic term identifier
  * @param {(progress: number, statusMessage?: string) => void} [onProgress] Optional callback for tracking progress messages and percentages
  * @returns {Promise<Record<string, MergedCourseData>>} Map of course key (e.g., "CSC 316") to merged course data
  */
 export async function batchFetchCoursesData(
-  courses: RequiredCourse[],
+  courses: CourseQuery[],
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
   onError?: (message: string) => void,
@@ -484,9 +484,9 @@ export async function batchFetchCoursesData(
   onProgress?.(10, "Checking open courses cache");
 
   // Generate cache keys and prepare lookup data
-  const courseKeyMapping: Record<string, RequiredCourse> = {}; // Used to find the course id when merging the data
+  const courseKeyMapping: Record<string, CourseQuery> = {}; // Used to find the course id when merging the data
   const openCoursesCache: Record<string, CourseData> = {}; // Used to store the data that is already in cache
-  const openCoursesToFetch: Record<string, RequiredCourse> = {}; // Used to store the data that needs to be fetched from the API
+  const openCoursesToFetch: Record<string, CourseQuery> = {}; // Used to store the data that needs to be fetched from the API
   const openCoursesHashKeys: Record<string, string> = {}; // Used when storing the data in cache that needed to be fetched
 
   // Compute every course's open-courses and null-course hash keys up front
@@ -653,7 +653,7 @@ export async function fetchCourseSearchData(
   onProgress?.(10, "Initializing course search");
 
   // Collect all courses from requirements
-  const allCourses: RequiredCourse[] = (
+  const allCourses: CourseQuery[] = (
     Object.values(requirements) as Requirement[]
   ).flatMap((rq) => rq.courses);
 
@@ -694,7 +694,7 @@ export async function fetchCourseSearchData(
 }
 
 export async function fetchGEPCourseData(
-  courses: RequiredCourse[],
+  courses: CourseQuery[],
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
 ): Promise<Record<string, MergedCourseData> | null> {

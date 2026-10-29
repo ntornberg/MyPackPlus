@@ -24,7 +24,6 @@
     "prob": "MA-421",
     "analysis 1": "MA-425",
     "real analysis 2": "MA-426",
-    "analysis 2": "MA-426",
     "liberal arts math": "MA-103",
     "math for non majors": "MA-103",
     "intro stats": "ST-311",
@@ -75,18 +74,41 @@
     "pchem": "CH-331",
     "phys chem": "CH-331",
     "green chem": "CH-335",
-    "physics 1": ["PY-205", "PY-201", "PY-211"],
-    "phys 1": ["PY-205", "PY-201", "PY-211"],
-    "phys i": ["PY-205", "PY-201", "PY-211"],
-    "intro physics": ["PY-205", "PY-201", "PY-211"],
-    "physics 2": ["PY-208", "PY-202", "PY-212"],
-    "phys 2": ["PY-208", "PY-202", "PY-212"],
+    "physics 1": [
+      "PY-205",
+      "PY-201",
+      "PY-211"
+    ],
+    "phys 1": [
+      "PY-205",
+      "PY-201",
+      "PY-211"
+    ],
+    "phys i": [
+      "PY-205",
+      "PY-201",
+      "PY-211"
+    ],
+    "intro physics": [
+      "PY-205",
+      "PY-201",
+      "PY-211"
+    ],
+    "physics 2": [
+      "PY-208",
+      "PY-202",
+      "PY-212"
+    ],
+    "phys 2": [
+      "PY-208",
+      "PY-202",
+      "PY-212"
+    ],
     "calc physics 1": "PY-205",
     "calc physics 2": "PY-208",
     "calculus based physics 2": "PY-208",
     "algebra physics": "PY-211",
     "mechanics of materials": "CE-225",
-    "digital logic": "ECE-212",
     "intro micro": "EC-201",
     "macro": "EC-202",
     "intro macro": "EC-202",

@@ -257,11 +257,18 @@ describe("syncPlanningData", () => {
       }
       return respond(JSON.stringify({ terms: [] }));
     });
+    const onProgress = vi.fn();
     const result = await syncPlanningData({
       location: portal,
       force: true,
       now: () => 3000,
+      onProgress,
     });
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        choices: { state: "failed", done: 2, total: 2 },
+      }),
+    );
     expect(result.status).toBe("failed");
     expect(result).toMatchObject({
       summary:

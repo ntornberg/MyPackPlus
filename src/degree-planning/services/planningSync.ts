@@ -20,7 +20,10 @@ import {
   storePlannerTerms,
   type PlannerTerm,
 } from "./packPlanner";
-import { loadRequirementChoices } from "./requirementChoices";
+import {
+  loadRequirementChoices,
+  requirementChoiceKeys,
+} from "./requirementChoices";
 
 /** chrome.storage key: when audits and Pack Planner were last fetched in full. */
 export const PLANNING_SYNCED_AT_KEY = "planningDataSyncedAt";
@@ -218,23 +221,32 @@ export function syncPlanningData({
     );
     if (force && audits.status === "fulfilled") {
       const choiceFailures = await runStep("choices", async (update) => {
-        update({ total: audits.value.length });
+        const total = audits.value.reduce(
+          (sum, audit) => sum + requirementChoiceKeys(audit).length,
+          0,
+        );
+        update({ total });
+        let done = 0;
         const errors: string[] = [];
-        for (const [index, audit] of audits.value.entries()) {
+        for (const audit of audits.value) {
           const choices = await loadRequirementChoices(audit, {
             force: true,
             location,
             now,
+            onProgress: (progress) => update({ done: done + progress.settled }),
           });
+          const keys = requirementChoiceKeys(audit);
           errors.push(
-            ...Object.values(choices.results).flatMap((result) =>
-              result.error ? [result.error] : [],
+            ...keys.flatMap((key) =>
+              choices.results[key]?.error ? [choices.results[key].error!] : [],
             ),
           );
-          update({ done: index + 1 });
+          done += keys.length;
+          update({ done });
         }
         return errors;
       });
+      if (choiceFailures.length) stepUpdater("choices")({ state: "failed" });
       failures.push(...choiceFailures);
     } else if (force) {
       stepUpdater("choices")({ state: "failed" });

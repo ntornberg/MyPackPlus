@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+
 import {
   PaginationControls,
   usePagination,
@@ -35,7 +37,7 @@ import {
 } from "../../utils/scheduleFitFilter";
 import { ToCartGroupedSectionCell } from "../cart/ToCartButtonCell";
 
-import { useMyPackPairings } from "./useMyPackPairings";
+import { useMyPackPairingsState } from "./useMyPackPairings";
 
 type GroupedRow = GroupedSections & { uniqueRowId: string };
 
@@ -256,7 +258,16 @@ export function CourseSectionsCardList({
   >({});
   const cart = useCartCoursesContext();
 
-  const pairedSections = useMyPackPairings(sections);
+  const {
+    sections: pairedSections,
+    loading: registrationLoading,
+    retry: retryRegistration,
+  } = useMyPackPairingsState(sections);
+  const missingRegistration = pairedSections.some(
+    (group) =>
+      group.lecture?.requiresExactCartPayload &&
+      !Object.keys(group.cartPayloads ?? {}).length,
+  );
   const processedRows = useMemo((): GroupedRow[] => {
     return pairedSections.flatMap<GroupedRow>((section, index) => {
       if (section.lecture) {
@@ -408,6 +419,23 @@ export function CourseSectionsCardList({
 
   return (
     <div ref={listTopRef} className="flex flex-col gap-3">
+      {missingRegistration ? (
+        <div
+          className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+          role="status"
+        >
+          <span>
+            {registrationLoading
+              ? "Loading registration details…"
+              : "Registration details unavailable. Open this term in MyPack to add these sections."}
+          </span>
+          {!registrationLoading ? (
+            <Button variant="ghost" size="sm" onClick={retryRegistration}>
+              Retry registration details
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <SectionCompareList
         isEmpty={filteredRows.length === 0}
         emptyMessage="No sections match the current filters for this course."

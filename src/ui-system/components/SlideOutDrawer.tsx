@@ -2,6 +2,7 @@ import {
   ChevronLeftIcon,
   GraduationCapIcon,
   MoonStarIcon,
+  Settings2Icon,
   SunMediumIcon,
   UserSearchIcon,
   XIcon,
@@ -23,6 +24,11 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -81,6 +87,7 @@ import {
   type PlannerNavigation,
 } from "./workbench/plannerNavigation";
 import { PlannerPreviewRail } from "./workbench/PlannerPreviewRail";
+import { SectionDensityToggle } from "./workbench/SectionDensityToggle";
 import { useOverlayPortalContainer } from "./workbench/useOverlayPortalContainer";
 import {
   type PlannerSectionPreview,
@@ -420,6 +427,7 @@ export default function SlideOutDrawer({
     mergeScheduleData(persisted?.scheduleData),
   );
   const [instructorLookupOpen, setInstructorLookupOpen] = useState(false);
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null);
   const portalContainer = useOverlayPortalContainer();
 
   const setScheduleTabData: TabUpdater<ScheduleData> = useCallback(
@@ -787,10 +795,6 @@ export default function SlideOutDrawer({
                       <div className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
                         MyPack+ Planner
                       </div>
-                      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                        Use Search to filter, then pick a row to pin the preview
-                        and compare sections side by side.
-                      </p>
                     </div>
 
                     <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
@@ -808,40 +812,109 @@ export default function SlideOutDrawer({
                         <UserSearchIcon />
                         <span className="max-sm:hidden">Instructors</span>
                       </Button>
-                      <Button
-                        asChild
-                        variant="outline"
-                        size="sm"
-                        className={plannerActionButtonClassName}
-                      >
-                        <a href="mailto:nicktornberg12@gmail.com?subject=Pack%20Planner%20Feedback">
-                          Report bug / Feedback
-                        </a>
-                      </Button>
-                      <ForceResetButton
-                        compact
-                        className={plannerActionButtonClassName}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        className={plannerActionButtonClassName}
-                        onClick={() =>
-                          setThemeMode((current) =>
-                            current === "dark" ? "light" : "dark",
-                          )
-                        }
-                        aria-label={`Switch to ${
-                          themeMode === "dark" ? "light" : "dark"
-                        } mode`}
-                      >
-                        {themeMode === "dark" ? (
-                          <SunMediumIcon />
-                        ) : (
-                          <MoonStarIcon />
-                        )}
-                      </Button>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            ref={settingsTriggerRef}
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            className={plannerActionButtonClassName}
+                            aria-label="Planner settings"
+                          >
+                            <Settings2Icon />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="end"
+                          container={portalContainer}
+                          onPointerDownOutside={(event) => {
+                            if (
+                              settingsTriggerRef.current &&
+                              event.detail.originalEvent
+                                .composedPath()
+                                .includes(settingsTriggerRef.current)
+                            ) {
+                              event.preventDefault();
+                            }
+                          }}
+                          className="space-y-4"
+                        >
+                          <div className="text-sm font-semibold">Settings</div>
+                          <SectionDensityToggle
+                            value={
+                              (
+                                selectedTab === "schedule"
+                                  ? scheduleData.compactSections
+                                  : selectedTab === "gep_search"
+                                    ? GepSearchData.compactSections
+                                    : selectedTab === "major_plan_search"
+                                      ? majorPlanSearchData.compactSections
+                                      : courseSearchData.compactSections
+                              )
+                                ? "compact"
+                                : "comfy"
+                            }
+                            onValueChange={(value) => {
+                              const compactSections = value === "compact";
+                              setCourseSearchData((prev) => ({
+                                ...prev,
+                                compactSections,
+                              }));
+                              setGepSearchData((prev) => ({
+                                ...prev,
+                                compactSections,
+                              }));
+                              setMajorPlanSearchData((prev) => ({
+                                ...prev,
+                                compactSections,
+                              }));
+                              setScheduleData((prev) => ({
+                                ...prev,
+                                compactSections,
+                              }));
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start gap-2 dark:border-border"
+                            onClick={() =>
+                              setThemeMode((current) =>
+                                current === "dark" ? "light" : "dark",
+                              )
+                            }
+                          >
+                            {themeMode === "dark" ? (
+                              <SunMediumIcon />
+                            ) : (
+                              <MoonStarIcon />
+                            )}
+                            {themeMode === "dark"
+                              ? "Switch to light mode"
+                              : "Switch to dark mode"}
+                          </Button>
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start dark:border-border"
+                          >
+                            <a href="mailto:nicktornberg12@gmail.com?subject=Pack%20Planner%20Feedback">
+                              Report bug / Feedback
+                            </a>
+                          </Button>
+                          <div className="space-y-2 border-t border-border pt-3">
+                            <p className="text-sm text-muted-foreground">
+                              Clears cached data, saved searches, and
+                              preferences, then reloads the page. Use this if
+                              MyPack Plus stops working.
+                            </p>
+                            <ForceResetButton className="dark:border-border" />
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <DialogClose asChild>

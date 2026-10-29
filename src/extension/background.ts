@@ -1,4 +1,8 @@
 import {
+  parseRegistrarSearch,
+  SEARCH_COURSES_MESSAGE,
+} from "../course-management/services/api/planner-search/searchService";
+import {
   fetchStatusWorkerStatusDirect,
   isStatusWorkerFetchMessage,
 } from "../user-experience/status/statusWorker";
@@ -64,14 +68,8 @@ function setupMessageListener() {
       return true;
     }
 
-    if (message.type === "fetchData") {
-      AppLogger.info(
-        "[Background] Fetching URL:",
-        message.url,
-        "with formData:",
-        message.formData,
-      );
-
+    if (message?.type === SEARCH_COURSES_MESSAGE) {
+      // Parsed here so the page never parses a whole subject's HTML itself.
       fetchWithTimeout(message.url, {
         method: "POST",
         headers: {
@@ -80,23 +78,21 @@ function setupMessageListener() {
         body: message.formData,
       })
         .then(async (res) => {
-          const data = await res.text();
           if (!res.ok) {
-            AppLogger.error(
-              `[Background] Fetch failed with status ${res.status}`,
-            );
             sendResponse({
               success: false,
               error: `HTTP ${res.status} ${res.statusText}`,
             });
             return;
           }
-          AppLogger.info(`[Background] Fetch response text for course:`, data);
-          sendResponse({ success: true, data });
+          sendResponse({
+            success: true,
+            courses: parseRegistrarSearch(await res.text()),
+          });
         })
         .catch((err) => {
-          AppLogger.error("[Background] Fetch error:", err);
-          sendResponse({ success: false, error: err.toString() });
+          AppLogger.error("[Background] Course search error:", err);
+          sendResponse({ success: false, error: String(err) });
         });
 
       return true;

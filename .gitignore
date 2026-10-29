@@ -11,8 +11,16 @@ node_modules
 dist
 dist-ssr
 dist.zip
+coverage/
+*.tsbuildinfo
 *.local
 *.local.json
+
+# Local environment variables (tracked environment files remain tracked)
+.env
+.env.*
+!.env.example
+!.env.*.example
 
 # Supabase local state and secrets
 supabase/.temp/
@@ -24,11 +32,16 @@ supabase/functions/.env
 playwright-report/
 test-results/
 
+# Local catalog audit snapshots and cart verification images
+/outputs/catalog-audit-*/
+/outputs/live-cart-*.jpg
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj

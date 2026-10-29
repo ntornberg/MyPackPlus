@@ -81,6 +81,20 @@ describe("reduceOfferings", () => {
 });
 
 describe("applyOfferings", () => {
+  it("replaces legacy IDs with the live identity while retaining exact-payload requirements", () => {
+    const lecture = {
+      ...section("2753", "001", "Lec"),
+      course_id: "stale",
+      requiresExactCartPayload: true,
+    };
+    const result = applyOfferings(
+      [{ lecture, labs: [] }],
+      [offering("2753", [])],
+    );
+    expect(result[0].lecture?.course_id).toBe("018990");
+    expect(result[0].lecture?.requiresExactCartPayload).toBe(true);
+    expect(result[0].cartPayloads?.[""].crse_id).toBe("018990");
+  });
   it("splits choices from sections that come with every choice (PY 202)", () => {
     const lecture = section("2753", "001", "Lec");
     const labs = [section("2754", "201", "Lab"), section("2755", "202", "Lab")];

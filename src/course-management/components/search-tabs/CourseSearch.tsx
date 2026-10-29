@@ -22,7 +22,6 @@ import {
   buildInstructorFilterOptions,
   groupRowSections,
 } from "../../../ui-system/components/workbench/sectionCompareUtils";
-import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import {
   CartCoursesContext,
   useCartCourses,
@@ -82,9 +81,9 @@ export default function CourseSearch({
     label: progressLabel,
     retry,
   } = useCourseSections(
-    courseSearchData.searchSubject,
-    courseSearchData.selectedCourseInfo?.catalogNum ?? null,
-    courseSearchData.selectedCourseInfo?.id,
+    selectedCourse?.subject ?? null,
+    selectedCourse?.catalogNum ?? null,
+    selectedCourse?.id,
     courseSearchData.selectedTerm,
     loadSections,
   );
@@ -92,7 +91,7 @@ export default function CourseSearch({
   previewCallback.current = onPreviewSectionChange;
   useEffect(() => {
     previewCallback.current(null);
-  }, [courseSearchData.selectedTerm, courseSearchData.selectedCourseInfo?.id]);
+  }, [courseSearchData.selectedTerm, courseSearchData.selectedCourseInfo?.code]);
 
   const handleTermChange = (value: string | null) =>
     setCourseSearchTabData({ selectedTerm: value, instructorFilter: null });
@@ -155,11 +154,11 @@ export default function CourseSearch({
         : isLoading
           ? "Loading sections…"
           : selectedCourse
-            ? "No sections found for this course and term."
+            ? selectedCourse.catalogNum ? "No sections found for this course and term." : "This is a course placeholder. Select a specific course to load sections."
             : "Find a course by code, title, or topic to see its sections.";
   const controlsPanel = (
     <PlannerPanel
-      title="Course search"
+      title={null}
       actions={
         <ToggleGroup
           type="single"
@@ -203,7 +202,7 @@ export default function CourseSearch({
               <PlannerFilterCombobox
                 id="course_selector"
                 items={courseOptions}
-                value={courseSearchData.searchCourse}
+                value={selectedCourse?.label ?? null}
                 onValueChange={handleCourseChange}
                 placeholder="Type course code or title"
                 emptyLabel="No matching courses."
@@ -278,24 +277,7 @@ export default function CourseSearch({
 
   const resultsPanel = (
     <PlannerPanel
-      title={
-        selectedCourse
-          ? `${selectedCourse.code} — ${selectedCourse.title}`
-          : "Sections"
-      }
-      description={
-        hasSectionResults
-          ? `${courseSearchData.selectedTerm}: ${sectionsArray.length} section group${sectionsArray.length === 1 ? "" : "s"} loaded.`
-          : undefined
-      }
-      actions={
-        <SectionDensityToggle
-          value={courseSearchData.compactSections ? "compact" : "comfy"}
-          onValueChange={(value) =>
-            setCourseSearchTabData("compactSections", value === "compact")
-          }
-        />
-      }
+      title={null}
       contentClassName="min-w-0 space-y-3"
     >
       {hasSectionResults ? (

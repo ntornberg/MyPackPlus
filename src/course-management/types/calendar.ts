@@ -7,6 +7,7 @@ export interface CalendarCourseDetails {
   classNumber?: string;
   eventId?: string;
   title?: string;
+  topic?: string;
   component?: string;
   location?: string;
   instructors: { name: string; unityId?: string }[];

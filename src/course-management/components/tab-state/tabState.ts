@@ -41,7 +41,7 @@ export type CourseSearchData = {
     code: string | null;
     catalogNum: string | null;
     title: string | null;
-    id: string;
+    id?: string;
   } | null;
   instructorFilter: string | null;
   sortMode: SectionSortMode;

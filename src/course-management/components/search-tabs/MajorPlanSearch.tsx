@@ -1,5 +1,5 @@
 import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
-import { useCallback, useMemo, memo, useState, useRef, useEffect } from "react";
+import { useCallback, useMemo, memo } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,22 +13,14 @@ import { cn } from "@/lib/utils";
 
 import catalogSources from "../../../../docs/research/ncsu-major-requirement-sources.json";
 import {
-  auditRequirementEntries,
-  choiceErrors,
-  plannedAuditCourses,
-} from "../../../degree-planning/services/auditRequirements";
-import {
   auditDisplayName,
   auditKey,
   auditProgramKind,
   auditProgramRank,
   findDegreeAudit,
-  isOpenGroup,
   requisiteTermLabel,
-  type DegreeAudit,
 } from "../../../degree-planning/services/degreeAudit";
 import { plannerCourseCode } from "../../../degree-planning/services/packPlanner";
-import { loadRequirementChoices } from "../../../degree-planning/services/requirementChoices";
 import {
   auditGroupsById,
   degreeUnitsProgress,
@@ -57,7 +49,6 @@ import {
   buildInstructorFilterOptions,
   groupRowSections,
 } from "../../../ui-system/components/workbench/sectionCompareUtils";
-import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import {
   CartCoursesContext,
   useCartCourses,
@@ -78,15 +69,7 @@ import {
 
 import { CourseSectionsCardList } from "./CourseSectionsCardList";
 import { RequirementTree, type RequirementTreeEntry } from "./RequirementTree";
-
-const EMPTY_COURSES: Record<string, MergedCourseData> = {};
-const EMPTY_IDS: ReadonlySet<string> = new Set();
-
-/**
- * Requirements with more approved options than this (a humanities list can
- * run to 400) aren't searched up front; their sections load when opened.
- */
-const DEFERRED_OPTIONS_OVER = 24;
+import { usePersonalPlanLoader } from "./usePersonalPlanLoader";
 
 const CourseDisplay = memo(
   ({
@@ -98,6 +81,8 @@ const CourseDisplay = memo(
     instructorFilter,
     sortMode,
     compactSections,
+    searched = true,
+    loading = false,
   }: {
     course: RequiredCourse;
     openCourses: Record<string, MergedCourseData> | null;
@@ -107,6 +92,8 @@ const CourseDisplay = memo(
     instructorFilter: string | null;
     sortMode: SectionSortMode;
     compactSections: boolean;
+    searched?: boolean;
+    loading?: boolean;
   }) => {
     const courseData =
       openCourses?.[`${course.course_abr} ${course.catalog_num}`];
@@ -139,7 +126,11 @@ const CourseDisplay = memo(
 
     return (
       <p className="p-3 text-center text-base italic text-muted-foreground">
-        No sections available
+        {loading
+          ? "Loading sections…"
+          : !searched
+            ? "Section availability is unknown. Refresh sections to retry."
+            : "No sections available"}
       </p>
     );
   },
@@ -203,45 +194,6 @@ export default function MajorPlanSearch({
   const selectedAudit = auditOptions.find(
     (option) => option.key === selectedAuditKey,
   )?.audit;
-  const personalContext = `${selectedAuditKey}|${selectedAudit?.capturedAt}|${majorPlanSearchData.selectedTerm}`;
-  const [personalResult, setPersonalResult] = useState<{
-    context: string;
-    courses: Record<string, MergedCourseData>;
-    /** Requirement ids whose options are still unsearched. */
-    deferred: ReadonlySet<string>;
-  } | null>(null);
-  const [loadingRequirements, setLoadingRequirements] =
-    useState<ReadonlySet<string>>(EMPTY_IDS);
-  // Keyed by context and requirement id, so a new term or audit starts over.
-  const requirementLoads = useRef(new Set<string>());
-  const [personalBusy, setPersonalBusy] = useState(false);
-  const [personalProgress, setPersonalProgress] = useState({
-    value: 0,
-    label: "",
-  });
-  const [personalError, setPersonalError] = useState<string | null>(null);
-  const personalRequest = useRef(0);
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    personalRequest.current++;
-    setPersonalBusy(false);
-    setPersonalError(null);
-  }, [personalContext, personal]);
-  const personalSearched = personalResult?.context === personalContext;
-  const activeOpenCourses = personal
-    ? personalSearched
-      ? personalResult.courses
-      : EMPTY_COURSES
-    : majorPlanSearchData.openCourses;
-  const personalCourseCount = personalSearched
-    ? Object.keys(personalResult.courses).length
-    : 0;
   const storedChoices = selectedAuditKey
     ? planningData.choices[selectedAuditKey]
     : undefined;
@@ -250,87 +202,24 @@ export default function MajorPlanSearch({
       ? storedChoices
       : undefined;
 
-  // Load approved choices for the program's open groups as soon as it's
-  // shown. Keyed by audit identity, not object: storage reloads hand back new
-  // objects, and the load itself writes storage.
-  const selectedAuditRef = useRef<DegreeAudit | undefined>(selectedAudit);
-  selectedAuditRef.current = selectedAudit;
-  const choicesLoadKey =
-    personal && selectedAudit
-      ? `${auditKey(selectedAudit)}|${selectedAudit.capturedAt}`
-      : null;
-  useEffect(() => {
-    const audit = selectedAuditRef.current;
-    if (choicesLoadKey && audit) {
-      loadRequirementChoices(audit).catch(() => undefined);
-    }
-  }, [choicesLoadKey]);
-
-  const personalEntries = useMemo(
-    () =>
-      selectedAudit
-        ? auditRequirementEntries(selectedAudit, personalChoices)
-        : [],
-    [selectedAudit, personalChoices],
-  );
+  const personalLoader = usePersonalPlanLoader({
+    audit: selectedAudit,
+    term: majorPlanSearchData.selectedTerm,
+    choices: personalChoices,
+    enabled: personal,
+    syncing: planningData.sync.status === "syncing",
+  });
+  const personalBusy = personalLoader.sectionBusy;
+  const personalError = personalLoader.sectionError;
+  const personalEntries = personalLoader.entries;
+  const personalSearched = !!selectedAudit;
+  const activeOpenCourses = personal
+    ? personalLoader.courses
+    : majorPlanSearchData.openCourses;
+  const personalCourseCount = Object.keys(personalLoader.courses).length;
   const personalGroups = useMemo(
     () => auditGroupsById(selectedAudit ? [selectedAudit] : []),
     [selectedAudit],
-  );
-
-  // Searches one deferred requirement's options, once per search.
-  const selectedTerm = majorPlanSearchData.selectedTerm;
-  const loadDeferredRequirement = useCallback(
-    async (requirementId: string) => {
-      const context = personalContext;
-      const loadKey = `${context}|${requirementId}`;
-      const entry = personalEntries.find(
-        (e) => e.requirementId === requirementId,
-      );
-      if (!entry || !selectedTerm || requirementLoads.current.has(loadKey)) {
-        return;
-      }
-      requirementLoads.current.add(loadKey);
-      setLoadingRequirements((previous) =>
-        new Set(previous).add(requirementId),
-      );
-      try {
-        const data = await fetchCourseSearchData(
-          [{ id: requirementId, min_units: 0, courses: entry.courses }],
-          selectedTerm,
-          undefined,
-          (message) => {
-            if (mounted.current) setPersonalError(message);
-          },
-        );
-        if (!mounted.current) return;
-        setPersonalResult((previous) => {
-          if (previous?.context !== context) return previous;
-          const deferred = new Set(previous.deferred);
-          deferred.delete(requirementId);
-          return {
-            ...previous,
-            courses: { ...previous.courses, ...data },
-            deferred,
-          };
-        });
-      } catch (error) {
-        if (mounted.current)
-          setPersonalError(`Couldn't load sections: ${String(error)}`);
-      } finally {
-        if (mounted.current)
-          setLoadingRequirements((previous) => {
-            const next = new Set(previous);
-            next.delete(requirementId);
-            return next;
-          });
-      }
-    },
-    [personalContext, personalEntries, selectedTerm],
-  );
-  const personalChoiceErrors = useMemo(
-    () => (selectedAudit ? choiceErrors(selectedAudit, personalChoices) : []),
-    [selectedAudit, personalChoices],
   );
   const scheduleBackground = useScheduleBackgroundEvents(
     majorPlanSearchData.selectedTerm,
@@ -415,80 +304,8 @@ export default function MajorPlanSearch({
 
   const runMajorPlanSearch = async ({ auto = false } = {}) => {
     if (personal) {
-      if (!selectedAudit || !majorPlanSearchData.selectedTerm) return;
-      const request = ++personalRequest.current;
-      setPersonalBusy(true);
-      setPersonalError(null);
-      setPersonalProgress({
-        value: 5,
-        label: "Loading approved choices from MyPack…",
-      });
-      // An automatic search keeps the preview restored with the tab.
+      personalLoader.refreshSections();
       if (!auto) onPreviewSectionChange(null);
-      try {
-        const choices = await loadRequirementChoices(selectedAudit);
-        if (!mounted.current || request !== personalRequest.current) return;
-        // Only groups that still need something; finished ones need no sections.
-        const openIds = new Set(
-          selectedAudit.groups.filter(isOpenGroup).map((group) => group.id),
-        );
-        const courses = new Map<string, RequiredCourse>();
-        const add = (course: RequiredCourse) =>
-          courses.set(
-            plannerCourseCode(course.course_abr, course.catalog_num),
-            course,
-          );
-        const deferred = new Set<string>();
-        for (const entry of auditRequirementEntries(selectedAudit, choices)) {
-          if (!openIds.has(entry.requirementId)) continue;
-          if (entry.courses.length > DEFERRED_OPTIONS_OVER) {
-            deferred.add(entry.requirementId);
-          } else {
-            entry.courses.forEach(add);
-          }
-        }
-        // Planned courses still need registering, so look them up too.
-        plannedAuditCourses(selectedAudit).forEach(add);
-        const data = courses.size
-          ? await fetchCourseSearchData(
-              [
-                {
-                  id: "personal",
-                  min_units: 0,
-                  courses: [...courses.values()],
-                },
-              ],
-              majorPlanSearchData.selectedTerm,
-              (progress, message) => {
-                if (mounted.current && request === personalRequest.current)
-                  setPersonalProgress((previous) => ({
-                    value: 10 + progress * 0.9,
-                    label: message || previous.label,
-                  }));
-              },
-              (message) => {
-                if (mounted.current && request === personalRequest.current)
-                  setPersonalError(message);
-              },
-            )
-          : null;
-        if (mounted.current && request === personalRequest.current) {
-          // A new search searches opened groups again.
-          requirementLoads.current.clear();
-          setPersonalResult({
-            context: personalContext,
-            courses: data ?? {},
-            deferred,
-          });
-        }
-      } catch (error) {
-        if (mounted.current && request === personalRequest.current)
-          setPersonalError(`Couldn't load sections: ${String(error)}`);
-      } finally {
-        if (mounted.current && request === personalRequest.current) {
-          setPersonalBusy(false);
-        }
-      }
       return;
     }
     onPreviewSectionChange(null);
@@ -623,25 +440,6 @@ export default function MajorPlanSearch({
     }
   };
 
-  // Search your own plan without a click once the audit and term are known,
-  // so the tree's counts fill in after a reload. Once per context, so a
-  // failed search waits for the button instead of retrying forever.
-  const runSearchRef = useRef(runMajorPlanSearch);
-  runSearchRef.current = runMajorPlanSearch;
-  const autoSearchedContext = useRef<string | null>(null);
-  useEffect(() => {
-    if (
-      !personal ||
-      personalSearched ||
-      isSearchDisabled ||
-      autoSearchedContext.current === personalContext
-    ) {
-      return;
-    }
-    autoSearchedContext.current = personalContext;
-    void runSearchRef.current({ auto: true });
-  }, [personal, personalSearched, isSearchDisabled, personalContext]);
-
   const selectedPlans = useMemo(() => {
     const major_data = majorPlanSearchData.selectedMajor
       ? (majorPlans[
@@ -716,10 +514,25 @@ export default function MajorPlanSearch({
         instructorFilter={majorPlanSearchData.instructorFilter}
         sortMode={majorPlanSearchData.sortMode}
         compactSections={majorPlanSearchData.compactSections}
+        searched={
+          !personal ||
+          personalLoader.searched.has(
+            plannerCourseCode(course.course_abr, course.catalog_num),
+          )
+        }
+        loading={
+          personal &&
+          personalLoader.pending.has(
+            plannerCourseCode(course.course_abr, course.catalog_num),
+          )
+        }
       />
     ),
     [
       activeOpenCourses,
+      personal,
+      personalLoader.searched,
+      personalLoader.pending,
       majorPlanSearchData.instructorFilter,
       majorPlanSearchData.sortMode,
       majorPlanSearchData.compactSections,
@@ -924,17 +737,7 @@ export default function MajorPlanSearch({
   );
 
   const resultsPanel = (
-    <PlannerPanel
-      title="Requirement Tree"
-      actions={
-        <SectionDensityToggle
-          value={majorPlanSearchData.compactSections ? "compact" : "comfy"}
-          onValueChange={(value) =>
-            setMajorPlanSearchTabData("compactSections", value === "compact")
-          }
-        />
-      }
-    >
+    <PlannerPanel title="Requirement Tree">
       {personal ? (
         selectedAudit ? (
           <div className="flex flex-col gap-3">
@@ -961,8 +764,8 @@ export default function MajorPlanSearch({
             </div>
             <LoadingProgress
               active={personalBusy}
-              value={personalProgress.value}
-              label={personalProgress.label}
+              value={personalLoader.sectionProgress}
+              label="Loading course sections…"
               succeeded={!personalError}
               doneLabel={`Found sections for ${personalCourseCount} course${personalCourseCount === 1 ? "" : "s"}`}
             />
@@ -971,11 +774,33 @@ export default function MajorPlanSearch({
                 {personalError}
               </p>
             ) : null}
-            {personalChoiceErrors.length > 0 ? (
-              <p role="status" className="text-sm text-destructive">
-                Some approved-course lists couldn&apos;t load from MyPack.
-                Refresh to retry.
+            {personalLoader.choiceBusy ? (
+              <p role="status" className="text-xs text-muted-foreground">
+                Loading approved choices:{" "}
+                {personalLoader.choiceProgress.settled} of{" "}
+                {personalLoader.choiceProgress.total}
               </p>
+            ) : personalLoader.failureCount > 0 ||
+              personalLoader.choiceError ? (
+              <div
+                role="status"
+                className="flex flex-wrap items-center gap-2 text-sm text-destructive"
+              >
+                <span>
+                  {personalLoader.choiceError ??
+                    (personalLoader.sessionExpired
+                      ? "Your MyPack session expired. Refresh the page to sign in again."
+                      : `${personalLoader.failureCount} approved-course list${personalLoader.failureCount === 1 ? "" : "s"} ${personalLoader.timedOut ? "couldn't load (request timed out)" : "couldn't load"}. Other results are available.`)}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={personalLoader.retryChoices}
+                >
+                  Retry failed lists
+                </Button>
+              </div>
             ) : null}
             <RequirementTree
               key={auditKey(selectedAudit)}
@@ -995,11 +820,11 @@ export default function MajorPlanSearch({
               }
               sectionsSearched={personalSearched}
               sectionsLoading={personalBusy}
-              deferredRequirements={
-                personalSearched ? personalResult.deferred : undefined
-              }
-              loadingRequirements={loadingRequirements}
-              onLoadRequirement={loadDeferredRequirement}
+              deferredRequirements={personalLoader.deferred}
+              unresolvedRequirements={personalLoader.unresolved}
+              searchedCourseKeys={personalLoader.searched}
+              loadingRequirements={personalLoader.loadingGroups}
+              onLoadRequirement={personalLoader.openGroup}
               filter={majorPlanSearchData.requirementFilter ?? "needed"}
               onFilterChange={(value) =>
                 setMajorPlanSearchTabData("requirementFilter", value)

@@ -1,10 +1,11 @@
+import type { CourseQuery } from "../../course-management/types/courseQuery";
 import type {
   GroupedSections,
   MergedCourseData,
   ModifiedSection,
   SectionLinkedMeeting,
 } from "../../course-management/types/section";
-import type { RequiredCourse } from "../../degree-planning/types/Plans";
+import { EXACT_CART_COURSE_CODES } from "../../generated/catalogs/course-search/catalog";
 import type { BatchDataRequestResponse, GradeData } from "../../types/api";
 import { AppLogger } from "../logger";
 
@@ -15,6 +16,8 @@ export function toLinkedMeeting(
   section: ModifiedSection,
 ): SectionLinkedMeeting {
   return {
+    topic: section.topic,
+    offering: section.offering,
     dayTime: section.dayTime,
     location: section.location,
     component: section.component,
@@ -54,13 +57,13 @@ export function linkGroupMeetings(group: GroupedSections): void {
  *
  * @param {Record<string, CourseData>} courses Map of course key to parsed registrar data
  * @param {BatchDataRequestResponse} batchData Grade and professor batch results
- * @param {Record<string, RequiredCourse>} [courseInfoMap] Optional map of course key to RequiredCourse to propagate course_id
+ * @param {Record<string, CourseQuery>} [courseInfoMap] Optional map of course key to CourseQuery to propagate course_id
  * @returns {Record<string, MergedCourseData>} Map of course key to merged and grouped course data
  */
 export function mergeData(
   courses: Record<string, CourseData>,
   batchData: BatchDataRequestResponse,
-  courseInfoMap?: Record<string, RequiredCourse>, // Map of course keys to RequiredCourse containing course_id
+  courseInfoMap?: Record<string, CourseQuery>, // Map of course keys to CourseQuery containing course_id
   term?: string,
 ) {
   AppLogger.info("Merging data");
@@ -79,7 +82,7 @@ export function mergeData(
     const mergedCourse: MergedCourseData = {
       ...course,
       sections: {},
-      course_id: reqCourse?.course_id, // Store course_id from RequiredCourse
+      course_id: reqCourse?.course_id, // Store course_id from CourseQuery
     };
 
     // Extract catalog number from course code (e.g., "CSC 316" -> "316")
@@ -132,13 +135,18 @@ export function mergeData(
         professor_rating: profData,
         // Cart functionality fields with default values
         course_id: reqCourse?.course_id,
+        requiresExactCartPayload:
+          !reqCourse?.course_id ||
+          EXACT_CART_COURSE_CODES.has(`${codeParts[0]}-${catalog_nbr}`),
         catalog_nbr,
         course_career: "UGRD", // Default for undergraduate
         session_code: "1", // Default session
         grading_basis: "GRD", // Default grading basis
         rqmnt_designtn: "", // Default requirement designation
         wait_list_okay: "N", // Default waitlist setting
-        courseData: course, // Reference to parent course
+        courseData: section.offering
+          ? { ...course, ...section.offering }
+          : course,
         term,
       };
       modifiedSections[section.id] = modifiedSection;

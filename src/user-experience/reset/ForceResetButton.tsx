@@ -2,6 +2,11 @@ import { DatabaseZapIcon, Loader2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 import { forceResetExtension } from "../../extension/storageMigration";
@@ -12,7 +17,7 @@ const RESET_DESCRIPTION =
   "Clears every cache, saved search, and preference MyPack Plus keeps, then reloads the page. Use it if something stops working.";
 
 type Props = {
-  /** Icon-only until armed, for the crowded planner header. */
+  /** Show an explanation popover from the crowded planner header. */
   compact?: boolean;
   className?: string;
 };
@@ -41,14 +46,38 @@ export function ForceResetButton({ compact = false, className }: Props) {
     }
   };
 
-  const showLabel = !compact || state !== "idle";
+  if (compact) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className={className}
+            aria-label="About clearing the cache"
+            title="Clear cache and reset MyPack Plus"
+          >
+            <DatabaseZapIcon aria-hidden="true" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="space-y-3">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">Clear cache &amp; reset</p>
+            <p className="text-sm text-muted-foreground">{RESET_DESCRIPTION}</p>
+          </div>
+          <ForceResetButton />
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
   return (
     <Button
       type="button"
       variant={state === "idle" ? "outline" : "destructive"}
-      size={showLabel ? "sm" : "icon-sm"}
-      className={cn(showLabel && "gap-1.5", className)}
+      size="sm"
+      className={cn("gap-1.5", className)}
       onClick={handleClick}
       onBlur={() => {
         if (state === "armed") setState("idle");
@@ -66,15 +95,13 @@ export function ForceResetButton({ compact = false, className }: Props) {
       ) : (
         <DatabaseZapIcon aria-hidden="true" />
       )}
-      {showLabel ? (
-        <span>
-          {state === "armed"
-            ? "Click again to reset"
-            : state === "resetting"
-              ? "Resetting…"
-              : "Clear cache & reset"}
-        </span>
-      ) : null}
+      <span>
+        {state === "armed"
+          ? "Click again to reset"
+          : state === "resetting"
+            ? "Resetting…"
+            : "Clear cache & reset"}
+      </span>
     </Button>
   );
 }

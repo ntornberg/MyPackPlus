@@ -1,5 +1,7 @@
-import descriptions from "../../generated/catalogs/course-search/courseDescriptions.json";
-import { DEPT_COURSES } from "../../generated/catalogs/course-search/departmentCourses.typed";
+import {
+  CATALOG_COURSES,
+  subjectLabel,
+} from "../../generated/catalogs/course-search/catalog";
 
 export const normalizeSearchText = (text: string) =>
   text
@@ -11,7 +13,8 @@ export interface SearchCourse {
   subject: string;
   code: string;
   title: string;
-  id: string;
+  id?: string;
+  currentCatalog?: boolean;
   catalogNum: string;
   description: string;
   label: string;
@@ -24,34 +27,32 @@ export interface SearchCourse {
   paddedTitle: string;
 }
 
-const descriptionRecords: Record<string, { description: string }> =
-  descriptions.courses;
 let courseSearchIndex: SearchCourse[] | undefined;
 
 const buildCourseSearchIndex = (): SearchCourse[] =>
-  Object.entries(DEPT_COURSES).flatMap(([subject, courses]) =>
-    Object.entries(courses).map(([code, course]) => {
-      const description = descriptionRecords[code]?.description ?? "";
-      const normalizedTitle = normalizeSearchText(course.course_title);
-      const normalizedDescription = normalizeSearchText(description);
-      return {
-        subject,
-        code,
-        title: course.course_title,
-        id: course.course_id,
-        catalogNum: code.match(/\d+[A-Za-z]?$/)?.[0] ?? "",
-        description,
-        label: `${code} ${course.course_title}`,
-        normalizedCode: normalizeSearchText(code).replaceAll(" ", ""),
-        normalizedTitle,
-        normalizedDescription,
-        subjectWords: normalizeSearchText(subject).split(" "),
-        titleTokens: normalizedTitle.split(" "),
-        descriptionTokens: normalizedDescription.split(" "),
-        paddedTitle: ` ${normalizedTitle} `,
-      };
-    }),
-  );
+  CATALOG_COURSES.map((course) => {
+    const { code, description } = course;
+    const subject = subjectLabel(course.subject);
+    const normalizedTitle = normalizeSearchText(course.title);
+    const normalizedDescription = normalizeSearchText(description);
+    return {
+      subject,
+      code,
+      title: course.title,
+      id: course.registrarId,
+      currentCatalog: course.currentCatalog,
+      catalogNum: code.match(/\d+[A-Za-z]?$/)?.[0] ?? "",
+      description,
+      label: `${code} ${course.title}${course.currentCatalog ? "" : " · Not in current catalog"}`,
+      normalizedCode: normalizeSearchText(code).replaceAll(" ", ""),
+      normalizedTitle,
+      normalizedDescription,
+      subjectWords: normalizeSearchText(subject).split(" "),
+      titleTokens: normalizedTitle.split(" "),
+      descriptionTokens: normalizedDescription.split(" "),
+      paddedTitle: ` ${normalizedTitle} `,
+    };
+  });
 
 export const getCourseSearchIndex = () =>
   (courseSearchIndex ??= buildCourseSearchIndex());
@@ -224,7 +225,10 @@ export function findCourses(query: string, courses = getCourseSearchIndex()) {
   const numbered = text.match(/^([a-z][a-z ]*?)?\s*(\d+[a-z]?)$/);
   if (numbered) {
     const subjectText = numbered[1]?.trim() ?? "";
-    const subjectQuery = subjectAliases[subjectText] ?? subjectText;
+    const exactCode = courses.some((course) => course.normalizedCode === code);
+    const subjectQuery = exactCode
+      ? subjectText
+      : (subjectAliases[subjectText] ?? subjectText);
     const number = numbered[2];
     const subjectWords = subjectQuery.split(" ").filter(Boolean);
     // An exact subject code ("ch") means that subject only; subject-name
@@ -261,6 +265,8 @@ export function findCourses(query: string, courses = getCourseSearchIndex()) {
         (a, b) =>
           a.tier - b.tier ||
           a.rank - b.rank ||
+          Number(a.course.currentCatalog === false) -
+            Number(b.course.currentCatalog === false) ||
           a.course.code.localeCompare(b.course.code),
       )
       .map(({ course, rank }) => ({ course, rank }));
@@ -279,6 +285,8 @@ export function findCourses(query: string, courses = getCourseSearchIndex()) {
               (a, b) =>
                 a.rank - b.rank ||
                 compareKeys(a.keys, b.keys) ||
+                Number(a.course.currentCatalog === false) -
+                  Number(b.course.currentCatalog === false) ||
                 a.course.code.localeCompare(b.course.code),
             )
             .map(({ course, rank }) => ({ course, rank }))
@@ -321,6 +329,8 @@ export function findCourses(query: string, courses = getCourseSearchIndex()) {
         a.rank - b.rank ||
         a.scoped - b.scoped ||
         compareKeys(a.keys, b.keys) ||
+        Number(a.course.currentCatalog === false) -
+          Number(b.course.currentCatalog === false) ||
         a.course.code.localeCompare(b.course.code),
     )
     .slice(0, 20)

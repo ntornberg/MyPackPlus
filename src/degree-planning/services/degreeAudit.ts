@@ -120,6 +120,11 @@ export function isUnmetLine(line: DegreeAuditLine): boolean {
   return line.status === "U" || line.status === "I";
 }
 
+/** Requirements whose approved choices are useful for future registration. */
+export function hasBrowsableChoices(line: DegreeAuditLine): boolean {
+  return isUnmetLine(line) || line.status === "P" || line.status === "E";
+}
+
 /** Groups with an unmet requirement, the only ones worth listing alternatives for. */
 export function isOpenGroup(group: DegreeAuditGroup): boolean {
   return isRequirementGroup(group) && group.lines.some(isUnmetLine);

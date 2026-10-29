@@ -44,7 +44,6 @@ import {
   buildInstructorFilterOptions,
   groupRowSections,
 } from "../../../ui-system/components/workbench/sectionCompareUtils";
-import { SectionDensityToggle } from "../../../ui-system/components/workbench/SectionDensityToggle";
 import {
   CartCoursesContext,
   useCartCourses,
@@ -811,14 +810,6 @@ export default function GepSearch({
   const resultsPanel = (
     <PlannerPanel
       title="Requirement Matches"
-      actions={
-        <SectionDensityToggle
-          value={compactSections ? "compact" : "comfy"}
-          onValueChange={(value) =>
-            setGepSearchTabData("compactSections", value === "compact")
-          }
-        />
-      }
     >
       <section className="mb-6 flex flex-col gap-2">
         <SectionHeading

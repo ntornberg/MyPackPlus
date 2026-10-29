@@ -137,7 +137,12 @@ export function ToCartButtonCell({
 
   // MyPack's own payload carries everything the cart needs.
   const hasCartData =
-    cartOptions.payload != null || (course_id && classNumber && catalog_nbr);
+    cartOptions.payload != null ||
+    (!selectedSection.requiresExactCartPayload &&
+      !parent?.requiresExactCartPayload &&
+      course_id &&
+      classNumber &&
+      catalog_nbr);
   if (!hasCartData || !courseData) {
     AppLogger.warn("Missing required data for section: ", selectedSection);
     return (

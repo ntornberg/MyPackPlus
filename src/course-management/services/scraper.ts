@@ -468,6 +468,18 @@ export async function applyIframeStyles(
     vertical-align: top;
     box-sizing: border-box;
   }
+     #classSearchTable > tbody > tr:not(.child) > td:nth-child(3),
+     #classSearchTable > tbody > tr:not(.child) > td:nth-child(3) a {
+       white-space: normal !important;
+       overflow: visible !important;
+       text-overflow: clip !important;
+       overflow-wrap: anywhere;
+       max-width: none !important;
+       height: auto !important;
+     }
+     #classSearchTable > tbody > tr:not(.child) > td:nth-child(3) {
+       min-width: 15rem;
+     }
      #classSearchTable{
       table-layout: auto !important;
   }
@@ -609,7 +621,11 @@ async function applyFlexDialogLayout(
   );
   parent_dialog.style.setProperty("overflow", "hidden", "important");
   inner_dialog.style.setProperty("overflow-y", "auto", "important");
-  inner_dialog.style.setProperty("overflow-x", "hidden", "important");
+  inner_dialog.style.setProperty(
+    "overflow-x",
+    inner_dialog.querySelector("#classSearchTable") ? "auto" : "hidden",
+    "important",
+  );
   inner_dialog.style.setProperty("flex-grow", "1", "important");
   inner_dialog.style.setProperty("flex-shrink", "1", "important");
   inner_dialog.style.setProperty("height", "auto", "important");

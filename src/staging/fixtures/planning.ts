@@ -19,7 +19,7 @@ import { DEPT_COURSES } from "../../generated/catalogs/course-search/departmentC
 
 const courseIds = new Map(
   Object.values(DEPT_COURSES).flatMap((courses) =>
-    Object.entries(courses as Record<string, { course_id: string }>).map(
+    Object.entries(courses as Record<string, { course_id?: string }>).map(
       ([code, course]) => [code.replace("-", " "), course.course_id] as const,
     ),
   ),

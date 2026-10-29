@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { ScheduleEvent } from "../types/calendar";
+import type { GroupedSections, ModifiedSection } from "../types/section";
 
-import { scheduleCoursesFrom } from "./scheduleCourses";
+import {
+  alternativeRows,
+  heldTopics,
+  scheduleCoursesFrom,
+} from "./scheduleCourses";
 
 let nextId = 1;
 function block(
@@ -81,5 +86,36 @@ describe("scheduleCoursesFrom", () => {
       ["enrolled", ["001"]],
       ["cart", ["002"]],
     ]);
+  });
+});
+
+describe("special topics alternatives", () => {
+  const row = (classNumber: string, topic?: string): GroupedSections => ({
+    lecture: { classNumber, topic } as ModifiedSection,
+    labs: null,
+  });
+  const rows = [
+    row("5812", "Generative AI"),
+    row("6000", "Generative AI"),
+    row("8010", "AI-powered Robotics"),
+    row("12051", "Natural Language Processing"),
+  ];
+
+  it("offers only sections of the held topic", () => {
+    const topics = heldTopics(rows, ["5812"]);
+    expect(topics).toEqual(["Generative AI"]);
+    expect(
+      alternativeRows(rows, topics).map((r) => r.lecture?.classNumber),
+    ).toEqual(["5812", "6000"]);
+  });
+
+  it("names every topic held and leaves courses without topics unfiltered", () => {
+    expect(heldTopics(rows, ["5812", "8010"])).toEqual([
+      "Generative AI",
+      "AI-powered Robotics",
+    ]);
+    const plain = [row("100"), row("200")];
+    expect(heldTopics(plain, ["100"])).toEqual([]);
+    expect(alternativeRows(plain, [])).toEqual(plain);
   });
 });
