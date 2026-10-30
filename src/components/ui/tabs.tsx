@@ -2,7 +2,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { Tabs as TabsPrimitive } from "radix-ui";
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { useSlidingIndicator } from "@/hooks/useSlidingIndicator";
+import { cn, mergeRefs } from "@/lib/utils";
 
 function Tabs({
   className,
@@ -23,7 +24,7 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
+  "group/tabs-list relative inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
   {
     variants: {
       variant: {
@@ -39,19 +40,55 @@ const tabsListVariants = cva(
   },
 );
 
+// One highlight per list that glides to the active trigger (the "line" variant keeps per-trigger underlines).
+const tabsIndicatorVariants = cva(
+  "mpp-indicator pointer-events-none absolute top-0 left-0 h-(--mpp-indicator-h) w-(--mpp-indicator-w) translate-x-(--mpp-indicator-x) translate-y-(--mpp-indicator-y) opacity-(--mpp-indicator-opacity) group-data-[indicator=ready]/tabs-list:transition-[translate,width,height,opacity] group-data-[indicator=ready]/tabs-list:duration-280 group-data-[indicator=ready]/tabs-list:ease-(--mpp-ease-out)",
+  {
+    variants: {
+      variant: {
+        default:
+          "rounded-md border border-border/60 bg-background shadow-sm dark:border-border dark:bg-muted",
+        segmented:
+          "rounded-lg border-2 border-primary/55 bg-background shadow-sm dark:bg-card/95",
+      },
+    },
+  },
+);
+
 function TabsList({
   className,
   variant = "default",
+  children,
+  ref,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.List> &
   VariantProps<typeof tabsListVariants>) {
+  const sliding = variant === "default" || variant === "segmented";
+  const [indicatorRef, indicator] = useSlidingIndicator<HTMLDivElement>(
+    '[data-slot="tabs-trigger"][data-state="active"]',
+  );
   return (
     <TabsPrimitive.List
+      ref={sliding ? mergeRefs(ref, indicatorRef) : ref}
       data-slot="tabs-list"
       data-variant={variant}
+      data-indicator={sliding ? indicator : undefined}
+      data-indicator-on={sliding && indicator !== "none" ? "" : undefined}
       className={cn(tabsListVariants({ variant }), className)}
       {...props}
-    />
+    >
+      {sliding ? (
+        <span
+          aria-hidden
+          data-slot="tabs-indicator"
+          className={cn(
+            tabsIndicatorVariants({ variant }),
+            indicator === "none" && "hidden",
+          )}
+        />
+      ) : null}
+      {children}
+    </TabsPrimitive.List>
   );
 }
 
@@ -67,6 +104,7 @@ function TabsTrigger({
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none dark:group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent dark:group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent",
         "group-data-[variant=segmented]/tabs-list:min-h-10 group-data-[variant=segmented]/tabs-list:flex-1 group-data-[variant=segmented]/tabs-list:rounded-lg group-data-[variant=segmented]/tabs-list:border-2 group-data-[variant=segmented]/tabs-list:border-solid group-data-[variant=segmented]/tabs-list:bg-transparent group-data-[variant=segmented]/tabs-list:px-2 group-data-[variant=segmented]/tabs-list:py-2 group-data-[variant=segmented]/tabs-list:text-xs group-data-[variant=segmented]/tabs-list:font-semibold group-data-[variant=segmented]/tabs-list:sm:px-3 group-data-[variant=segmented]/tabs-list:sm:text-sm group-data-[variant=segmented]/tabs-list:data-[state=inactive]:border-transparent group-data-[variant=segmented]/tabs-list:data-[state=inactive]:bg-transparent group-data-[variant=segmented]/tabs-list:data-[state=inactive]:shadow-none group-data-[variant=segmented]/tabs-list:data-[state=inactive]:text-foreground/70 group-data-[variant=segmented]/tabs-list:data-[state=inactive]:hover:bg-foreground/[0.06] group-data-[variant=segmented]/tabs-list:data-[state=inactive]:hover:text-foreground dark:group-data-[variant=segmented]/tabs-list:data-[state=inactive]:text-foreground/80 dark:group-data-[variant=segmented]/tabs-list:data-[state=inactive]:hover:bg-white/[0.08] group-data-[variant=segmented]/tabs-list:data-[state=active]:border-primary/55 group-data-[variant=segmented]/tabs-list:data-[state=active]:bg-background group-data-[variant=segmented]/tabs-list:data-[state=active]:text-foreground group-data-[variant=segmented]/tabs-list:data-[state=active]:shadow-sm dark:group-data-[variant=segmented]/tabs-list:data-[state=active]:bg-card/95 dark:group-data-[variant=segmented]/tabs-list:data-[state=active]:text-foreground",
         "group-data-[variant=default]/tabs-list:data-[state=active]:bg-background group-data-[variant=default]/tabs-list:data-[state=active]:text-foreground group-data-[variant=default]/tabs-list:data-[state=active]:border-border/60 dark:group-data-[variant=default]/tabs-list:data-[state=active]:border-border dark:group-data-[variant=default]/tabs-list:data-[state=active]:bg-muted dark:group-data-[variant=default]/tabs-list:data-[state=active]:text-foreground",
+        "group-data-indicator-on/tabs-list:data-[state=active]:border-transparent! group-data-indicator-on/tabs-list:data-[state=active]:bg-transparent! group-data-indicator-on/tabs-list:data-[state=active]:shadow-none!",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
         className,
       )}

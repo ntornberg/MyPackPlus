@@ -10,13 +10,26 @@ Visit [mypackplus.me](https://mypackplus.me) for the project site.
 
 The extension is independent and is not affiliated with, endorsed by, or sponsored by NC State University.
 
+## What's New in 4.0
+
+- **Schedule tab** — see enrolled and carted classes together, swap sections, and find alternative sections or instructors without leaving the planner.
+- **Cart management** — add, swap, and remove sections (including linked labs and recitations) directly from the planner, with waitlist, grading, and credit choices preserved.
+- **Degree progress** — degree-audit requirements show progress metrics, approved-course choices load progressively, and GEP search jumps to your first unmet category.
+- **Calendar** — credit hours, online classes, and native MyPack calendar metadata in the schedule preview.
+- **Grades** — class averages, standard deviation, and S/U grading in grade history.
+- **Reliability** — safer extension updates, cross-tab cart coordination, and a "Clear cache & reset" button for recovery.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list.
+
 ## Features
 
 - Search by term, subject, course number, GEP requirement, major, minor, plan, and concentration.
 - Compare sections with meeting times, locations, instructors, notes, prerequisites, seats, availability, grades, and professor ratings.
 - Preview selected sections alongside enrolled and carted classes, including schedule-conflict context.
 - Handle linked lectures, labs, and recitations as complete registration combinations.
-- Add compatible combinations to the MyPack cart where available.
+- Add, swap, and remove compatible combinations in the MyPack cart, including lab changes.
+- Plan from a dedicated Schedule tab with section alternatives and instructor lookup.
+- Track degree-audit and GEP progress, with approved-course choices for each requirement.
 - Use light and dark mode, local caching, and batched lookups for faster repeat searches.
 
 ## How It Works
@@ -26,7 +39,7 @@ MyPack Plus runs as a Manifest V3 browser extension.
 - A content script adds the planning interface to supported MyPack Portal pages.
 - A background service worker handles extension-level requests.
 - Local browser storage and IndexedDB cache course and section data for faster repeat sessions.
-- Supabase Edge Functions provide consolidated grade and professor data.
+- A hosted Supabase backend provides consolidated grade and professor data through Edge Functions. Backend source and database migrations are maintained separately and are not part of this repository.
 - Registrar availability lookups are batched and proxied to reduce repeated manual requests.
 
 ## Tech Stack
@@ -42,7 +55,7 @@ MyPack Plus runs as a Manifest V3 browser extension.
 - `src/ui-system/components` contains shared planner UI, workbench components, and reusable controls.
 - `src/course-management` contains section search, registrar data, cart actions, and result rendering.
 - `src/degree-planning` contains plan/GEP data and injected grade/professor cards.
-- `src/staging` contains the planner staging app used for visual and interaction checks outside MyPack.
+- `src/staging` mounts the real planner outside MyPack with dummy data, for visual checks, screenshots, and smoke tests.
 
 ## Development
 
@@ -58,7 +71,7 @@ Run the Vite dev server:
 npm run dev
 ```
 
-Run the planner staging app:
+Run the planner staging app (the real planner with dummy data, with screenshot presets such as `?tab=gep_search&theme=dark`):
 
 ```bash
 npm run dev:planner-staging

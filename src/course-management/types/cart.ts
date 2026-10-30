@@ -11,4 +11,5 @@ export interface ToCartPayload {
   wait_list_okay: string;
 }
 
+/** `relate_class_nbr_1`, `_2`, … carry the lab and any other required sections. */
 export type FullToCartPayload = ToCartPayload & { relate_class_nbr_1: string };

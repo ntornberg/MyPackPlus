@@ -40,41 +40,6 @@ export function injectCssOnce(
 }
 
 /**
- * Ensures that an extension cell exists in the given row, creating one if necessary.
- *
- * @param {HTMLTableRowElement} row The table row where the cell should be added
- * @returns {HTMLTableCellElement} The extension cell
- */
-export function ensureExtensionCell(
-  row: HTMLTableRowElement,
-): HTMLTableCellElement {
-  let cell = row.querySelector<HTMLTableCellElement>(
-    "td.mypack-extension-cell",
-  );
-  if (cell) {
-    cell.innerHTML = "";
-    return cell;
-  }
-
-  cell = row.ownerDocument!.createElement("td");
-  cell.className = "mypack-extension-cell";
-  cell.colSpan = row.cells.length;
-  Object.assign(cell.style, {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
-    justifyContent: "flex-start",
-    gap: ".5rem",
-    padding: ".25rem",
-    whiteSpace: "normal",
-    verticalAlign: "top",
-  });
-
-  row.appendChild(cell);
-  return cell;
-}
-
-/**
  * Waits for the schedule table ('#scheduleTable') within the MyPack iframe.
  *
  * @returns {Promise<Element>} Resolves with the '#scheduleTable' element
@@ -188,12 +153,8 @@ export function extensionCssForShadowRoot(compiledCss: string): string {
   let css = compiledCss;
   // Longer selectors first � naive `#id` ? `:host` would produce invalid `:host[data-�]`.
   css = css.replace(
-    /#extension-overlay-root\[data-mpp-theme="light"\]/g,
-    ':host([data-mpp-theme="light"])',
-  );
-  css = css.replace(
-    /#extension-overlay-root\[data-mpp-theme="dark"\]/g,
-    ':host([data-mpp-theme="dark"])',
+    /#extension-overlay-root\[data-mpp-theme=(["']?)(light|dark)\1\]/g,
+    ':host([data-mpp-theme="$2"])',
   );
   css = css.replace(/#extension-overlay-root/g, ":host");
   return css;
@@ -374,9 +335,12 @@ export function waitForCart(): Promise<Element> {
         '[id$="divPSPAGECONTAINER"] iframe',
       )?.contentDocument;
       if (!iframe) return null;
-      const plannerParent = iframe.querySelector("#enroll-wizard-container");
-      if (!plannerParent) return null;
-      return plannerParent.querySelector("#classSearchTable");
+      // Search result dialogs may be attached outside the wizard container
+      // (jQuery UI dialogs often move to the end of <body>).
+      return (
+        iframe.querySelector("#enroll-wizard-container #classSearchTable") ??
+        iframe.querySelector(".ui-dialog #classSearchTable")
+      );
     };
 
     const existingTable = findTable();
@@ -401,14 +365,9 @@ export function waitForCart(): Promise<Element> {
       '[id$="divPSPAGECONTAINER"] iframe',
     );
     if (initialIframe?.contentDocument) {
-      const plannerParent = initialIframe.contentDocument.querySelector(
-        "#enroll-wizard-container",
-      );
-      if (plannerParent) {
-        targetNodeToObserve = plannerParent; // Observe #enroll-wizard-container if available
-      } else {
-        targetNodeToObserve = initialIframe.contentDocument; // Observe iframe document if #enroll-wizard-container is not
-      }
+      // Whole iframe document: the table can appear inside the wizard
+      // container or in a dialog appended elsewhere.
+      targetNodeToObserve = initialIframe.contentDocument;
     }
     observer.observe(targetNodeToObserve, { childList: true, subtree: true });
   });

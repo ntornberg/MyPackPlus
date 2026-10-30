@@ -5,6 +5,26 @@
     window.__myPackHookLoaded = true;
 
     const OriginalXHR = window.XMLHttpRequest;
+    const cartRequests = new Map();
+    window.addEventListener("message", (event) => {
+        if (
+            (event.source !== window && event.source !== window.parent) ||
+            event.origin !== window.location.origin ||
+            event.data?.source !== "content-script" ||
+            event.data.type !== "MYPACK_REFRESH_CART"
+        ) return;
+
+        for (const request of cartRequests.values()) {
+            const xhr = new window.XMLHttpRequest();
+            xhr.open(request.method, request.url);
+            xhr._mypackCartRefresh = true;
+            for (const [name, value] of request.headers) {
+                xhr.setRequestHeader(name, value);
+            }
+            xhr.setRequestHeader("Cache-Control", "no-cache");
+            xhr.send(request.body);
+        }
+    });
     const keywords = [
         "_getClassSearchResults",
         "_getShopCartTableData",
@@ -14,7 +34,11 @@
         "_getCustEventsTableData",
         "_getPlanTermTableData",
         "_getShopCartCalEvents",
+        "IScript_getDegreeDetails",
+        "IScript_getTermDetails",
     ];
+    // Responses the content script parses itself, with the request URL.
+    const rawTextKeywords = ["IScript_getDegreeDetails", "IScript_getTermDetails"];
 
     const receiverPromise = (function () {
         if (window.__receiverPromise) return window.__receiverPromise;
@@ -44,17 +68,55 @@
 
     class InterceptedXHR extends OriginalXHR {
         open(method, url, ...rest) {
-            this._url = url;
+            this._url = String(url);
+            this._method = method;
+            this._headers = [];
             return super.open(method, url, ...rest);
         }
 
+        setRequestHeader(name, value) {
+            this._headers.push([name, value]);
+            return super.setRequestHeader(name, value);
+        }
+
         send(...args) {
+            // Lets the extension tell a snapshot taken before its own cart
+            // change from one taken after.
+            this._requestedAt = Date.now();
+            const cartType = ["_getShopCartTableData", "_getShopCartCalEvents"]
+                .find((keyword) => this._url.includes(keyword));
+            if (cartType && !this._mypackCartRefresh) {
+                cartRequests.set(cartType, {
+                    method: this._method,
+                    url: this._url,
+                    headers: this._headers,
+                    body: args[0],
+                });
+            }
             this.addEventListener("load", async function () {
                 try {
                     const matchedKeyword = keywords.find((keyword) =>
                         this._url.includes(keyword)
                     );
-                    if (matchedKeyword) {
+                    if (this.status < 200 || this.status >= 300) return;
+                    if (matchedKeyword && rawTextKeywords.includes(matchedKeyword)) {
+                        await receiverPromise;
+                        window.postMessage(
+                            {
+                                source: "realFetchHook",
+                                type: "CLASS_DATA",
+                                payload: {
+                                    data: this.responseText,
+                                    responseType: matchedKeyword,
+                                    // The plan or term is only named in the request URL.
+                                    url: this._url,
+                                },
+                            },
+                            window.location.origin !== "null"
+                                ? window.location.origin
+                                : "*"
+                        );
+                    } else if (matchedKeyword) {
                         let data = JSON.parse(this.responseText);
                         if (matchedKeyword === "_getClassSearchResults") {
                             data = data.data;
@@ -77,7 +139,12 @@
                             {
                                 source: "realFetchHook",
                                 type: "CLASS_DATA",
-                                payload: { data: data, responseType: matchedKeyword },
+                                payload: {
+                                    data: data,
+                                    responseType: matchedKeyword,
+                                    requestedAt: this._requestedAt,
+                                    ...(this._mypackCartRefresh ? { fullSnapshot: true } : {}),
+                                },
                             },
                             // "null" origins (sandboxed/about:blank) can't be targeted.
                             window.location.origin !== "null"

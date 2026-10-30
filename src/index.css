@@ -9,8 +9,7 @@
 @custom-variant dark (&:is(.dark *, #extension-overlay-root[data-mpp-theme="dark"] *));
 
 @theme inline {
-  --font-sans:
-    'Geist Variable', sans-serif;
+  --font-sans: "Geist Variable", sans-serif;
   --font-mono:
     "JetBrains Mono", "SFMono-Regular", ui-monospace, SFMono-Regular, Consolas,
     "Liberation Mono", Menlo, monospace;
@@ -37,43 +36,26 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --shadow-2xs: 0 1px 2px 0 rgb(15 23 42 / 0.08);
-  --shadow-xs: 0 8px 20px 0 rgb(3 8 20 / 0.16);
-  --shadow-sm: 0 12px 30px 0 rgb(3 8 20 / 0.22);
-  --shadow-md: 0 18px 48px 0 rgb(3 8 20 / 0.28);
-  --font-heading:
-    var(--font-sans);
-  --color-sidebar-ring:
-    var(--sidebar-ring);
-  --color-sidebar-border:
-    var(--sidebar-border);
-  --color-sidebar-accent-foreground:
-    var(--sidebar-accent-foreground);
-  --color-sidebar-accent:
-    var(--sidebar-accent);
-  --color-sidebar-primary-foreground:
-    var(--sidebar-primary-foreground);
-  --color-sidebar-primary:
-    var(--sidebar-primary);
-  --color-sidebar-foreground:
-    var(--sidebar-foreground);
-  --color-sidebar:
-    var(--sidebar);
-  --color-chart-5:
-    var(--chart-5);
-  --color-chart-4:
-    var(--chart-4);
-  --color-chart-3:
-    var(--chart-3);
-  --color-chart-2:
-    var(--chart-2);
-  --color-chart-1:
-    var(--chart-1);
-  --radius-2xl:
-    calc(var(--radius) * 1.8);
-  --radius-3xl:
-    calc(var(--radius) * 2.2);
-  --radius-4xl:
-    calc(var(--radius) * 2.6);
+  --shadow-xs: var(--planner-shadow-xs, 0 1px 2px rgb(15 23 42 / 0.04));
+  --shadow-sm: var(--planner-shadow-sm, 0 2px 4px -2px rgb(15 23 42 / 0.08));
+  --shadow-md: var(--planner-shadow-md, 0 4px 10px -4px rgb(15 23 42 / 0.1));
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 #extension-overlay-root {
@@ -138,6 +120,15 @@
   --sidebar-accent-foreground: #1e3a8a;
   --sidebar-border: rgb(100 116 139 / 0.34);
   --sidebar-ring: rgb(37 99 235 / 0.35);
+  /* Motion tokens: things enter on a long ease-out and leave quicker on an ease-in. */
+  --mpp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --mpp-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --mpp-duration-enter: 240ms;
+  --mpp-duration-exit: 160ms;
+  --mpp-duration-micro: 120ms;
+  /* Small overshoot for pops (checks, icons); falls back to ease-out where linear() is unsupported. */
+  --mpp-ease-spring: var(--mpp-ease-out);
+  --mpp-stagger: 30ms;
   color-scheme: light;
   font-family: var(--font-sans);
   color: var(--foreground);
@@ -250,6 +241,21 @@
   color-scheme: dark;
 }
 
+.dark,
+#extension-overlay-root[data-mpp-theme="dark"] {
+  --planner-shadow-xs: 0 8px 20px 0 rgb(3 8 20 / 0.16);
+  --planner-shadow-sm: 0 12px 30px 0 rgb(3 8 20 / 0.22);
+  --planner-shadow-md: 0 18px 48px 0 rgb(3 8 20 / 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  #extension-overlay-root:not([data-mpp-theme="light"]) {
+    --planner-shadow-xs: 0 8px 20px 0 rgb(3 8 20 / 0.16);
+    --planner-shadow-sm: 0 12px 30px 0 rgb(3 8 20 / 0.22);
+    --planner-shadow-md: 0 18px 48px 0 rgb(3 8 20 / 0.28);
+  }
+}
+
 /* :where() keeps specificity at 0 so Tailwind utilities (e.g. ring-*) can override these. */
 :where(#extension-overlay-root),
 :where(#extension-overlay-root) *,
@@ -315,6 +321,148 @@
   /* border-spacing composite (same hard pattern, no fallback) */
   --tw-border-spacing-x: 0;
   --tw-border-spacing-y: 0;
+  /*
+   * Gradient stack (bg-gradient-to-* + from/via/to). The stop positions are
+   * referenced without fallbacks, so leaving them unset drops the whole
+   * background-image — e.g. the "Add to cart" button rendered white-on-white.
+   */
+  --tw-gradient-position: initial;
+  --tw-gradient-from: #0000;
+  --tw-gradient-via: #0000;
+  --tw-gradient-to: #0000;
+  --tw-gradient-stops: initial;
+  --tw-gradient-via-stops: initial;
+  --tw-gradient-from-position: 0%;
+  --tw-gradient-via-position: 50%;
+  --tw-gradient-to-position: 100%;
+  /*
+   * `translate: var(--tw-translate-x) var(--tw-translate-y)` — a one-axis
+   * utility (e.g. the cart toast's -translate-x-1/2, the tooltip arrow) leaves
+   * the other axis unset and the whole translate is dropped.
+   */
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-translate-z: 0;
+  /* `outline` utilities emit outline-style: var(--tw-outline-style). */
+  --tw-outline-style: solid;
+  /* before:/after: utilities emit content: var(--tw-content) (tab underline, checkbox hit area). */
+  --tw-content: "";
+}
+
+/* Reduced motion: tw-animate enter/exit become plain fades (no slide or zoom). */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    --tw-enter-scale: 1 !important;
+    --tw-enter-translate-x: 0 !important;
+    --tw-enter-translate-y: 0 !important;
+    --tw-exit-scale: 1 !important;
+    --tw-exit-translate-x: 0 !important;
+    --tw-exit-translate-y: 0 !important;
+  }
+}
+
+@supports (animation-timing-function: linear(0, 1)) {
+  #extension-overlay-root {
+    --mpp-ease-spring: linear(
+      0,
+      0.2 6%,
+      0.62 15%,
+      0.92 24%,
+      1.06 32%,
+      1.09 38%,
+      1.06 46%,
+      1.01 58%,
+      0.99 70%,
+      1
+    );
+  }
+}
+
+/* Children rise in one after another as they mount (capped at 8 steps so long lists stay quick). */
+.mpp-stagger > * {
+  animation: mpp-rise-in var(--mpp-duration-enter) var(--mpp-ease-out) backwards;
+}
+.mpp-stagger > :nth-child(2) {
+  animation-delay: calc(1 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(3) {
+  animation-delay: calc(2 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(4) {
+  animation-delay: calc(3 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(5) {
+  animation-delay: calc(4 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(6) {
+  animation-delay: calc(5 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(7) {
+  animation-delay: calc(6 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(8) {
+  animation-delay: calc(7 * var(--mpp-stagger));
+}
+.mpp-stagger > :nth-child(n + 9) {
+  animation-delay: calc(8 * var(--mpp-stagger));
+}
+
+.mpp-rise-in {
+  animation: mpp-rise-in var(--mpp-duration-enter) var(--mpp-ease-out) backwards;
+}
+
+@keyframes mpp-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes mpp-pop-in {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+/* The checkbox tick mounts on check, so it pops in with a little overshoot. */
+.mpp-check-pop {
+  animation: mpp-pop-in 220ms var(--mpp-ease-spring) backwards;
+}
+
+/* StarRating fill (also defined in degreeAuditCards.css for the native-page rating card). */
+@keyframes mpp-star-pop {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
+
+@keyframes mpp-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mpp-stagger > *,
+  .mpp-rise-in,
+  .mpp-check-pop,
+  .mpp-star-fill {
+    animation-name: mpp-fade-in;
+    animation-delay: 0s;
+  }
+
+  .mpp-indicator {
+    transition: none !important;
+  }
+
+  .mpp-skeleton {
+    animation: none !important;
+  }
 }
 
 #extension-overlay-root button:not(:disabled),
@@ -330,6 +478,29 @@
 /* Native <details> plan requirement groups (MajorPlanSearch): rotate chevron when open. */
 #extension-overlay-root .plan-req-disclosure[open] > summary .plan-req-chevron {
   transform: rotate(90deg);
+}
+
+/* Expand/collapse the group body where `::details-content` is supported; others snap open. */
+#extension-overlay-root .plan-req-disclosure {
+  interpolate-size: allow-keywords;
+}
+
+#extension-overlay-root .plan-req-disclosure::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition:
+    block-size 200ms var(--mpp-ease-out),
+    content-visibility 200ms allow-discrete;
+}
+
+#extension-overlay-root .plan-req-disclosure[open]::details-content {
+  block-size: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #extension-overlay-root .plan-req-disclosure::details-content {
+    transition: none;
+  }
 }
 
 /* Extension: sheet is injected into ShadowRoot (`:host`). Utilities are unlayered

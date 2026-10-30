@@ -54,13 +54,15 @@ export function StarRating({
             />
             {fillLevel > 0 ? (
               <div
-                className="absolute inset-0 overflow-hidden text-amber-400"
+                className="mpp-star-fill absolute inset-0 overflow-hidden text-amber-400"
                 style={{
                   position: "absolute",
                   inset: 0,
                   overflow: "hidden",
                   width: `${fillLevel * 100}%`,
                   color: "#f59e0b",
+                  // Stars fill left to right with a small overshoot.
+                  animation: `mpp-star-pop 260ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 60}ms backwards`,
                 }}
               >
                 <StarIcon

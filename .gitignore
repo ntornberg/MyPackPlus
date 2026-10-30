@@ -11,26 +11,44 @@ node_modules
 dist
 dist-ssr
 dist.zip
+coverage/
+*.tsbuildinfo
 *.local
 *.local.json
+
+# Local environment variables (tracked environment files remain tracked)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Supabase local state and secrets
+supabase/.temp/
+supabase/.branches/
+supabase/functions/
+supabase/migrations/
 
 # Browser smoke-test artifacts and authenticated profiles
 .auth/
 playwright-report/
 test-results/
 
+# Local catalog refresh reports and audit output
+/outputs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Local agent/editor tooling
+# Local editor tooling
 .agents/
 .claude/
 .cursor/

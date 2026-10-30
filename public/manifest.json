@@ -2,7 +2,7 @@
   "manifest_version": 3,
 
   "name": "MyPack Plus",
-  "version": "3.8.13",
+  "version": "4.0.0",
 
   "description": "Plan NC State courses with section comparisons, live availability, schedule previews, grades, and professor ratings.",
   "permissions": ["storage"],

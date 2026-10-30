@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import type { GradeData } from "@/types/api";
@@ -11,22 +11,83 @@ export const GRADE_DISTRIBUTION_COLORS = [
   "#b91c1c",
 ] as const;
 
-/** Letter-grade shares (0-100) derived from API averages; total may be 0. */
+const SAT_UNSAT_COLORS = {
+  S: "#15803d",
+  U: "#b91c1c",
+  W: "#94a3b8",
+} as const;
+
+export type GradeDistributionRow = {
+  label: string;
+  pct: number;
+  color: string;
+};
+
+/**
+ * Grade shares (0-100) derived from API averages. Letter-graded history yields A-F rows;
+ * Sat/Unsat-only history falls back to S/U/W rows. Empty when neither has data.
+ */
 export function gradeDistributionPercents(
   data: GradeData,
-): { label: string; pct: number }[] {
+): GradeDistributionRow[] {
   const { a_average, b_average, c_average, d_average, f_average } = data;
   const total = a_average + b_average + c_average + d_average + f_average;
-  if (total <= 0) {
+  if (total > 0) {
+    return [a_average, b_average, c_average, d_average, f_average].map(
+      (value, i) => ({
+        label: "ABCDF"[i]!,
+        pct: (value / total) * 100,
+        color: GRADE_DISTRIBUTION_COLORS[i]!,
+      }),
+    );
+  }
+  const s = Number(data.s_average) || 0;
+  const u = Number(data.u_average) || 0;
+  const w = Number(data.w_average) || 0;
+  const satTotal = s + u + w;
+  if (satTotal <= 0) {
     return [];
   }
-  return [
-    { label: "A", pct: (a_average / total) * 100 },
-    { label: "B", pct: (b_average / total) * 100 },
-    { label: "C", pct: (c_average / total) * 100 },
-    { label: "D", pct: (d_average / total) * 100 },
-    { label: "F", pct: (f_average / total) * 100 },
-  ];
+  return (
+    [
+      ["S", s],
+      ["U", u],
+      ["W", w],
+    ] as const
+  ).map(([label, value]) => ({
+    label,
+    pct: (value / satTotal) * 100,
+    color: SAT_UNSAT_COLORS[label],
+  }));
+}
+
+/** True when there is a letter-grade or Sat/Unsat distribution to chart. */
+export function hasGradeDistribution(data: GradeData | undefined): boolean {
+  return Boolean(data) && gradeDistributionPercents(data!).length > 0;
+}
+
+/**
+ * "93.5% ± 4.4%": bucket-midpoint class average with the per-student spread when known.
+ * Null when there is no letter-grade average (Sat/Unsat-only or missing history).
+ */
+export function formatGradeAverage(data: GradeData): string | null {
+  if (!(data.class_avg_max > 0)) {
+    return null;
+  }
+  const avg = data.class_avg ?? (data.class_avg_min + data.class_avg_max) / 2;
+  const stddev = data.class_avg_stddev;
+  return stddev != null
+    ? `${avg.toFixed(1)}% ± ${stddev.toFixed(1)}%`
+    : `${avg.toFixed(1)}%`;
+}
+
+/** True when the chartable distribution is Sat/Unsat rather than letter grades. */
+export function isSatUnsatDistribution(data: GradeData | undefined): boolean {
+  return Boolean(data) && gradeDistributionPercents(data!)[0]?.label === "S";
+}
+
+function sliceTitle(slice: { label: string; pct: number }): string {
+  return `${slice.label} — ${slice.pct.toFixed(1)}%`;
 }
 
 type GradePieSlice = {
@@ -41,7 +102,7 @@ function gradePieSlices(data: GradeData): GradePieSlice[] {
   const rows = gradeDistributionPercents(data);
   let cursor = -90;
   const out: GradePieSlice[] = [];
-  rows.forEach((row, i) => {
+  rows.forEach((row) => {
     if (row.pct <= 0) {
       return;
     }
@@ -49,7 +110,7 @@ function gradePieSlices(data: GradeData): GradePieSlice[] {
     out.push({
       label: row.label,
       pct: row.pct,
-      color: GRADE_DISTRIBUTION_COLORS[i]!,
+      color: row.color,
       startDeg: cursor,
       endDeg: cursor + span,
     });
@@ -81,19 +142,48 @@ export function GradeDistributionChart({
   size,
   className,
   wedgeStrokeWidth,
+  animate = false,
 }: {
   data: GradeData;
   size: number;
   className?: string;
   /** Wedge outline; slightly thicker reads better on larger pies. */
   wedgeStrokeWidth?: number;
+  /** Draw the pie in clockwise on mount (styled by `.mpp-pie-sweep`). */
+  animate?: boolean;
 }) {
   const slices = useMemo(() => gradePieSlices(data), [data]);
+  const maskId = `mpp-pie-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const pad = size >= 72 ? 2.5 : 2;
   const strokeW = wedgeStrokeWidth ?? (size >= 64 ? 1.5 : 1);
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - pad;
+
+  // A thick stroke as wide as the radius, revealed by stroke-dashoffset, uncovers the pie like a clock hand.
+  const sweep = (content: ReactNode) =>
+    animate ? (
+      <>
+        <mask id={maskId}>
+          <circle
+            className="mpp-pie-sweep-mask"
+            cx={cx}
+            cy={cy}
+            r={size / 4}
+            fill="none"
+            stroke="#fff"
+            strokeWidth={size / 2}
+            pathLength={1}
+            transform={`rotate(${slices[0]?.startDeg ?? -90} ${cx} ${cy})`}
+          />
+        </mask>
+        <g className="mpp-pie-sweep" mask={`url(#${maskId})`}>
+          {content}
+        </g>
+      </>
+    ) : (
+      content
+    );
 
   if (slices.length === 0) {
     return (
@@ -121,7 +211,11 @@ export function GradeDistributionChart({
         role="img"
         aria-label="Grade distribution pie chart"
       >
-        <circle cx={cx} cy={cy} r={r} fill={only.color} />
+        {sweep(
+          <circle cx={cx} cy={cy} r={r} fill={only.color}>
+            <title>{sliceTitle(only)}</title>
+          </circle>,
+        )}
       </svg>
     );
   }
@@ -135,16 +229,20 @@ export function GradeDistributionChart({
       role="img"
       aria-label="Grade distribution pie chart"
     >
-      {slices.map((s) => (
-        <path
-          key={s.label}
-          d={pieWedgePath(cx, cy, r, s.startDeg, s.endDeg)}
-          fill={s.color}
-          stroke="var(--popover, #fff)"
-          strokeWidth={strokeW}
-          vectorEffect="non-scaling-stroke"
-        />
-      ))}
+      {sweep(
+        slices.map((s) => (
+          <path
+            key={s.label}
+            d={pieWedgePath(cx, cy, r, s.startDeg, s.endDeg)}
+            fill={s.color}
+            stroke="var(--popover, #fff)"
+            strokeWidth={strokeW}
+            vectorEffect="non-scaling-stroke"
+          >
+            <title>{sliceTitle(s)}</title>
+          </path>
+        )),
+      )}
     </svg>
   );
 }

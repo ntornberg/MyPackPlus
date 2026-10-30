@@ -35,7 +35,7 @@ try {
 
   await page.goto(portalUrl, { waitUntil: "domcontentloaded" });
 
-  const launcher = page.getByRole("button", { name: "Open Pack Planner" });
+  const launcher = page.getByRole("button", { name: "Open MyPack+ Planner" });
   await launcher.waitFor({ state: "visible", timeout: authWaitMs });
 
   assert.match(

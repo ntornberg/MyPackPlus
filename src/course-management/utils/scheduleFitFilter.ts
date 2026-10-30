@@ -41,6 +41,7 @@ function daySetsOverlap(a: Set<string>, b: Set<string>): boolean {
 }
 
 export function eventsTimeOverlap(a: ScheduleEvent, b: ScheduleEvent): boolean {
+  if (a.allDay || b.allDay) return false;
   if (!hasSharedDayArrays(a.days, b.days)) {
     return false;
   }
@@ -57,6 +58,31 @@ type BusySlot = {
   days: Set<string>;
 };
 
+/** "CSC 316" from labels like "CSC316 Lecture" or "CSC 316 (001)". */
+export function courseCodeOf(label: string): string | null {
+  const match = label.toUpperCase().match(/\b([A-Z]{1,5})\s*(\d{3}[A-Z]?)\b/);
+  return match ? `${match[1]} ${match[2]}` : null;
+}
+
+/**
+ * Background (cart + enrolled) events that any of the section's meetings
+ * overlap. Another section of the same course isn't a conflict — you'd swap
+ * it, not take both.
+ */
+export function findScheduleConflicts(
+  section: ScheduleEvent[],
+  background: ScheduleEvent[],
+): ScheduleEvent[] {
+  return background.filter((busy) => {
+    const busyCode = courseCodeOf(busy.subj);
+    return section.some(
+      (block) =>
+        (busyCode === null || busyCode !== courseCodeOf(block.subj)) &&
+        eventsTimeOverlap(block, busy),
+    );
+  });
+}
+
 /** True when none of the section’s meetings overlap cart + enrolled background. */
 export function sectionFitsSchedule(
   section: ScheduleEvent[],
@@ -66,13 +92,16 @@ export function sectionFitsSchedule(
     return true;
   }
 
-  const bgCache: BusySlot[] = background.map((e) => ({
-    start: toMinutes(e.start),
-    end: toMinutes(e.end),
-    days: getDaySet(e.days),
-  }));
+  const bgCache: BusySlot[] = background
+    .filter((e) => !e.allDay)
+    .map((e) => ({
+      start: toMinutes(e.start),
+      end: toMinutes(e.end),
+      days: getDaySet(e.days),
+    }));
 
   for (const block of section) {
+    if (block.allDay) continue;
     const blockStart = toMinutes(block.start);
     const blockEnd = toMinutes(block.end);
     const blockDays = getDaySet(block.days);

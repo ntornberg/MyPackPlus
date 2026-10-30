@@ -75,6 +75,7 @@ const DialogContent = React.forwardRef<
     overlayClassName,
     onOverlayPointerDown,
     onPointerDownOutside,
+    forceMount,
     ...props
   },
   forwardedRef,
@@ -94,13 +95,20 @@ const DialogContent = React.forwardRef<
       }
       // Native scrollbars often skip React's pointer capture on the content node, so Radix
       // treats the press as "outside" even when the scrollbar belongs to this dialog.
+      // Hit-test against the content box: inside the extension's shadow root,
+      // document.elementFromPoint only returns the shadow host.
       const { clientX, clientY } = event.detail.originalEvent;
       const root = contentRef.current;
       if (!root) {
         return;
       }
-      const top = document.elementFromPoint(clientX, clientY);
-      if (top && root.contains(top)) {
+      const rect = root.getBoundingClientRect();
+      if (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      ) {
         event.preventDefault();
       }
     },
@@ -108,13 +116,15 @@ const DialogContent = React.forwardRef<
   );
 
   return (
-    <DialogPortal container={portalContainer}>
+    <DialogPortal container={portalContainer} forceMount={forceMount}>
       <DialogOverlay
         className={overlayClassName}
         onPointerDown={onOverlayPointerDown}
+        forceMount={forceMount}
       />
       <DialogPrimitive.Content
         ref={composedRef}
+        forceMount={forceMount}
         data-slot="dialog-content"
         className={cn(
           "pointer-events-auto fixed z-50 bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-200 outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",

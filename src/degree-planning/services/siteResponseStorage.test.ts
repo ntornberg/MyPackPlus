@@ -17,6 +17,27 @@ const mocks = vi.hoisted(() => ({
     async (_category: string): Promise<Record<string, unknown> | null> => null,
   ),
   notifyScheduleDataChanged: vi.fn(async () => undefined),
+  storeDegreeDetailsResponse: vi.fn(
+    async (_data: unknown, _url: unknown) => undefined,
+  ),
+  storeTermDetailsResponse: vi.fn(
+    async (_data: unknown, _url: unknown) => true,
+  ),
+  markPlanningDataStale: vi.fn(async () => undefined),
+}));
+
+vi.mock("./degreeAudit", () => ({
+  DEGREE_DETAILS_RESPONSE: "IScript_getDegreeDetails",
+  storeDegreeDetailsResponse: mocks.storeDegreeDetailsResponse,
+}));
+
+vi.mock("./packPlanner", () => ({
+  PLANNER_TERM_DETAILS_RESPONSE: "IScript_getTermDetails",
+  storeTermDetailsResponse: mocks.storeTermDetailsResponse,
+}));
+
+vi.mock("./planningSync", () => ({
+  markPlanningDataStale: mocks.markPlanningDataStale,
 }));
 
 vi.mock("../../course-management/cache/courseRetrieval", () => ({
@@ -138,7 +159,70 @@ describe("siteResponseStorage listener", () => {
       "shopCartTableData",
       {},
     );
+    expect(mocks.replaceGenericCache).toHaveBeenCalledWith(
+      "shopCartCalEventsData",
+      {},
+    );
+    expect(mocks.notifyScheduleDataChanged).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves calendar meetings when nonempty cart rows omit meeting details", async () => {
+    await setupListener();
+    await dispatch({
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: {
+        responseType: "_getShopCartTableData",
+        data: [{ crse_id: "100", class_nbr: "1", section_details: [] }],
+      },
+    });
+
+    expect(mocks.replaceGenericCache.mock.calls).toEqual([
+      [
+        "shopCartTableData",
+        {
+          "hash:100|1": {
+            crse_id: "100",
+            class_nbr: "1",
+            section_details: [],
+          },
+        },
+      ],
+    ]);
+    expect(mocks.notifyScheduleDataChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { data: [] },
+    {
+      data: [
+        {
+          title: "CSC 316 (001)",
+          start: "2026-10-26T11:45:00",
+          end: "2026-10-26T13:00:00",
+        },
+      ],
+    },
+  ])(
+    "replaces stale cart calendar data with the freshly requested snapshot: %j",
+    async ({ data }) => {
+      await setupListener();
+      await dispatch({
+        source: "realFetchHook",
+        type: "CLASS_DATA",
+        payload: {
+          responseType: "_getShopCartCalEvents",
+          data,
+          fullSnapshot: true,
+        },
+      });
+      expect(mocks.replaceGenericCache).toHaveBeenCalledTimes(1);
+      const [category, entries] = mocks.replaceGenericCache.mock.calls[0];
+      expect(category).toBe("shopCartCalEventsData");
+      expect(Object.values(entries)).toEqual(data);
+      expect(mocks.notifyScheduleDataChanged).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("keys table rows by course and class number so sections don't collide", async () => {
     await setupListener();
@@ -203,6 +287,80 @@ describe("siteResponseStorage listener", () => {
     expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
   });
 
+  it("drops calendar events from other semesters in every calendar category", async () => {
+    mocks.getCacheCategory.mockImplementation(async (category: string) =>
+      category === "shopCartCalEventsData"
+        ? {
+            fallCart: { combinedData: { start: "2026-10-05T08:30:00" } },
+            springCart: { combinedData: { start: "2027-01-20T08:30:00" } },
+          }
+        : {
+            fallClass: { combinedData: { start: "2026-10-06T10:00:00" } },
+            undated: { combinedData: { title: "?" } },
+          },
+    );
+    await setupListener();
+
+    await dispatch({
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: {
+        responseType: "_getShopCartCalEvents",
+        data: [{ class_nbr: "9", start: "2027-01-12T08:30:00" }],
+      },
+    });
+
+    expect(mocks.removeGenericCacheEntries).toHaveBeenCalledWith(
+      "shopCartCalEventsData",
+      ["fallCart"],
+    );
+    // The other category keeps undated rows; only off-semester ones go.
+    expect(mocks.removeGenericCacheEntries).toHaveBeenCalledWith(
+      "scheduleCalEventsData",
+      ["fallClass"],
+    );
+    mocks.getCacheCategory.mockReset();
+    mocks.getCacheCategory.mockResolvedValue(null);
+  });
+
+  it("tags items with the page's selected term and uses it over dates", async () => {
+    // The cart calendar shows this week's (fall) dates while shopping spring.
+    (globalThis as unknown as { document: unknown }).document = {
+      querySelectorAll: () => [{ textContent: "2027 Spring Term" }],
+    };
+    mocks.getCacheCategory.mockImplementation(async (category: string) =>
+      category === "scheduleCalEventsData"
+        ? { fallClass: { combinedData: { start: "2026-10-26T10:00:00" } } }
+        : null,
+    );
+    try {
+      await setupListener();
+
+      await dispatch({
+        source: "realFetchHook",
+        type: "CLASS_DATA",
+        payload: {
+          responseType: "_getShopCartCalEvents",
+          data: [{ class_nbr: "9", start: "2026-10-26T10:40:00" }],
+        },
+      });
+
+      const stored = Object.values(
+        mocks.setGenericCache.mock.calls[0]![1],
+      )[0] as Record<string, unknown>;
+      expect(stored._mypackTerm).toBe("2027 Spring Term");
+      // Same week, but a different term: this fall's enrolled class goes.
+      expect(mocks.removeGenericCacheEntries).toHaveBeenCalledWith(
+        "scheduleCalEventsData",
+        ["fallClass"],
+      );
+    } finally {
+      delete (globalThis as unknown as { document?: unknown }).document;
+      mocks.getCacheCategory.mockReset();
+      mocks.getCacheCategory.mockResolvedValue(null);
+    }
+  });
+
   it("keeps stored calendar events when a calendar response is empty", async () => {
     await setupListener();
 
@@ -213,6 +371,47 @@ describe("siteResponseStorage listener", () => {
     });
 
     expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
+  });
+
+  it("routes degree audit responses to the audit store with their URL", async () => {
+    await setupListener();
+
+    await dispatch({
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: {
+        responseType: "IScript_getDegreeDetails",
+        data: "<script>var details = {}</script>",
+        url: "/IScript_getDegreeDetails?acad_plan=X",
+      },
+    });
+
+    expect(mocks.storeDegreeDetailsResponse).toHaveBeenCalledWith(
+      "<script>var details = {}</script>",
+      "/IScript_getDegreeDetails?acad_plan=X",
+    );
+    expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
+    expect(mocks.notifyScheduleDataChanged).not.toHaveBeenCalled();
+  });
+
+  it("stores Pack Planner edits and marks the audit stale", async () => {
+    await setupListener();
+
+    await dispatch({
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: {
+        responseType: "IScript_getTermDetails",
+        data: '{"data":[]}',
+        url: "/IScript_getTermDetails?strm=2271&plan_type=live",
+      },
+    });
+
+    expect(mocks.storeTermDetailsResponse).toHaveBeenCalledWith(
+      '{"data":[]}',
+      "/IScript_getTermDetails?strm=2271&plan_type=live",
+    );
+    expect(mocks.markPlanningDataStale).toHaveBeenCalledTimes(1);
   });
 
   it("ignores messages from other windows and malformed payloads", async () => {
@@ -228,6 +427,40 @@ describe("siteResponseStorage listener", () => {
     );
     await dispatch({ source: "realFetchHook", type: "CLASS_DATA" });
 
+    expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
+  });
+
+  it("queues early responses until storage initialization completes", async () => {
+    let release!: () => void;
+    const startup = setupListener(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const response = dispatch({
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: { responseType: "_getShopCartTableData", data: [{ id: 1 }] },
+    });
+    await Promise.resolve();
+    expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
+    release();
+    await startup;
+    await response;
+    expect(mocks.replaceGenericCache).toHaveBeenCalledTimes(1);
+  });
+
+  it("never stores responses after initialization fails, even after queue recovery", async () => {
+    await expect(
+      setupListener(Promise.reject(new Error("reset failed"))),
+    ).rejects.toThrow("reset failed");
+    const message = {
+      source: "realFetchHook",
+      type: "CLASS_DATA",
+      payload: { responseType: "_getShopCartTableData", data: [{ id: 1 }] },
+    };
+    await dispatch(message);
+    await dispatch(message);
     expect(mocks.replaceGenericCache).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 import { CalendarView } from "../../../course-management/components/calendar/CalendarView";
@@ -22,6 +22,8 @@ type PlannerPreviewRailProps = {
   stagingOptions?: {
     calendarEvents: ScheduleEvent[];
   };
+  /** Draw these instead of every cached cart/enrolled block (e.g. one term's). */
+  backgroundEvents?: ScheduleEvent[];
 };
 
 const normalizeRichText = (value: string | null | undefined): string | null => {
@@ -40,53 +42,67 @@ export function PlannerPreviewRail({
   selectedPreview,
   isOpen: _isOpen,
   stagingOptions,
+  backgroundEvents,
 }: PlannerPreviewRailProps) {
   const selectedSection = selectedPreview?.section;
+  const calendarEvents = backgroundEvents ?? stagingOptions?.calendarEvents;
 
   const selectedNotes = useMemo(
     () => normalizeRichText(selectedSection?.notes),
     [selectedSection?.notes],
   );
   const selectedRequisites = useMemo(
-    () => normalizeRichText(selectedSection?.requisites),
-    [selectedSection?.requisites],
+    () =>
+      normalizeRichText(
+        selectedSection?.requisites ??
+          selectedSection?.offering?.prerequisite ??
+          selectedSection?.courseData?.prerequisite,
+      ),
+    [
+      selectedSection?.requisites,
+      selectedSection?.offering?.prerequisite,
+      selectedSection?.courseData?.prerequisite,
+    ],
   );
 
   return (
-    <Card
-      className={cn(
-        "overflow-visible border-2 border-border bg-card text-card-foreground shadow-md ring-1 ring-border/50 dark:ring-white/12",
-        "dark:bg-gradient-to-b dark:from-[rgb(9,15,27)] dark:to-[rgb(10,17,30)] dark:shadow-[inset_0_1px_0_rgba(136,164,224,0.08),0_18px_44px_rgba(0,0,0,0.28)]",
-      )}
-    >
-      <CardHeader className="gap-2 border-b border-border/60 bg-muted/20 dark:bg-transparent">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-          Preview
-        </div>
-        <CardTitle className="text-base font-semibold">
-          {selectedPreview ? "Selected Section" : "Current MyPack Context"}
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {selectedPreview
-            ? "Schedule, class notes, and prerequisites for the pinned section (grades and instructor stay on each row card)."
-            : stagingOptions
-              ? "Select a row to pin schedule context, notes, and prerequisites here."
-              : "Choose a section row to pin schedule, notes, and prerequisites while you browse."}
-        </p>
-      </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-4 p-3 sm:p-4">
+    <section className="flex min-w-0 flex-col gap-4 text-sm text-card-foreground">
+      {selectedPreview ? (
+        <header className="flex flex-col gap-2">
+          <CardTitle className="text-base font-semibold">
+            Selected Section
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Schedule, class notes, and prerequisites for the pinned section
+            (grades and instructor stay on each row card).
+          </p>
+        </header>
+      ) : null}
+      <div className="flex min-w-0 flex-col gap-4">
         {selectedPreview ? (
           <div className="min-w-0 rounded-xl border border-border bg-background/55 p-3 sm:p-4">
             <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
               <CalendarView
+                selectedSection={selectedSection}
                 plannerPreview
                 dayTime={selectedSection?.dayTime}
                 courseData={selectedSection?.courseData}
                 linkedMeetings={selectedSection?.linkedMeetings}
-                staticBackgroundEvents={stagingOptions?.calendarEvents}
+                staticBackgroundEvents={calendarEvents}
               />
             </div>
             <ScheduleCalendarLegend className="mt-2 px-0.5" />
+            {selectedSection?.topic ? (
+              <p className="mt-3 whitespace-normal break-words">
+                Topic: {selectedSection.topic}
+              </p>
+            ) : null}
+            {selectedSection?.courseData?.description ? (
+              <p className="mt-3 whitespace-normal break-words">
+                {selectedSection.offering?.description ??
+                  selectedSection.courseData.description}
+              </p>
+            ) : null}
 
             {selectedNotes ? (
               <div className="mt-4 flex flex-col gap-1 rounded-lg border border-border/60 bg-background/45 p-3">
@@ -108,28 +124,21 @@ export function PlannerPreviewRail({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <div>
-              <div className="text-sm font-semibold">Schedule Preview</div>
-              <p className="text-sm text-muted-foreground">
-                {stagingOptions
-                  ? "Sample schedule for this preview."
-                  : "Live context from your current schedule."}
-              </p>
-            </div>
             <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
               <CalendarView
+                selectedSection={selectedSection}
                 plannerPreview
                 dayTime={selectedSection?.dayTime}
                 courseData={selectedSection?.courseData}
                 linkedMeetings={selectedSection?.linkedMeetings}
-                staticBackgroundEvents={stagingOptions?.calendarEvents}
+                staticBackgroundEvents={calendarEvents}
               />
             </div>
             <ScheduleCalendarLegend className="mt-2 px-0.5" />
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -165,8 +174,8 @@ function ScheduleCalendarLegend({ className }: { className?: string }) {
             className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground"
           >
             <span
-              className="size-2.5 shrink-0 rounded-sm shadow-sm"
-              style={shell}
+              className="h-2.5 w-3.5 shrink-0 rounded-[3px]"
+              style={{ ...shell, boxShadow: "none" }}
               aria-hidden
             />
             {item.label}

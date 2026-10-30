@@ -4,41 +4,67 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-type ScheduleFitFieldProps = {
+import {
+  SECTION_SORT_OPTIONS,
+  type SectionSortMode,
+} from "../../../course-management/types/sectionSorting";
+
+type SectionSortFieldProps = {
   id: string;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-  description?: ReactNode;
+  value: SectionSortMode;
+  onValueChange: (value: SectionSortMode) => void;
+  /** Whether the cart/enrolled schedule for the selected term is known. */
+  scheduleKnown: boolean;
 };
 
-export function ScheduleFitField({
+function sortHint(mode: SectionSortMode, scheduleKnown: boolean): string {
+  if (!scheduleKnown) {
+    return "To check which sections fit, open your shopping cart or schedule for this term in MyPack once.";
+  }
+  return mode === "recommended"
+    ? "Sections that fit your cart and enrolled classes for this term come first."
+    : "Each card shows whether it fits your cart and enrolled classes.";
+}
+
+export function SectionSortField({
   id,
-  checked,
-  onCheckedChange,
-  description = "Hide sections that overlap classes in your cart or enrolled schedule.",
-}: ScheduleFitFieldProps) {
+  value,
+  onValueChange,
+  scheduleKnown,
+}: SectionSortFieldProps) {
   return (
     <Field>
-      <div className="flex items-start gap-3 rounded-lg border-2 border-border bg-card p-3.5 shadow-sm dark:bg-card/95">
-        <PlannerCheckbox
-          id={id}
-          checked={checked}
-          onCheckedChange={onCheckedChange}
-          aria-describedby={`${id}-desc`}
-          className="mt-0.5"
-        />
-        <div className="min-w-0 space-y-1">
-          <FieldLabel
-            htmlFor={id}
-            className="cursor-pointer text-sm font-medium text-foreground"
-          >
-            Fits my schedule
-          </FieldLabel>
-          <FieldDescription id={`${id}-desc`}>{description}</FieldDescription>
-        </div>
-      </div>
+      <FieldLabel htmlFor={id}>Sort by</FieldLabel>
+      <Select
+        items={SECTION_SORT_OPTIONS}
+        value={value}
+        onValueChange={(next) => {
+          if (next) onValueChange(next);
+        }}
+      >
+        <SelectTrigger id={id} aria-describedby={`${id}-desc`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {SECTION_SORT_OPTIONS.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <FieldDescription id={`${id}-desc`}>
+        {sortHint(value, scheduleKnown)}
+      </FieldDescription>
     </Field>
   );
 }

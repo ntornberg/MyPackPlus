@@ -57,7 +57,6 @@ export default defineConfig(({ mode }) => {
           manualChunks: isProduction
             ? {
                 vendor: ["react", "react-dom"],
-                utils: ["cheerio"],
               }
             : undefined,
           chunkFileNames: isProduction
@@ -91,6 +90,10 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+    },
+    // Emit large catalog JSON as JSON.parse("…"), which parses faster than an object literal.
+    json: {
+      stringify: true,
     },
     define: {
       __DEV__: isDevelopment,

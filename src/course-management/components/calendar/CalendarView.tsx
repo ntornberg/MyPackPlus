@@ -1,19 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { cn } from "@/lib/utils";
 
 import { getCacheCategory } from "../../cache/courseRetrieval";
 import {
   getScheduleCacheGeneration,
   subscribeScheduleCache,
 } from "../../cache/scheduleCacheSignal";
-import { parseDayTimeEvent } from "../../schedule/parseScheduleDayTime";
+import {
+  isUntimedDayTime,
+  parseDayTimeEvents,
+} from "../../schedule/parseScheduleDayTime";
+import { cartSettingsOf } from "../../services/cartRows";
+import { enrichScheduleTopics } from "../../services/sectionMetadata";
 import {
   type ScheduleEvent,
   CALENDAR_COLOR_CART_CLASS,
   CALENDAR_COLOR_ENROLLED_CLASS,
+  calendarBlockShellStyle,
 } from "../../types/calendar";
-import type { SectionLinkedMeeting } from "../../types/section";
+import type {
+  ModifiedSection,
+  SectionLinkedMeeting,
+} from "../../types/section";
+import { datePart, semesterOfItem } from "../../utils/semester";
 
+import {
+  courseDetailsFromSection,
+  courseDetailsFromLabel,
+} from "./calendarCourseDetails";
 import CalendarGrid, { toMinutes } from "./CalendarGrid";
+import { CalendarHoverLayer } from "./CalendarHoverLayer";
 
 type ScheduleTableEntry = {
   DT_RowId: string | null;
@@ -60,6 +77,7 @@ type CachedEntry = {
 type CalendarEventEntry = Record<string, unknown>;
 
 type CalendarViewProps = {
+  selectedSection?: ModifiedSection;
   dayTime?: string;
   courseData?: { code?: string };
   /** Lab / recitation / studio rows paired with this section (same enrollment). */
@@ -86,38 +104,68 @@ function meetingCalendarLabel(
 }
 
 /** Prepends lecture + linked meetings (labs, etc.); overlap flags come from `markOverlaps`. */
-const mergePinnedDayTimeWithEvents = (
+export const mergePinnedDayTimeWithEvents = (
   dayTime: string | undefined,
   courseCode: string | undefined,
   cachedEvents: ScheduleEvent[],
   linkedMeetings?: SectionLinkedMeeting[],
+  selectedSection?: ModifiedSection,
 ): ScheduleEvent[] => {
   const maxBackgroundId =
     cachedEvents.length === 0 ? 0 : Math.max(...cachedEvents.map((e) => e.id));
   let nextId = maxBackgroundId + 1;
   const pins: ScheduleEvent[] = [];
-  const primary = parseDayTimeEvent(
+  for (const primary of parseDayTimeEvents(
     dayTime,
     meetingCalendarLabel(courseCode),
-    nextId++,
-  );
-  if (primary) {
+    nextId,
+  )) {
+    primary.course = selectedSection
+      ? courseDetailsFromSection(selectedSection)
+      : courseDetailsFromLabel(courseCode ?? "");
     pins.push(primary);
   }
+  nextId += pins.length;
   for (const m of linkedMeetings ?? []) {
-    const ev = parseDayTimeEvent(
+    const events = parseDayTimeEvents(
       m.dayTime,
       meetingCalendarLabel(courseCode, m.component),
-      nextId++,
+      nextId,
     );
-    if (ev) {
+    nextId += events.length;
+    for (const ev of events) {
+      ev.course = selectedSection
+        ? {
+            ...courseDetailsFromSection(selectedSection),
+            section: m.section,
+            topic: m.topic ?? selectedSection.topic,
+            title:
+              m.offering?.title ??
+              selectedSection.offering?.title ??
+              selectedSection.courseData?.title,
+            classNumber: m.classNumber,
+            component: m.component,
+            location: m.location,
+            instructors: (m.instructor_name ?? []).map((name, i) => ({
+              name,
+              unityId: m.instructor_unity_ids?.[i] || undefined,
+            })),
+            grade: undefined,
+            professor: undefined,
+          }
+        : courseDetailsFromLabel(courseCode ?? "");
       pins.push(ev);
     }
   }
   if (pins.length === 0) {
     return cachedEvents;
   }
-  return [...pins, ...cachedEvents];
+  // A section already in the cart (or enrolled) shows up in the background
+  // too; drop that copy so it doesn't read as a conflict with itself.
+  const background = cachedEvents.filter(
+    (event) => !pins.some((pin) => eventCoversCandidate(pin, event)),
+  );
+  return [...pins, ...background];
 };
 
 let cachedScheduleEvents: ScheduleEvent[] | null = null;
@@ -162,6 +210,10 @@ export const markOverlaps = (events: ScheduleEvent[]): ScheduleEvent[] => {
       const eventA = result[i];
       const eventB = result[j];
       if (
+        !eventA.allDay &&
+        !eventB.allDay &&
+        !eventA.dimmed &&
+        !eventB.dimmed &&
         toMinutes(eventA.start) < toMinutes(eventB.end) &&
         toMinutes(eventA.end) > toMinutes(eventB.start) &&
         hasSharedDay(eventA.days, eventB.days)
@@ -223,11 +275,48 @@ function buildEventsFromTableEntries(
   for (const course of Object.values(courses as Record<string, CachedEntry>)) {
     const scheduleEntry = unpackCachedData(course) as ScheduleTableEntry | null;
 
-    if (!scheduleEntry?.section_details) {
+    if (!Array.isArray(scheduleEntry?.section_details)) {
       continue;
     }
 
+    // MyPack's schedule lists `units`; cart rows (ours and some of MyPack's)
+    // only record the credits chosen at add time, as `unt_taken`.
+    const units = Number.parseFloat(
+      scheduleEntry.units ?? cartSettingsOf(scheduleEntry).unt_taken ?? "",
+    );
     for (const section of scheduleEntry.section_details) {
+      const course = {
+        code: scheduleEntry.classs?.trim() ?? "",
+        term: semesterOfItem(scheduleEntry, null) ?? undefined,
+        title:
+          scheduleEntry.crse_title ?? scheduleEntry.description ?? undefined,
+        section: section.section ?? undefined,
+        classNumber:
+          section.class_nbr ?? scheduleEntry.enroll_class_nbr ?? undefined,
+        eventId: scheduleEntry.eventid ?? undefined,
+        component: section.type ?? undefined,
+        location: section.location ?? section.facility ?? undefined,
+        units: Number.isFinite(units) ? units : undefined,
+        instructors: (section.instructors ?? []).map((name) => ({ name })),
+      };
+      if (
+        isUntimedDayTime(section.meet_days) &&
+        isUntimedDayTime(section.time)
+      ) {
+        const code = scheduleEntry.classs?.trim() || "Class";
+        events.push({
+          id: eventId++,
+          course,
+          subj: section.section ? `${code} (${section.section})` : code,
+          start: "",
+          end: "",
+          days: [],
+          color,
+          allDay: true,
+          semester: semesterOfItem(scheduleEntry, null) ?? undefined,
+        });
+        continue;
+      }
       if (!section.meet_days || !section.time) {
         continue;
       }
@@ -247,20 +336,26 @@ function buildEventsFromTableEntries(
       if (timeParts.length < 2) {
         continue;
       }
-      const [startTime, endTime] = timeParts;
+      // MyPack's table pads hours ("09:35 AM") while the calendar feed does
+      // not; normalize so both sources describe the same meeting identically.
+      const startTime = normalizeTime(timeParts[0]) ?? timeParts[0];
+      const endTime = normalizeTime(timeParts[1]) ?? timeParts[1];
       if (!startTime || !endTime) {
         continue;
       }
       const sectionType = section.type || "Section";
       const subject =
         `${scheduleEntry.classs?.trim() || ""} ${sectionType}`.trim();
+      const semester = semesterOfItem(scheduleEntry, null);
       events.push({
         id: eventId++,
         subj: subject,
+        course,
         start: startTime,
         end: endTime,
         days: recurrRule.map((day) => ({ day, isOverlapping: false })),
         color,
+        ...(semester ? { semester } : {}),
       });
     }
   }
@@ -455,7 +550,12 @@ function buildEventsFromCalendarEntries(
     const start = normalizeTime(startRaw);
     const end = normalizeTime(endRaw);
     const days = weekdaysFromEvent(entry);
-    if (!start || !end || days.length === 0) {
+    const allDay =
+      entry.allDay === true ||
+      entry.allDay === "true" ||
+      (!start && datePart(startRaw) !== null) ||
+      (start === "12:00 AM" && (!end || end === "12:00 AM"));
+    if (!allDay && (!start || !end || days.length === 0)) {
       continue;
     }
 
@@ -470,21 +570,54 @@ function buildEventsFromCalendarEntries(
         "course_title",
         "description",
       ]) ?? "Class";
+    const semester = semesterOfItem(entry, datePart(startRaw));
     events.push({
       id: eventId++,
       subj,
-      start,
-      end,
-      days,
+      course: courseDetailsFromLabel(subj)
+        ? {
+            ...courseDetailsFromLabel(subj)!,
+            term: semesterOfItem(entry, null) ?? undefined,
+          }
+        : undefined,
+      start: allDay ? "" : start!,
+      end: allDay ? "" : end!,
+      days: allDay ? [] : days,
       color,
+      ...(allDay ? { allDay: true } : {}),
+      ...(semester ? { semester } : {}),
     });
   }
 
   return events;
 }
 
+/**
+ * Table rows have no dates; rows stored before terms were captured inherit
+ * the semester of the same category's calendar events (the most common one),
+ * or stay unknown.
+ */
+function tagTableEventsWithSemester(
+  tableEvents: ScheduleEvent[],
+  calendarEvents: ScheduleEvent[],
+): ScheduleEvent[] {
+  const counts = new Map<string, number>();
+  for (const event of calendarEvents) {
+    if (event.semester) {
+      counts.set(event.semester, (counts.get(event.semester) ?? 0) + 1);
+    }
+  }
+  const [semester] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+  return semester
+    ? tableEvents.map((event) =>
+        // Rows captured with a term already know their semester.
+        event.semester ? event : { ...event, semester },
+      )
+    : tableEvents;
+}
+
 function normalizedCourseToken(subject: string): string | null {
-  const match = subject.toUpperCase().match(/\b[A-Z]{2,5}\s*\d{3}[A-Z]?\b/);
+  const match = subject.toUpperCase().match(/\b[A-Z]{1,5}\s*\d{3}[A-Z]?\b/);
   return match ? match[0].replace(/\s+/g, " ") : null;
 }
 
@@ -492,7 +625,26 @@ function eventCoversCandidate(
   existing: ScheduleEvent,
   candidate: ScheduleEvent,
 ): boolean {
-  if (existing.start !== candidate.start || existing.end !== candidate.end) {
+  if (
+    existing.course?.term &&
+    candidate.course?.term &&
+    existing.course.term !== candidate.course.term
+  )
+    return false;
+  if (
+    existing.course?.section &&
+    candidate.course?.section &&
+    existing.course.section !== candidate.course.section
+  )
+    return false;
+  if (Boolean(existing.allDay) !== Boolean(candidate.allDay)) {
+    return false;
+  }
+  if (
+    !existing.allDay &&
+    (toMinutes(existing.start) !== toMinutes(candidate.start) ||
+      toMinutes(existing.end) !== toMinutes(candidate.end))
+  ) {
     return false;
   }
 
@@ -503,6 +655,12 @@ function eventCoversCandidate(
   }
   if (!existingToken && !candidateToken && existing.subj !== candidate.subj) {
     return false;
+  }
+  if (existing.allDay) {
+    return (
+      existing.subj.match(/\([^)]+\)/)?.[0] ===
+      candidate.subj.match(/\([^)]+\)/)?.[0]
+    );
   }
 
   const existingDays = new Set(existing.days.map((day) => day.day));
@@ -545,12 +703,17 @@ export const loadScheduleEvents = async (): Promise<ScheduleEvent[]> => {
       );
 
       const tableEntries = await getCacheCategory("scheduleTableData");
-      const tableEvents = buildEventsFromTableEntries(
-        tableEntries,
-        CALENDAR_COLOR_ENROLLED_CLASS,
-        1 + calendarEvents.length,
+      const tableEvents = tagTableEventsWithSemester(
+        buildEventsFromTableEntries(
+          tableEntries,
+          CALENDAR_COLOR_ENROLLED_CLASS,
+          1 + calendarEvents.length,
+        ),
+        calendarEvents,
       );
-      const events = mergeScheduleSources(tableEvents, calendarEvents);
+      const events = await enrichScheduleTopics(
+        mergeScheduleSources(tableEvents, calendarEvents),
+      );
       if (generation === getScheduleCacheGeneration()) {
         cachedScheduleEvents = events;
       }
@@ -586,12 +749,17 @@ export const loadCartScheduleEvents = async (): Promise<ScheduleEvent[]> => {
       );
 
       const tableEntries = await getCacheCategory("shopCartTableData");
-      const tableEvents = buildEventsFromTableEntries(
-        tableEntries,
-        CALENDAR_COLOR_CART_CLASS,
-        10_000 + calendarEvents.length,
+      const tableEvents = tagTableEventsWithSemester(
+        buildEventsFromTableEntries(
+          tableEntries,
+          CALENDAR_COLOR_CART_CLASS,
+          10_000 + calendarEvents.length,
+        ),
+        calendarEvents,
       );
-      const events = mergeScheduleSources(tableEvents, calendarEvents);
+      const events = await enrichScheduleTopics(
+        mergeScheduleSources(tableEvents, calendarEvents),
+      );
       if (generation === getScheduleCacheGeneration()) {
         cachedCartEvents = events;
       }
@@ -618,12 +786,14 @@ export const loadCartScheduleEvents = async (): Promise<ScheduleEvent[]> => {
 export const CalendarView = (params: CalendarViewProps) => {
   const {
     dayTime,
+    selectedSection,
     courseData,
     linkedMeetings,
     staticBackgroundEvents,
     plannerPreview = false,
   } = params;
 
+  const calendarRef = useRef<HTMLDivElement>(null);
   const [eventData, setEventData] = useState<ScheduleEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const scheduleCacheVersion = useScheduleCacheVersion();
@@ -635,6 +805,7 @@ export const CalendarView = (params: CalendarViewProps) => {
         courseData?.code,
         staticBackgroundEvents,
         linkedMeetings,
+        selectedSection,
       );
       setEventData(markOverlaps(merged));
       setIsLoading(false);
@@ -653,6 +824,7 @@ export const CalendarView = (params: CalendarViewProps) => {
         courseData?.code,
         [],
         linkedMeetings,
+        selectedSection,
       );
       setEventData(markOverlaps(merged));
       setIsLoading(false);
@@ -670,6 +842,7 @@ export const CalendarView = (params: CalendarViewProps) => {
           courseData?.code,
           background,
           linkedMeetings,
+          selectedSection,
         );
         if (mounted) {
           setEventData(markOverlaps(merged));
@@ -697,27 +870,62 @@ export const CalendarView = (params: CalendarViewProps) => {
     staticBackgroundEvents,
     linkedMeetings,
     scheduleCacheVersion,
+    selectedSection,
   ]);
 
   if (isLoading) {
     return (
       <div
-        className={`flex h-full min-h-[400px] items-center justify-center rounded-2xl border border-border/60 bg-muted/30 text-sm text-muted-foreground ${plannerPreview ? "min-w-[460px] sm:min-w-[560px]" : ""}`}
+        className={`flex h-full min-h-[480px] items-center justify-center rounded-2xl border border-border/60 bg-muted/30 text-sm text-muted-foreground ${plannerPreview ? "min-w-[460px]" : ""}`}
       >
         Loading schedule...
       </div>
     );
   }
 
+  const untimedEvents = eventData.filter((event) => event.allDay);
   return (
     <div
+      ref={calendarRef}
       className={
         plannerPreview
-          ? "h-full w-full min-w-[460px] max-w-[1400px] shrink-0 sm:min-w-[560px]"
+          ? "h-full w-full min-w-[460px] max-w-[1400px] shrink-0"
           : "h-full w-full"
       }
     >
+      {untimedEvents.length > 0 ? (
+        <section
+          aria-label="Online / no fixed meeting time"
+          className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-muted/20 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Online / no fixed time
+          </p>
+          <ul className="flex flex-wrap gap-1.5">
+            {untimedEvents.map((event) => (
+              <li
+                key={event.id}
+                className={cn(
+                  "rounded-md py-1 pr-2 pl-2.5 text-[11px] leading-4 font-semibold",
+                  event.dimmed && "opacity-35",
+                )}
+                style={calendarBlockShellStyle(event.color)}
+              >
+                <button
+                  type="button"
+                  className="text-left"
+                  data-calendar-event={event.id}
+                  aria-label={`${event.subj} class information`}
+                >
+                  {event.subj}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <CalendarGrid eventData={eventData} />
+      <CalendarHoverLayer targetRef={calendarRef} events={eventData} />
     </div>
   );
 };

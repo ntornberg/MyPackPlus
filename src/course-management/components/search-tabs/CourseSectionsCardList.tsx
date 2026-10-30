@@ -1,4 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
 
 import {
   PaginationControls,
@@ -12,17 +14,30 @@ import {
   previewIdForGroupedRow,
   sectionMatchesInstructorFilter,
 } from "../../../ui-system/components/workbench/sectionCompareUtils";
+import { useCartCoursesContext } from "../../../ui-system/components/workbench/useCartCourses";
 import {
   createSectionPreview,
   type PlannerSectionPreview,
   type PlannerWorkbenchTab,
 } from "../../../ui-system/components/workbench/workbenchTypes";
+import type { CartSelection } from "../../services/replaceCartSection";
 import type { ScheduleEvent } from "../../types/calendar";
 import type { GroupedSections, ModifiedSection } from "../../types/section";
-import { sortSections } from "../../types/sectionSorting";
+import {
+  makeSectionComparator,
+  SECTION_SORT_OPTIONS,
+  type ScheduleFit,
+  type SectionSortMode,
+} from "../../types/sectionSorting";
+import { isSectionInCart } from "../../utils/cartCourses";
 import { modifiedSectionToScheduleEvents } from "../../utils/modifiedSectionToScheduleEvents";
-import { sectionFitsSchedule } from "../../utils/scheduleFitFilter";
+import {
+  courseCodeOf,
+  findScheduleConflicts,
+} from "../../utils/scheduleFitFilter";
 import { ToCartGroupedSectionCell } from "../cart/ToCartButtonCell";
+
+import { useMyPackPairingsState } from "./useMyPackPairings";
 
 type GroupedRow = GroupedSections & { uniqueRowId: string };
 
@@ -31,8 +46,14 @@ type CourseSectionCardRowProps = {
   isSelected: boolean;
   compact: boolean;
   selectedLabClassNumber?: string;
+  /** Names of cart/enrolled classes this section overlaps; [] when it fits; null when unknown. */
+  conflictsWith: string[] | null;
+  inCart: boolean;
+  /** The course's section in the cart, which this row's button would swap out. */
+  replaces?: CartSelection;
   onSelect: (rowId: string) => void;
   onLabClassChange: (rowId: string, classNbr: string) => void;
+  variant: "default" | "alternative";
 };
 
 const CourseSectionCardRow = memo(
@@ -41,8 +62,12 @@ const CourseSectionCardRow = memo(
     isSelected,
     compact,
     selectedLabClassNumber,
+    conflictsWith,
+    inCart,
+    replaces,
     onSelect,
     onLabClassChange,
+    variant,
   }: CourseSectionCardRowProps) {
     const lecture = row.lecture;
     const labs = useMemo(
@@ -59,14 +84,18 @@ const CourseSectionCardRow = memo(
       },
       [onLabClassChange, row.uniqueRowId],
     );
+    // Alternatives only swap for the course's cart section; enrolled ones swap in MyPack.
     const addToCartSlot = useMemo(
-      () => (
-        <ToCartGroupedSectionCell
-          {...row}
-          selectedLabClassNumber={selectedLabClassNumber}
-        />
-      ),
-      [row, selectedLabClassNumber],
+      () =>
+        variant === "alternative" && !replaces ? null : (
+          <ToCartGroupedSectionCell
+            {...row}
+            selectedLabClassNumber={selectedLabClassNumber}
+            inCart={inCart}
+            replaces={replaces}
+          />
+        ),
+      [variant, row, selectedLabClassNumber, inCart, replaces],
     );
 
     if (!lecture) {
@@ -82,6 +111,9 @@ const CourseSectionCardRow = memo(
         selectedLabClassNumber={multiLab ? selectedLabClassNumber : undefined}
         onLabClassChange={multiLab ? handleLabClassChange : undefined}
         addToCartSlot={addToCartSlot}
+        conflictsWith={conflictsWith}
+        inCart={inCart}
+        variant={variant}
       />
     );
   },
@@ -90,8 +122,13 @@ const CourseSectionCardRow = memo(
     prev.isSelected === next.isSelected &&
     prev.compact === next.compact &&
     prev.selectedLabClassNumber === next.selectedLabClassNumber &&
+    String(prev.conflictsWith) === String(next.conflictsWith) &&
+    (prev.conflictsWith === null) === (next.conflictsWith === null) &&
+    prev.inCart === next.inCart &&
+    prev.replaces === next.replaces &&
     prev.onSelect === next.onSelect &&
-    prev.onLabClassChange === next.onLabClassChange,
+    prev.onLabClassChange === next.onLabClassChange &&
+    prev.variant === next.variant,
 );
 
 export type CourseSectionsCardListProps = {
@@ -101,12 +138,105 @@ export type CourseSectionsCardListProps = {
   onPreviewSectionChange: (preview: PlannerSectionPreview | null) => void;
   /** Avoid row id collisions when multiple lists mount (e.g. different catalog numbers). */
   rowKeyPrefix?: string;
-  sortFunc?: (a: GroupedSections, b: GroupedSections) => number;
   instructorFilter: string | null;
-  scheduleFitOnly: boolean;
-  scheduleBackground: ScheduleEvent[];
+  sortMode: SectionSortMode;
+  scheduleBackground: ScheduleEvent[] | null;
   compact?: boolean;
+  /**
+   * When one of these sections is in the cart, the others offer Replace
+   * (swap it for them) instead of Add to cart.
+   */
+  replaceInCart?: boolean;
+  /** Lecture class numbers to leave out, e.g. the section a course already has. */
+  excludeClassNumbers?: ReadonlySet<string>;
+  /** "alternative": small replacement cards, with Replace only when `replaceInCart` finds a cart section. */
+  variant?: "default" | "alternative";
+  /** A card's lab before one is picked; `defaultLabClassForGroup` otherwise. */
+  defaultLabClassFor?: (row: GroupedSections) => string | undefined;
 };
+
+/** The lecture with the lab the cart holds (or its first lab), as the cart services take it. */
+export function cartSelectionFor(
+  row: GroupedSections,
+  cartClassNumbers: Set<string>,
+): CartSelection | undefined {
+  const lecture = row.lecture;
+  if (!lecture) {
+    return undefined;
+  }
+  const labs = (row.labs ?? []).filter(Boolean) as ModifiedSection[];
+  if (labs.length === 0) {
+    return { section: lecture };
+  }
+  const lab =
+    labs.find((l) => cartClassNumbers.has(String(l.classNumber))) ?? labs[0]!;
+  return { section: lab, parent: lecture };
+}
+
+/**
+ * Scrolls the nearest scrolling ancestor up so `element` starts at its top,
+ * or all the way up with `toTop`.
+ * Not scrollIntoView: that also scrolls overflow-hidden ancestors, which
+ * shifts the whole planner dialog off screen.
+ */
+function scrollUpTo(element: HTMLElement, toTop: boolean): void {
+  let scroller = element.parentElement;
+  while (
+    scroller &&
+    !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
+  ) {
+    scroller = scroller.parentElement;
+  }
+  if (!scroller) {
+    return;
+  }
+  if (toTop) {
+    scroller.scrollTop = 0;
+    return;
+  }
+  const offset =
+    element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  if (offset < 0) {
+    scroller.scrollTop += offset;
+  }
+}
+
+/** Cart/enrolled classes the row's meetings overlap, for one lab choice. */
+export function conflictsFor(
+  row: GroupedSections,
+  labClass: string | undefined,
+  background: ScheduleEvent[],
+): ScheduleEvent[] | null {
+  const section = groupedSectionForPreview(row, labClass);
+  if (!section) {
+    return null;
+  }
+  return findScheduleConflicts(
+    modifiedSectionToScheduleEvents(section),
+    background,
+  );
+}
+
+/**
+ * Whether a grouped section fits cart + enrolled classes with *any* of its lab
+ * options, so picking a different lab doesn't change the answer.
+ */
+export function groupedSectionFit(
+  row: GroupedSections,
+  background: ScheduleEvent[] | null,
+): ScheduleFit {
+  if (!background) {
+    return "unknown";
+  }
+  const labs = (row.labs ?? []).filter(Boolean) as ModifiedSection[];
+  const options =
+    labs.length > 1 ? labs.map((lab) => String(lab.classNumber)) : [""];
+  const anyFits = options.some(
+    (labClass) =>
+      conflictsFor(row, labClass || undefined, background)?.length === 0,
+  );
+  return anyFits ? "fits" : "conflicts";
+}
 
 export function CourseSectionsCardList({
   tab,
@@ -114,18 +244,32 @@ export function CourseSectionsCardList({
   selectedPreviewId,
   onPreviewSectionChange,
   rowKeyPrefix = "",
-  sortFunc = sortSections,
   instructorFilter,
-  scheduleFitOnly,
+  sortMode,
   scheduleBackground,
   compact = false,
+  replaceInCart = false,
+  excludeClassNumbers,
+  variant = "default",
+  defaultLabClassFor = defaultLabClassForGroup,
 }: CourseSectionsCardListProps) {
   const [labClassByRowId, setLabClassByRowId] = useState<
     Record<string, string>
   >({});
+  const cart = useCartCoursesContext();
 
+  const {
+    sections: pairedSections,
+    loading: registrationLoading,
+    retry: retryRegistration,
+  } = useMyPackPairingsState(sections);
+  const missingRegistration = pairedSections.some(
+    (group) =>
+      group.lecture?.requiresExactCartPayload &&
+      !Object.keys(group.cartPayloads ?? {}).length,
+  );
   const processedRows = useMemo((): GroupedRow[] => {
-    return [...sections].sort(sortFunc).flatMap((section, index) => {
+    return pairedSections.flatMap<GroupedRow>((section, index) => {
       if (section.lecture) {
         const id = section.lecture.classNumber || `grouped-${index}`;
         return [{ ...section, uniqueRowId: `${rowKeyPrefix}${id}` }];
@@ -142,45 +286,49 @@ export function CourseSectionsCardList({
       }
       return [];
     });
-  }, [sections, rowKeyPrefix, sortFunc]);
+  }, [pairedSections, rowKeyPrefix]);
 
   useEffect(() => {
     setLabClassByRowId({});
   }, [sections, rowKeyPrefix]);
 
+  // Ordering uses the any-lab fit so cards don't jump when a lab is picked.
+  const sortFitByRowId = useMemo(() => {
+    const fits = new Map<string, ScheduleFit>();
+    for (const row of processedRows) {
+      fits.set(row.uniqueRowId, groupedSectionFit(row, scheduleBackground));
+    }
+    return fits;
+  }, [processedRows, scheduleBackground]);
+
   const filteredRows = useMemo(() => {
-    return processedRows.filter((row) => {
-      const lec = row.lecture;
-      if (!lec) {
-        return false;
-      }
-      if (!sectionMatchesInstructorFilter(lec, instructorFilter)) {
-        return false;
-      }
-      if (scheduleFitOnly) {
-        const pick = labClassByRowId[row.uniqueRowId];
-        const previewSec = groupedSectionForPreview(row, pick);
-        if (!previewSec) {
-          return false;
-        }
-        const evs = modifiedSectionToScheduleEvents(previewSec);
-        if (!sectionFitsSchedule(evs, scheduleBackground)) {
-          return false;
-        }
-      }
-      return true;
-    });
+    // Restored tab state may predate a mode; fall back rather than misbehave.
+    const mode = SECTION_SORT_OPTIONS.some((o) => o.value === sortMode)
+      ? sortMode
+      : "recommended";
+    const comparator = makeSectionComparator(mode, (group) =>
+      sortFitByRowId.get((group as GroupedRow).uniqueRowId),
+    );
+    return processedRows
+      .filter(
+        (row) =>
+          row.lecture != null &&
+          !excludeClassNumbers?.has(String(row.lecture.classNumber)) &&
+          sectionMatchesInstructorFilter(row.lecture, instructorFilter),
+      )
+      .sort(comparator);
   }, [
     processedRows,
     instructorFilter,
-    scheduleFitOnly,
-    labClassByRowId,
-    scheduleBackground,
+    sortMode,
+    sortFitByRowId,
+    excludeClassNumbers,
   ]);
+
   const paginationResetKey = [
     rowKeyPrefix,
     instructorFilter ?? "",
-    scheduleFitOnly ? "1" : "0",
+    sortMode,
     compact ? "1" : "0",
   ].join("|");
   const {
@@ -189,6 +337,16 @@ export function CourseSectionsCardList({
     setPage,
     slice: paginatedRows,
   } = usePagination(filteredRows, compact ? 8 : 4, paginationResetKey);
+
+  const replaces = useMemo(() => {
+    if (!replaceInCart || !cart) {
+      return undefined;
+    }
+    const cartRow = processedRows.find(
+      (row) => row.lecture != null && isSectionInCart(cart, row.lecture),
+    );
+    return cartRow ? cartSelectionFor(cartRow, cart.classNumbers) : undefined;
+  }, [replaceInCart, cart, processedRows]);
 
   const processedRowsById = useMemo(
     () => new Map(processedRows.map((row) => [row.uniqueRowId, row])),
@@ -220,9 +378,18 @@ export function CourseSectionsCardList({
 
   const handleCardSelect = useCallback(
     (rowId: string) => {
-      handleRowPreviewById(rowId);
+      const row = processedRowsById.get(rowId);
+      handleRowPreviewById(
+        rowId,
+        row ? (labClassByRowId[rowId] ?? defaultLabClassFor(row)) : undefined,
+      );
     },
-    [handleRowPreviewById],
+    [
+      defaultLabClassFor,
+      handleRowPreviewById,
+      labClassByRowId,
+      processedRowsById,
+    ],
   );
 
   const handleCardLabClassChange = useCallback(
@@ -235,16 +402,63 @@ export function CourseSectionsCardList({
     [handleRowPreviewById],
   );
 
+  const listTopRef = useRef<HTMLDivElement>(null);
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      setPage(nextPage);
+      const list = listTopRef.current;
+      if (list) {
+        // Course Search shows one list under its search options, so go back to
+        // them; GEP and Major tabs stack a list per course, so go back to its title.
+        const courseRow = list.closest<HTMLElement>("[data-course-row]");
+        scrollUpTo(courseRow ?? list, tab === "course_search");
+      }
+    },
+    [setPage, tab],
+  );
+
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={listTopRef} className="flex flex-col gap-3">
+      {missingRegistration ? (
+        <div
+          className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+          role="status"
+        >
+          <span>
+            {registrationLoading
+              ? "Loading registration details…"
+              : "Registration details unavailable. Open this term in MyPack to add these sections."}
+          </span>
+          {!registrationLoading ? (
+            <Button variant="ghost" size="sm" onClick={retryRegistration}>
+              Retry registration details
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <SectionCompareList
         isEmpty={filteredRows.length === 0}
         emptyMessage="No sections match the current filters for this course."
       >
         {paginatedRows.map((row) => {
           const pick =
-            labClassByRowId[row.uniqueRowId] ?? defaultLabClassForGroup(row);
+            labClassByRowId[row.uniqueRowId] ?? defaultLabClassFor(row);
           const selectedId = previewIdForGroupedRow(row, pick);
+          // The badge reflects the lab currently picked on the card.
+          const conflicts = scheduleBackground
+            ? conflictsFor(row, pick, scheduleBackground)
+            : null;
+          const conflictsWith = conflicts
+            ? [
+                ...new Set(
+                  conflicts.map((ev) => courseCodeOf(ev.subj) ?? ev.subj),
+                ),
+              ]
+            : null;
+          // Labs and problem sessions can be shared by several lectures, so only
+          // the enrollment section (always in its cart row) says which one is added.
+          const inCart =
+            row.lecture != null && isSectionInCart(cart, row.lecture);
 
           return (
             <CourseSectionCardRow
@@ -253,8 +467,12 @@ export function CourseSectionsCardList({
               isSelected={selectedId === selectedPreviewId}
               onSelect={handleCardSelect}
               compact={compact}
+              conflictsWith={conflictsWith}
+              inCart={inCart}
+              replaces={replaces}
               selectedLabClassNumber={pick}
               onLabClassChange={handleCardLabClassChange}
+              variant={variant}
             />
           );
         })}
@@ -262,7 +480,7 @@ export function CourseSectionsCardList({
       <PaginationControls
         page={page}
         pageCount={pageCount}
-        onPageChange={setPage}
+        onPageChange={handlePageChange}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import type {
   MatchedRateMyProf,
   SingleCourseDataResponse,
 } from "../../../../../types/api";
+import { ErrorBoundary } from "../../../../../ui-system/components/shared/ErrorBoundary";
 import { createShadowHost, injectCssOnce } from "../../../../../utils/dom";
 
 const DEGREE_AUDIT_CARD_STYLE_ID = "mpp-degree-audit-card-styles";
@@ -36,10 +37,11 @@ export function createProfessorCard(
 
   const profInfo = data.RateMyProfInfo;
 
-  // Check if there's any valid professor data
+  // Check if there's any valid professor data (a 0 rating is still data)
   if (
     !profInfo ||
-    (!profInfo.avgRating &&
+    (profInfo.avgRating == null &&
+      !profInfo.ratingState &&
       !profInfo.master_name &&
       !profInfo.first_name &&
       !profInfo.last_name)
@@ -48,20 +50,20 @@ export function createProfessorCard(
     return wrapper;
   }
 
-  // Prepare professor data for the component
   const profData: MatchedRateMyProf = {
-    master_name: profInfo.master_name ?? course.instructor,
-    first_name: profInfo.first_name,
-    last_name: profInfo.last_name,
-    avgRating: profInfo.avgRating,
-    department: profInfo.department,
-    school: profInfo.school,
-    id: profInfo.id,
+    ...profInfo,
+    master_name: profInfo.master_name || course.instructor,
   };
 
   // Render the professor rating card component
   const root = createRoot(container);
-  root.render(React.createElement(ProfRatingCard, { data: profData }));
+  root.render(
+    React.createElement(
+      ErrorBoundary,
+      { name: "rating card", fallback: null },
+      React.createElement(ProfRatingCard, { data: profData }),
+    ),
+  );
 
   return wrapper;
 }

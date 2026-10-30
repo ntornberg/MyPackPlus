@@ -1,7 +1,3 @@
-import {
-  SUPABASE_ANON_KEY,
-  SUPABASE_URL,
-} from "../../../../../config/supabase";
 import type {
   Course,
   CourseElements,
@@ -9,15 +5,20 @@ import type {
 } from "../../../../../types/api";
 import { AppLogger } from "../../../../../utils/logger";
 import {
+  GRADE_DATA_CACHE_VERSION,
   generateCacheKey,
   getGenericCache,
   setGenericCache,
 } from "../../../../cache/courseRetrieval";
+import { fetchGradeCourseV2, v2ToBatchResponse } from "../../gradesV2";
 import { createGradeCard } from "../grade/gradeService";
 import { createProfessorCard } from "../professor/ratingService";
 
 // Cache map to store course data in memory
 const courseDataCache = new Map<string, SingleCourseDataResponse>();
+
+// TTL for answers with neither grades nor a professor rating (30 minutes).
+const EMPTY_RESULT_CACHE_TTL_MS = 30 * 60 * 1000;
 
 /**
  * Fetches combined course and professor data from the backend API with layered caching.
@@ -30,7 +31,9 @@ async function fetchInlineCourseMetadata(
   course: Course,
 ): Promise<SingleCourseDataResponse | null> {
   // Generate a cache key for this course
-  const cacheKey = await generateCacheKey(course.abr + " " + course.instructor);
+  const cacheKey = await generateCacheKey(
+    `${GRADE_DATA_CACHE_VERSION} ${course.abr} ${course.instructor}`,
+  );
 
   // Check memory cache first
   if (courseDataCache.has(cacheKey)) {
@@ -38,11 +41,8 @@ async function fetchInlineCourseMetadata(
     return courseDataCache.get(cacheKey)!;
   }
 
-  // Generate hash for persistent cache lookup
-  const hash = await generateCacheKey(course.abr + " " + course.instructor);
-
   // Check persistent cache
-  const persistentCache = await getGenericCache("courseList", hash);
+  const persistentCache = await getGenericCache("courseList", cacheKey);
   AppLogger.info("Persistent cache:", persistentCache);
   if (persistentCache && persistentCache.combinedData) {
     try {
@@ -64,49 +64,27 @@ async function fetchInlineCourseMetadata(
   // Fetch from API if not in cache
   try {
     AppLogger.info("Fetching combined data from API for:", course);
-    const url = `${SUPABASE_URL}/functions/v1/database-access`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        courseName: course.abr,
-        professorName: course.instructor,
-      }),
+    // MyPack rows carry no Unity ID; the server only picks an instructor when the
+    // name maps to exactly one reviewed record.
+    const v2 = await fetchGradeCourseV2({
+      course: course.abr,
+      instructor_name: course.instructor,
     });
-
-    if (!response.ok) {
-      AppLogger.error(
-        "Error fetching combined data:",
-        response.status,
-        response.statusText,
-      );
-      return null;
-    }
-
-    const combined_data_json = await response.json();
-
-    const combinedData = {
-      CourseData: combined_data_json.data.course
-        ? combined_data_json.data.course
-        : null,
-      RateMyProfInfo: combined_data_json.data.prof
-        ? combined_data_json.data.prof
-        : null,
-    } as SingleCourseDataResponse;
-    // Store in memory cache
+    const batch = v2ToBatchResponse(v2);
+    const combinedData: SingleCourseDataResponse = {
+      CourseData: batch.courses?.[0] ?? null,
+      RateMyProfInfo: batch.profs?.[0] ?? null,
+    };
 
     courseDataCache.set(cacheKey, combinedData);
 
-    // Generate hash and store in persistent cache
-    const courseHash = await generateCacheKey(
-      course.abr + " " + course.instructor,
+    // Empty answers expire sooner so newly added grades/ratings show up quickly.
+    const isEmpty = !combinedData.CourseData && !combinedData.RateMyProfInfo;
+    await setGenericCache(
+      "courseList",
+      { [cacheKey]: JSON.stringify(combinedData) },
+      isEmpty ? EMPTY_RESULT_CACHE_TTL_MS : undefined,
     );
-    await setGenericCache("courseList", {
-      [courseHash]: JSON.stringify(combinedData),
-    });
 
     return combinedData;
   } catch (error) {
@@ -164,6 +142,7 @@ export async function getCourseAndProfessorDetails(
     return {
       gradeElement,
       professorElement,
+      data: combinedData,
     };
   } catch (error) {
     AppLogger.error("Exception while creating course elements:", error);
@@ -178,6 +157,7 @@ export async function getCourseAndProfessorDetails(
     return {
       gradeElement: gradeErrorElement,
       professorElement: profErrorElement,
+      data: null,
     };
   }
 }

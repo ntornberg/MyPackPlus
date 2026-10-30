@@ -7,3 +7,4 @@ public
 *.config.cjs
 coverage
 src/generated/catalogs
+supabase/functions

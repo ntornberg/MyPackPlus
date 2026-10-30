@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type PlannerPanelProps = {
@@ -20,6 +14,11 @@ type PlannerPanelProps = {
   headerClassName?: string;
 };
 
+/**
+ * A titled region of a planner column. Deliberately unboxed: the section and
+ * course cards inside it are the only framed surfaces, and stacked panels are
+ * split by a rule instead of each getting its own card.
+ */
 export function PlannerPanel({
   eyebrow,
   title,
@@ -31,29 +30,41 @@ export function PlannerPanel({
   headerClassName,
 }: PlannerPanelProps) {
   return (
-    <Card
-      className={cn("min-w-0 overflow-visible bg-card/80 shadow-sm", className)}
+    <section
+      data-planner-panel=""
+      className={cn(
+        "flex min-w-0 flex-col gap-4 text-sm text-card-foreground [[data-planner-panel]+&]:border-t [[data-planner-panel]+&]:border-border/60 [[data-planner-panel]+&]:pt-5",
+        className,
+      )}
     >
-      <CardHeader className={cn(actions ? "gap-3" : "gap-1", headerClassName)}>
-        {actions ? (
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      {eyebrow || title || description || actions ? (
+        <header
+          className={cn(
+            "flex flex-col",
+            actions ? "gap-3" : "gap-1",
+            headerClassName,
+          )}
+        >
+          {actions ? (
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <PlannerPanelTitle
+                eyebrow={eyebrow}
+                title={title}
+                description={description}
+              />
+              {actions}
+            </div>
+          ) : (
             <PlannerPanelTitle
               eyebrow={eyebrow}
               title={title}
               description={description}
             />
-            {actions}
-          </div>
-        ) : (
-          <PlannerPanelTitle
-            eyebrow={eyebrow}
-            title={title}
-            description={description}
-          />
-        )}
-      </CardHeader>
-      <CardContent className={contentClassName}>{children}</CardContent>
-    </Card>
+          )}
+        </header>
+      ) : null}
+      <div className={cn("min-w-0", contentClassName)}>{children}</div>
+    </section>
   );
 }
 
@@ -69,7 +80,7 @@ function PlannerPanelTitle({
           {eyebrow}
         </div>
       ) : null}
-      <CardTitle className="text-base">{title}</CardTitle>
+      {title ? <CardTitle className="text-base">{title}</CardTitle> : null}
       {description ? <CardDescription>{description}</CardDescription> : null}
     </div>
   );

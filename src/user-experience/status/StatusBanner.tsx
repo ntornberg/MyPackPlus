@@ -8,8 +8,13 @@ import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { UpdateAvailablePill } from "../update/UpdateAvailablePill";
+import { usePendingUpdate } from "../update/usePendingUpdate";
+
 import {
+  currentVersion,
   fetchStatusWorkerStatus,
+  isOutdated,
   type StatusLevel,
   type StatusWorkerStatus,
 } from "./statusWorker";
@@ -55,6 +60,7 @@ function StatusIcon({ level }: { level: StatusLevel }) {
 
 export function StatusBanner({ className }: { className?: string }) {
   const [status, setStatus] = useState<StatusWorkerStatus | null>(null);
+  const { version: pendingVersion } = usePendingUpdate();
 
   useEffect(() => {
     let isMounted = true;
@@ -83,6 +89,24 @@ export function StatusBanner({ className }: { className?: string }) {
     return null;
   }
 
+  // Outages outrank the nudge, and a downloaded update has its own pill.
+  const running = currentVersion();
+  if (
+    (status.level === "ok" || status.level === "info") &&
+    !pendingVersion &&
+    status.latestVersion &&
+    isOutdated(running, status.latestVersion)
+  ) {
+    return (
+      <UpdateAvailablePill
+        running={running}
+        latest={status.latestVersion}
+        notes={status.releaseNotes}
+        className={className}
+      />
+    );
+  }
+
   const role = status.level === "error" ? "alert" : "status";
   const showMessage = status.level !== "ok" && status.message.trim().length > 0;
   const label =
@@ -96,7 +120,7 @@ export function StatusBanner({ className }: { className?: string }) {
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex max-w-[min(56vw,360px)] items-center gap-2 rounded-full border px-2.5 py-1.5 text-left text-xs font-medium shadow-sm",
+        "inline-flex max-w-[min(56vw,360px)] animate-in items-center gap-2 rounded-full border px-2.5 py-1.5 text-left text-xs font-medium shadow-sm fade-in slide-in-from-top-1 duration-(--mpp-duration-enter) ease-(--mpp-ease-out)",
         levelStyles[status.level],
         className,
       )}

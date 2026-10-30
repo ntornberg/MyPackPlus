@@ -7,7 +7,14 @@ import type { Element as DomHandlerElement, Text } from "domhandler";
 import { TermIdByName } from "../../generated/catalogs/termIds";
 import { AppLogger } from "../logger";
 
+export type OfferingMetadata = Pick<
+  CourseData,
+  "title" | "description" | "units" | "prerequisite"
+>;
+
 export interface CourseSection {
+  topic?: string;
+  offering?: OfferingMetadata;
   id: string;
   section: string;
   component: string;
@@ -17,6 +24,8 @@ export interface CourseSection {
   dayTime: string;
   location: string;
   instructor_name: string[];
+  /** Unity IDs parallel to `instructor_name` ("" when the link has none). */
+  instructor_unity_ids?: string[];
 
   dates: string;
   notes: string | null;
@@ -30,6 +39,18 @@ export interface CourseData {
   description: string;
   prerequisite: string | null;
   sections: CourseSection[];
+}
+
+/**
+ * Extracts the Unity ID from a registrar instructor link
+ * (e.g. "http://directory.ncsu.edu/users/sjsimmo2" -> "sjsimmo2").
+ *
+ * @param {string | undefined} href Anchor href
+ * @returns {string} Lower-case Unity ID, or "" when absent
+ */
+export function parseUnityIdFromHref(href: string | undefined): string {
+  const match = href?.match(/directory\.ncsu\.edu\/users\/([A-Za-z0-9_-]+)/);
+  return match ? match[1].toLowerCase() : "";
 }
 
 /**
@@ -53,6 +74,10 @@ function ParseCourseElement(
   const description = courseSection.find("p").first().text().trim();
   const prerequisite = courseSection.find("p").eq(1).text().trim();
   const sections: CourseSection[] = [];
+  const headers = courseSection.find("table.section-table thead th").toArray();
+  const topicColumn = headers.findIndex(
+    (header) => $(header).text().trim().toLowerCase() === "topic",
+  );
   // NC State often omits <tbody>; rows sit directly under <table> after <thead>/<tfoot>.
   courseSection
     .find("table.section-table tr")
@@ -81,13 +106,29 @@ function ParseCourseElement(
         $dayTime.find(".hidden-xs").remove();
         $dayTime.find(".screen-reader-only-text").remove();
         const dayTime = $dayTime.text().replace(/\s+/g, " ").trim();
-        const location = $cells.eq(5).text().trim();
+        // One room per meeting, on separate lines in the cell.
+        const location = $("<div>")
+          .html(
+            ($cells.eq(5).html() || "").replace(
+              /<br\s*\/?>|<\/(?:div|p|li)>/gi,
+              "\n",
+            ),
+          )
+          .text()
+          .split("\n")
+          .map((line) => line.replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .join(" / ");
         const $instructorLink = $cells.eq(6).find("a.instructor-link");
         const ins_list = [];
+        const unity_list: string[] = [];
         for (let i = 0; i < $instructorLink.length; i++) {
           const firstChild = $instructorLink[i].children[0];
           if (firstChild?.type === "text") {
             ins_list.push((firstChild as Text).data);
+            unity_list.push(
+              parseUnityIdFromHref($instructorLink.eq(i).attr("href")),
+            );
           }
         }
 
@@ -109,6 +150,16 @@ function ParseCourseElement(
           ? notes_clean.replace(/^\s*<br>|<\/br>$/g, "")
           : null;
         sections.push({
+          topic:
+            (topicColumn >= 0
+              ? $cells.eq(topicColumn).text()
+              : headers.length === 0 && $cells.length >= 10
+                ? $cells.eq(8).text()
+                : ""
+            )
+              .replace(/\s+/g, " ")
+              .trim() || undefined,
+          offering: { title, description, units, prerequisite },
           id: `${section}-${classNumber}`,
           section,
           component,
@@ -118,6 +169,7 @@ function ParseCourseElement(
           dayTime,
           location,
           instructor_name: ins_list,
+          instructor_unity_ids: unity_list,
           dates,
           notes: notes_clean,
           requisites: requisites_clean,
@@ -188,14 +240,14 @@ export function formCourseURL(
     AppLogger.error("Unknown term", { term });
     return null;
   }
-  const parsedCatalogNum = catalog_num ? parseInt(catalog_num, 10) : 0;
-  if (Number.isNaN(parsedCatalogNum)) {
+  const parsedCatalogNum = catalog_num ? catalog_num.trim().toUpperCase() : "0";
+  if (!/^\d+[A-Z]?$/.test(parsedCatalogNum)) {
     AppLogger.error("Invalid catalog number", { catalog_num });
     return null;
   }
   const formData = new URLSearchParams();
   formData.append("term", term_id);
-  formData.append("subject", course_abr);
+  formData.append("subject", course_abr.split(" - ")[0]!.trim().toUpperCase());
   const inequality = catalog_num ? "=" : ">=";
   formData.append("course-inequality", inequality);
   formData.append("course-number", parsedCatalogNum.toString());

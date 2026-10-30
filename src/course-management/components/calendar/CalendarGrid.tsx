@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -23,12 +23,29 @@ export function toMinutes(time: string) {
   return h * 60 + minutes;
 }
 
-function compactEventLabel(subject: string): string {
-  if (subject.length <= 15 || window.innerWidth >= 600) {
-    return subject;
+/**
+ * Splits a block label like "CH 101 (004A)" or "PY 208 · Lab" into the course
+ * code and the remaining detail ("004A", "Lab") so each can get its own line.
+ */
+function splitEventLabel(subject: string): { code: string; detail: string } {
+  const match = subject.trim().match(/^([A-Z]{1,5}\s*\d{3}[A-Z]?)\b\s*(.*)$/i);
+  if (!match) {
+    return { code: subject.trim(), detail: "" };
   }
-  const parts = subject.split(" ");
-  return `${parts[0] ?? subject} ${parts[1] ?? ""}...`.trim();
+  const detail = match[2]
+    .replace(/^[·\-–:]\s*/, "")
+    .replace(/^\((.*)\)$/, "$1")
+    .trim();
+  return { code: match[1], detail };
+}
+
+/**
+ * "9:35 AM" + "11:25 AM" → "9:35–11:25". The hour labels already say AM/PM,
+ * and dropping it keeps the range readable in narrow blocks.
+ */
+function formatTimeRange(start: string, end: string): string {
+  const short = (time: string) => time.split(" ")[0].replace(/^0(?=\d)/, "");
+  return `${short(start)}–${short(end)}`;
 }
 
 /**
@@ -55,6 +72,52 @@ function getMetrics(
     topPx: (startMin - windowStartMin) * pxPerMin,
     heightPx: (endMin - startMin) * pxPerMin,
   };
+}
+
+/** Headroom above the first hour so its label can center on a real gridline. */
+const GRID_TOP_PAD = 10;
+
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
+type PlacedEvent = { ev: ScheduleEvent; lane: number; lanes: number };
+
+/**
+ * Assigns overlapping events in one day column to side-by-side lanes so a
+ * conflict never hides the block underneath it.
+ */
+function layoutDayEvents(dayEvents: ScheduleEvent[]): PlacedEvent[] {
+  const sorted = [...dayEvents].sort(
+    (a, b) =>
+      toMinutes(a.start) - toMinutes(b.start) ||
+      toMinutes(b.end) - toMinutes(a.end),
+  );
+  const placed: PlacedEvent[] = [];
+  let cluster: PlacedEvent[] = [];
+  let laneEnds: number[] = [];
+  let clusterEnd = -1;
+  const closeCluster = () => {
+    for (const p of cluster) p.lanes = laneEnds.length;
+    cluster = [];
+    laneEnds = [];
+  };
+  for (const ev of sorted) {
+    const start = toMinutes(ev.start);
+    const end = toMinutes(ev.end);
+    if (start >= clusterEnd) closeCluster();
+    let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(end);
+    } else {
+      laneEnds[lane] = end;
+    }
+    const p = { ev, lane, lanes: 1 };
+    cluster.push(p);
+    placed.push(p);
+    clusterEnd = Math.max(clusterEnd, end);
+  }
+  closeCluster();
+  return placed;
 }
 
 /* measure an element's size */
@@ -88,43 +151,58 @@ export default function CalendarGrid({
 }: {
   eventData: ScheduleEvent[];
 }) {
-  const { windowStart, windowEnd } = useMemo(() => {
-    if (eventData.length === 0) {
-      return { windowStart: 8, windowEnd: 18 };
+  const events = useMemo(
+    () => eventData.filter((event) => !event.allDay),
+    [eventData],
+  );
+  // Always run to 10 PM so evening sections fit without the grid resizing.
+  const windowEnd = 22;
+  const windowStart = useMemo(() => {
+    if (events.length === 0) {
+      return 8;
     }
 
-    const eventStarts = eventData.map((event) => toMinutes(event.start));
-    const eventEnds = eventData.map((event) => toMinutes(event.end));
+    const eventStarts = events.map((event) => toMinutes(event.start));
     const earliestHour = Math.floor(Math.min(...eventStarts) / 60);
-    const latestHour = Math.ceil(Math.max(...eventEnds) / 60);
-
-    return {
-      windowStart: Math.max(8, earliestHour - 1),
-      windowEnd: Math.min(22, Math.max(latestHour + 1, earliestHour + 6)),
-    };
-  }, [eventData]);
+    return Math.max(8, earliestHour - 1);
+  }, [events]);
   const hours = Array.from(
     { length: windowEnd - windowStart + 1 },
     (_, i) => windowStart + i,
   );
-  const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const events = eventData;
+  const eventsByDay = useMemo(
+    () =>
+      Object.fromEntries(
+        WEEKDAYS.map((day) => [
+          day,
+          layoutDayEvents(
+            events.filter((e) => e.days.some((d) => d.day === day)),
+          ),
+        ]),
+      ),
+    [events],
+  );
   const [bodyRef, body] = useSize<HTMLDivElement>();
+  // Size by the grid itself, not the window: in the drawer the window is wide
+  // while the preview calendar can be narrow.
+  const narrow = body.w > 0 && body.w < 360;
+  const bodyPx = Math.max(0, body.h - GRID_TOP_PAD);
+  const pxPerHour = bodyPx / (windowEnd - windowStart);
 
   return (
-    <div className="mx-auto grid h-[400px] min-h-[400px] w-full max-w-[1400px] grid-cols-[48px_repeat(5,minmax(52px,1fr))] grid-rows-[40px_1fr] overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-background via-muted/15 to-muted/35 shadow-sm dark:bg-[linear-gradient(165deg,rgba(6,12,22,0.98)_0%,rgba(10,18,32,0.99)_45%,rgba(8,14,26,1)_100%)] dark:shadow-none sm:grid-cols-[60px_repeat(5,minmax(56px,1fr))] sm:grid-rows-[48px_1fr]">
+    <div className="mx-auto grid h-[500px] min-h-[500px] w-full max-w-[1400px] grid-cols-[44px_repeat(5,minmax(52px,1fr))] grid-rows-[36px_1fr] overflow-hidden rounded-2xl border border-border bg-background shadow-sm dark:border-white/10 dark:bg-[#0a1220] sm:grid-cols-[52px_repeat(5,minmax(56px,1fr))] sm:grid-rows-[40px_1fr]">
       <div
-        className="border-b border-r border-border bg-muted/50 dark:border-white/10 dark:bg-white/[0.06]"
+        className="border-b border-border bg-muted/40 dark:border-white/10 dark:bg-white/[0.03]"
         style={{ gridColumn: 1, gridRow: 1 }}
       />
 
-      {weekdays.map((day, index) => (
+      {WEEKDAYS.map((day, index) => (
         <div
           key={day}
           className={cn(
-            "flex items-center justify-center border-b border-border bg-muted/40 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground sm:px-2 sm:text-xs",
-            "dark:border-white/10 dark:bg-gradient-to-b dark:from-white/[0.08] dark:to-white/[0.02]",
-            index < 4 && "border-r border-border dark:border-white/[0.08]",
+            "flex items-center justify-center border-b border-border bg-muted/40 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:px-2 sm:text-[11px]",
+            "dark:border-white/10 dark:bg-white/[0.03]",
+            index < 4 && "border-r border-border/50 dark:border-white/[0.05]",
           )}
           style={{
             gridColumn: index + 2,
@@ -136,25 +214,21 @@ export default function CalendarGrid({
         </div>
       ))}
 
-      <div
-        className="relative border-r border-border bg-muted/30 dark:border-white/10 dark:bg-black/20"
-        style={{ gridColumn: 1, gridRow: 2 }}
-      >
+      <div className="relative" style={{ gridColumn: 1, gridRow: 2 }}>
         {hours.map((h) => {
-          const top =
-            body.h > 0
-              ? (body.h / ((windowEnd - windowStart) * 60)) *
-                (h * 60 - windowStart * 60)
-              : 0;
+          // The closing hour is the bottom edge, so it gets no label.
+          if (h === windowEnd) return null;
+          const top = GRID_TOP_PAD + pxPerHour * (h - windowStart);
           return (
             <span
               key={h}
-              className="pointer-events-none absolute left-1 select-none text-[9px] tabular-nums text-muted-foreground sm:left-2 sm:text-[10px] md:left-3 md:text-[11px]"
-              style={{ top: top - 8 }}
+              className="pointer-events-none absolute right-1.5 select-none text-[9px] font-medium leading-none tabular-nums text-muted-foreground/80 sm:right-2 sm:text-[10px]"
+              style={{ top, transform: "translateY(-50%)" }}
             >
-              {window.innerWidth < 600
-                ? `${((h + 11) % 12) + 1}${h < 12 ? "a" : "p"}`
-                : `${((h + 11) % 12) + 1}${h < 12 ? "AM" : "PM"}`}
+              {((h + 11) % 12) + 1}
+              <span className="ml-px text-[0.85em] opacity-70">
+                {narrow ? (h < 12 ? "a" : "p") : h < 12 ? "AM" : "PM"}
+              </span>
             </span>
           );
         })}
@@ -162,89 +236,125 @@ export default function CalendarGrid({
 
       <div
         ref={bodyRef}
-        className="relative grid grid-cols-5 bg-gradient-to-b from-muted/20 to-muted/45 dark:bg-[linear-gradient(180deg,rgba(12,20,36,0.5)_0%,rgba(8,14,26,0.85)_100%)]"
+        className="relative grid grid-cols-5"
         style={{ gridColumn: "2 / span 5", gridRow: 2 }}
       >
         {hours.map((h) => {
-          if (h === windowStart) return null;
-          const top =
-            body.h > 0
-              ? (body.h / ((windowEnd - windowStart) * 60)) *
-                (h * 60 - windowStart * 60)
-              : 0;
+          if (h === windowEnd) return null;
+          const top = GRID_TOP_PAD + pxPerHour * (h - windowStart);
           return (
-            <div
-              key={h}
-              className="absolute inset-x-0 border-t border-border/60 dark:border-white/[0.06]"
-              style={{ top }}
-            />
+            <Fragment key={h}>
+              <div
+                className="absolute inset-x-0 border-t border-border/70 dark:border-white/[0.07]"
+                style={{ top }}
+              />
+              <div
+                className="absolute inset-x-0 border-t border-dashed border-border/35 dark:border-white/[0.03]"
+                style={{ top: top + pxPerHour / 2 }}
+              />
+            </Fragment>
           );
         })}
 
-        {weekdays.map((day, colIdx) => (
+        {WEEKDAYS.map((day, colIdx) => (
           <div
             key={day}
             className={cn(
-              "relative text-foreground/95",
+              "relative",
               colIdx < 4 &&
-                "border-r border-border/60 dark:border-white/[0.06]",
+                "border-r border-border/50 dark:border-white/[0.05]",
             )}
           >
             {body.h > 0 &&
-              events
-                .filter((e) => e.days.some((d) => d.day === day))
-                .map((ev) => {
-                  const { topPx, heightPx } = getMetrics(
-                    ev.start,
-                    ev.end,
-                    body.h,
-                    windowStart,
-                    windowEnd,
-                  );
-                  const isOverlap = ev.days.some(
-                    (d) => d.isOverlapping && d.day === day,
-                  );
-                  const conflictNames = ev.days
-                    .find((d) => d.day === day)
-                    ?.conflictsWith?.filter((name) => name !== ev.subj);
-                  const conflictLabel =
-                    conflictNames && conflictNames.length > 0
-                      ? `Conflicts with ${conflictNames.join(", ")}`
-                      : "Conflicts with another class";
-                  return (
-                    <div
-                      key={`${ev.id}-${day}`}
+              eventsByDay[day].map(({ ev, lane, lanes }) => {
+                const { topPx, heightPx } = getMetrics(
+                  ev.start,
+                  ev.end,
+                  bodyPx,
+                  windowStart,
+                  windowEnd,
+                );
+                const isOverlap = ev.days.some(
+                  (d) => d.isOverlapping && d.day === day,
+                );
+                const conflictNames = ev.days
+                  .find((d) => d.day === day)
+                  ?.conflictsWith?.filter((name) => name !== ev.subj);
+                const conflictLabel =
+                  conflictNames && conflictNames.length > 0
+                    ? `Conflicts with ${conflictNames.join(", ")}`
+                    : "Conflicts with another class";
+                const { code, detail } = splitEventLabel(ev.subj);
+                const timeRange = formatTimeRange(ev.start, ev.end);
+                const height = Math.max(heightPx - 2, 18);
+                // Only show as many lines as the block can hold, so text never clips.
+                const lines = height >= 46 ? 3 : height >= 32 ? 2 : 1;
+                const inset = lanes > 1 ? 1.5 : narrow ? 3 : 4;
+                return (
+                  <button
+                    type="button"
+                    aria-label={`${ev.subj} class information`}
+                    key={`${ev.id}-${day}`}
+                    data-calendar-event={ev.id}
+                    tabIndex={0}
+                    className={cn(
+                      "group/event absolute flex min-w-0 flex-col items-start justify-start overflow-hidden rounded-md px-1.5 py-[3px] text-left transition-[filter,transform] hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring sm:px-2",
+                      lines === 1 && "justify-center py-0",
+                      ev.dimmed &&
+                        "opacity-35 outline-1 outline-dashed outline-foreground/50",
+                    )}
+                    title={
+                      isOverlap
+                        ? conflictLabel
+                        : ev.dimmed
+                          ? `${ev.subj} · ${timeRange} (would be replaced)`
+                          : `${ev.subj} · ${timeRange}`
+                    }
+                    style={{
+                      top: GRID_TOP_PAD + topPx + 1,
+                      left: `calc(${(lane / lanes) * 100}% + ${inset}px)`,
+                      width: `calc(${100 / lanes}% - ${inset * 2}px)`,
+                      height,
+                      zIndex: isOverlap ? 3 : 2,
+                      ...(isOverlap
+                        ? CALENDAR_CONFLICT_BLOCK_SHELL
+                        : calendarBlockShellStyle(ev.color)),
+                    }}
+                  >
+                    <span
                       className={cn(
-                        "group/event absolute flex min-h-[18px] items-center overflow-hidden rounded-lg px-1.5 py-0.5 text-[8px] leading-snug font-semibold tracking-tight text-white transition-opacity sm:min-h-5 sm:px-2 sm:py-1 sm:text-[9px] md:text-[10px]",
-                        isOverlap && "hover:opacity-[0.85]",
+                        "flex w-full min-w-0 flex-col transition-opacity",
+                        isOverlap && "group-hover/event:opacity-0",
                       )}
-                      title={isOverlap ? conflictLabel : undefined}
-                      style={{
-                        top: topPx,
-                        left: window.innerWidth < 640 ? 3 : 5,
-                        right: window.innerWidth < 640 ? 3 : 5,
-                        height: Math.max(heightPx, 18),
-                        zIndex: isOverlap ? 3 : 2,
-                        ...(isOverlap
-                          ? CALENDAR_CONFLICT_BLOCK_SHELL
-                          : calendarBlockShellStyle(ev.color)),
-                      }}
                     >
-                      <span
-                        className={cn(
-                          isOverlap && "group-hover/event:opacity-20",
-                        )}
-                      >
-                        {compactEventLabel(ev.subj)}
+                      <span className="w-full truncate text-[10px] leading-[13px] font-bold sm:text-[11px] sm:leading-[14px]">
+                        {code}
+                        {lines === 1 && detail ? (
+                          <span className="font-medium opacity-80">
+                            {" "}
+                            {detail}
+                          </span>
+                        ) : null}
                       </span>
-                      {isOverlap ? (
-                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45 px-1 text-center text-[8px] font-semibold leading-tight opacity-0 transition-opacity group-hover/event:opacity-100 sm:text-[9px]">
-                          {compactEventLabel(conflictLabel)}
+                      {lines >= 2 ? (
+                        <span className="w-full truncate text-[9px] leading-[12px] font-medium opacity-85 sm:text-[10px] sm:leading-[13px]">
+                          {detail || timeRange}
                         </span>
                       ) : null}
-                    </div>
-                  );
-                })}
+                      {lines >= 3 && detail ? (
+                        <span className="w-full truncate text-[9px] leading-[12px] tabular-nums opacity-75 sm:text-[10px] sm:leading-[13px]">
+                          {timeRange}
+                        </span>
+                      ) : null}
+                    </span>
+                    {isOverlap ? (
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/55 px-1 text-center text-[9px] leading-tight font-semibold opacity-0 transition-opacity group-hover/event:opacity-100">
+                        <span className="line-clamp-2">{conflictLabel}</span>
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
           </div>
         ))}
       </div>

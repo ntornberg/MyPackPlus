@@ -6,7 +6,10 @@ import {
   generateCacheKey,
   getCacheCategory,
   getGenericCache,
+  getGenericCacheMany,
   isCacheEntryExpired,
+  noteGradeDatasetVersion,
+  resetGradeDatasetVersionForTests,
   setGenericCache,
   type CacheEntry,
 } from "./courseRetrieval.js";
@@ -30,7 +33,9 @@ function installChromeStorageMock(storageState: Record<string, any>): {
   const chromeMock: ChromeStorageMock = {
     storage: {
       local: {
-        get: vi.fn(async (key: string) => ({ [key]: storageState[key] })),
+        get: vi.fn(async (key: string | null) =>
+          key === null ? { ...storageState } : { [key]: storageState[key] },
+        ),
         set: vi.fn(async (payload: Record<string, any>) => {
           setCalls.push(payload);
           for (const [key, value] of Object.entries(payload)) {
@@ -154,7 +159,7 @@ describe("CourseRetrieval cache expiration", () => {
     expect(storageState[cacheCategory].expired).toBeUndefined();
   });
 
-  it("clears cache categories without removing analytics state", async () => {
+  it("clears cache categories without clearing all extension storage", async () => {
     const storageState: Record<string, any> = {
       openCourses: {
         CSC_316_Fall_2024: {
@@ -182,6 +187,119 @@ describe("CourseRetrieval cache expiration", () => {
     expect(storageState.openCourses).toBeUndefined();
     expect(storageState.scheduleTableData).toBeUndefined();
   });
+
+  it("clears every revision of versioned categories on update", async () => {
+    const entry = { a: { combinedData: "{}", timestamp: 1 } };
+    const storageState: Record<string, any> = {
+      "openCourses-v3-2026-10": entry,
+      "openCourses-v2-2026-08": entry,
+      gradeDatasetVersion: "v-1",
+    };
+    installChromeStorageMock(storageState);
+
+    await clearAllExtensionCaches();
+
+    expect(storageState["openCourses-v3-2026-10"]).toBeUndefined();
+    expect(storageState["openCourses-v2-2026-08"]).toBeUndefined();
+    expect(storageState.gradeDatasetVersion).toBe("v-1");
+    expect(typeof storageState.cacheEpoch).toBe("number");
+  });
+});
+
+describe("getGenericCacheMany", () => {
+  const cacheCategory = "gradeProfData";
+  const now = 100_000;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (globalThis as unknown as { chrome?: ChromeStorageMock }).chrome;
+  });
+
+  function seedStorage(): Record<string, Record<string, CacheEntry>> {
+    return {
+      [cacheCategory]: {
+        fresh1: { combinedData: "a", timestamp: now - 10, expiresAt: now + 1 },
+        fresh2: { combinedData: "b", timestamp: now - 10, expiresAt: now + 1 },
+        stale1: { combinedData: "c", timestamp: now - 10, expiresAt: now - 1 },
+        stale2: { combinedData: "d", timestamp: now - 10, expiresAt: now - 1 },
+      },
+    };
+  }
+
+  it("returns every hit from a single storage read", async () => {
+    const storageState = seedStorage();
+    const { chromeMock, setCalls } = installChromeStorageMock(storageState);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const result = await getGenericCacheMany(cacheCategory, [
+      "fresh1",
+      "fresh2",
+      "fresh1",
+    ]);
+
+    expect(result).toEqual({
+      fresh1: storageState[cacheCategory].fresh1,
+      fresh2: storageState[cacheCategory].fresh2,
+    });
+    expect(chromeMock.storage.local.get).toHaveBeenCalledTimes(1);
+    expect(setCalls).toHaveLength(0);
+  });
+
+  it("drops expired entries with one removal write", async () => {
+    const storageState = seedStorage();
+    const { chromeMock, setCalls } = installChromeStorageMock(storageState);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const result = await getGenericCacheMany(cacheCategory, [
+      "fresh1",
+      "stale1",
+      "stale2",
+    ]);
+
+    expect(Object.keys(result)).toEqual(["fresh1"]);
+    // One lookup read plus the removal's locked read-modify-write.
+    expect(chromeMock.storage.local.get).toHaveBeenCalledTimes(2);
+    expect(setCalls).toHaveLength(1);
+    expect(Object.keys(storageState[cacheCategory]).sort()).toEqual([
+      "fresh1",
+      "fresh2",
+    ]);
+  });
+
+  it("leaves misses out of the result", async () => {
+    const storageState = seedStorage();
+    const { chromeMock, setCalls } = installChromeStorageMock(storageState);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const result = await getGenericCacheMany(cacheCategory, [
+      "missing1",
+      "fresh2",
+      "missing2",
+    ]);
+
+    expect(Object.keys(result)).toEqual(["fresh2"]);
+    expect(chromeMock.storage.local.get).toHaveBeenCalledTimes(1);
+    expect(setCalls).toHaveLength(0);
+  });
+
+  it("skips storage entirely for an empty key list", async () => {
+    const { chromeMock } = installChromeStorageMock(seedStorage());
+
+    expect(await getGenericCacheMany(cacheCategory, [])).toEqual({});
+    expect(chromeMock.storage.local.get).not.toHaveBeenCalled();
+  });
+
+  it("keeps getGenericCache as a one-key lookup", async () => {
+    const storageState = seedStorage();
+    const { chromeMock } = installChromeStorageMock(storageState);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    expect(await getGenericCache(cacheCategory, "fresh1")).toEqual(
+      storageState[cacheCategory].fresh1,
+    );
+    expect(await getGenericCache(cacheCategory, "missing")).toBeNull();
+    expect(chromeMock.storage.local.get).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("generateCacheKey", () => {
@@ -196,5 +314,46 @@ describe("generateCacheKey", () => {
     expect(key).toMatch(/^hash_[0-9a-f]{16}$/);
     expect(await generateCacheKey("x".repeat(100))).toBe(key);
     expect(await generateCacheKey(`${"x".repeat(99)}y`)).not.toBe(key);
+  });
+});
+
+describe("noteGradeDatasetVersion", () => {
+  afterEach(() => {
+    resetGradeDatasetVersionForTests();
+  });
+
+  it("records the first version without clearing caches", async () => {
+    const storageState: Record<string, any> = {
+      gradeProfData: { a: { combinedData: "{}", timestamp: 1 } },
+    };
+    installChromeStorageMock(storageState);
+
+    expect(await noteGradeDatasetVersion("v-1")).toBe(false);
+    expect(storageState.gradeDatasetVersion).toBe("v-1");
+    expect(storageState.gradeProfData).toBeDefined();
+  });
+
+  it("clears grade caches and bumps the epoch when the version changes", async () => {
+    const storageState: Record<string, any> = {
+      gradeDatasetVersion: "v-1",
+      gradeProfData: { a: { combinedData: "{}", timestamp: 1 } },
+      courseList: { b: { combinedData: "{}", timestamp: 1 } },
+      instructorSearch: { d: { combinedData: "{}", timestamp: 1 } },
+      instructorUpcoming: { e: { combinedData: "{}", timestamp: 1 } },
+      openCourses: { c: { combinedData: "{}", timestamp: 1 } },
+    };
+    installChromeStorageMock(storageState);
+
+    expect(await noteGradeDatasetVersion("v-2")).toBe(true);
+    expect(storageState.gradeDatasetVersion).toBe("v-2");
+    expect(storageState.gradeProfData).toBeUndefined();
+    expect(storageState.courseList).toBeUndefined();
+    expect(storageState.instructorSearch).toBeUndefined();
+    expect(storageState.instructorUpcoming).toBeUndefined();
+    expect(storageState.openCourses).toBeDefined();
+    expect(typeof storageState.cacheEpoch).toBe("number");
+
+    // Same version again is a no-op.
+    expect(await noteGradeDatasetVersion("v-2")).toBe(false);
   });
 });

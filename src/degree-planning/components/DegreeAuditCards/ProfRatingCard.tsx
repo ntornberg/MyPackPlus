@@ -1,6 +1,11 @@
 import { ExternalLinkIcon } from "lucide-react";
 
 import { buildRateMyProfessorUrl } from "@/utils/rateMyProfessor";
+import {
+  describeRating,
+  formatPercent,
+  formatRatingCount,
+} from "@/utils/rmpDisplay";
 
 import type { MatchedRateMyProf } from "../../../types/api";
 import { StarRating } from "../../../ui-system/components/shared/StarRating";
@@ -8,9 +13,9 @@ import { StarRating } from "../../../ui-system/components/shared/StarRating";
 const RMP_LINK_TOOLTIP = "Open Rate My Professor page in a new tab";
 
 export function ProfRatingCard({ data }: { data: MatchedRateMyProf }) {
-  const { master_name, first_name, last_name, avgRating, school, id } = data;
-  const hasRating = avgRating != null && !Number.isNaN(Number(avgRating));
-  const rating = hasRating ? parseFloat(avgRating.toString()) : null;
+  const { master_name, first_name, last_name, school, id } = data;
+  const display = describeRating(data);
+  const rating = display.avgRating;
 
   const displayName =
     `${first_name ?? ""} ${last_name ?? ""}`.trim() || master_name;
@@ -64,10 +69,41 @@ export function ProfRatingCard({ data }: { data: MatchedRateMyProf }) {
               {rating.toFixed(1)}
             </strong>{" "}
             / 5
+            {display.numRatings != null
+              ? ` · ${formatRatingCount(display.numRatings)}`
+              : ""}
           </p>
+          {display.avgDifficulty != null ||
+          display.wouldTakeAgainPct != null ? (
+            <p className="mpp-degree-card-muted mpp-degree-card-meta">
+              {[
+                display.avgDifficulty != null
+                  ? `Difficulty ${display.avgDifficulty.toFixed(1)}`
+                  : null,
+                display.wouldTakeAgainPct != null
+                  ? `${formatPercent(display.wouldTakeAgainPct)} would take again${
+                      display.wouldTakeAgainPrimaryOnly ? "*" : ""
+                    }`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : null}
+          {display.otherSchool ? (
+            <p className="mpp-degree-card-badge">
+              Rated at {display.otherSchool}
+            </p>
+          ) : null}
         </div>
       ) : (
-        <p className="mpp-degree-card-empty">No rating available.</p>
+        <p className="mpp-degree-card-empty" title={display.description}>
+          {display.state === "no_reviews"
+            ? "RMP page has 0 reviews."
+            : display.state === "withheld"
+              ? "Rating withheld."
+              : "No rating available."}
+        </p>
       )}
     </div>
   );

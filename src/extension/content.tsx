@@ -1,24 +1,9 @@
-import { useState } from "react";
-import { createRoot } from "react-dom/client";
-
-import { watchScheduleCacheChanges } from "../course-management/cache/scheduleCacheSignal";
-import {
-  debouncedScrapePlanner,
-  scrapeScheduleTable,
-} from "../course-management/services/scraper";
+import { watchNativeCalendar } from "../course-management/components/calendar/nativeCalendar";
 import { setupListener } from "../degree-planning/services/siteResponseStorage";
 import extensionCssRaw from "../index.css?inline";
-import SlideOutDrawer from "../ui-system/components/SlideOutDrawer";
-import FirstStartDialog from "../user-experience/components/UserGuide/FirstStartDialog";
-import WhatsNewDialog from "../user-experience/components/UserGuide/WhatsNewDialog";
-import {
-  attachExtensionShadowTailwindStyleOrderObserver,
-  ensureOverlayContainer,
-  extensionCssForShadowRoot,
-  rewriteCssAssetUrlsForExtension,
-  waitForScheduleTable,
-} from "../utils/dom";
 import { AppLogger } from "../utils/logger";
+
+import { forceResetExtension, initializePageStorage } from "./storageMigration";
 
 declare global {
   interface Window {
@@ -29,28 +14,41 @@ declare global {
 
 AppLogger.info("MyPack Enhancer script started.");
 
-function RootOverlayDialogs() {
-  const [allowFirstStartAutoOpen, setAllowFirstStartAutoOpen] = useState(false);
-
-  return (
-    <>
-      <WhatsNewDialog onResolved={() => setAllowFirstStartAutoOpen(true)} />
-      <FirstStartDialog suppressAutoOpen={!allowFirstStartAutoOpen} />
-      <SlideOutDrawer />
-    </>
-  );
-}
-
-(async () => {
-  try {
-    await setupListener();
-  } catch (err) {
-    AppLogger.error(
-      "Failed to initialize siteResponseStorage listener early:",
-      err,
-    );
-  }
-})();
+const storageReady = setupListener(initializePageStorage());
+void storageReady
+  .then(() => watchNativeCalendar(extensionCssRaw))
+  .catch((error) => {
+    AppLogger.error("Could not initialize calendar hover cards", error);
+  });
+void storageReady.catch((error) => {
+  AppLogger.error("Failed to initialize extension storage", error);
+  const showError = () => {
+    const notice = document.createElement("div");
+    notice.setAttribute("role", "alert");
+    notice.textContent =
+      "MyPack Plus could not start. Refresh this page to retry. ";
+    const retry = document.createElement("button");
+    retry.textContent = "Refresh page";
+    retry.onclick = () => window.location.reload();
+    notice.appendChild(retry);
+    // Broken stored data is a likely cause here, so offer the last-resort reset too.
+    const reset = document.createElement("button");
+    reset.textContent = "Clear MyPack Plus cache";
+    reset.onclick = () => {
+      if (
+        window.confirm(
+          "Clear every cache, saved search, and preference MyPack Plus keeps, then reload?",
+        )
+      ) {
+        void forceResetExtension();
+      }
+    };
+    notice.appendChild(reset);
+    document.body.prepend(notice);
+  };
+  if (document.body) showError();
+  else document.addEventListener("DOMContentLoaded", showError, { once: true });
+});
 
 function injectXHRHookScript() {
   const script = document.createElement("script");
@@ -145,70 +143,14 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
   try {
+    await storageReady;
     if (window.__mypackEnhancerInitialized) {
       AppLogger.warn("MyPack Enhancer already initialized. Skipping...");
       return;
     }
     window.__mypackEnhancerInitialized = true;
-    watchScheduleCacheChanges();
-
-    AppLogger.info("Initializing MyPack Drawer");
-
-    const scheduleElement = await waitForScheduleTable();
-    const shadowCss = extensionCssForShadowRoot(
-      rewriteCssAssetUrlsForExtension(extensionCssRaw),
-    );
-    const overlayElement = ensureOverlayContainer(shadowCss);
-    const shadowRoot = document.getElementById(
-      "extension-overlay-root",
-    )?.shadowRoot;
-    if (!shadowRoot) {
-      throw new Error("Extension overlay shadow root was not created.");
-    }
-    attachExtensionShadowTailwindStyleOrderObserver(shadowRoot);
-    const root = createRoot(overlayElement);
-    scrapeScheduleTable(scheduleElement);
-
-    root.render(<RootOverlayDialogs />);
-    const initialIframe = document.querySelector<HTMLIFrameElement>(
-      '[id$="divPSPAGECONTAINER"] iframe',
-    );
-    if (initialIframe) {
-      const initialIframeDoc = initialIframe.contentDocument;
-      if (!initialIframeDoc) {
-        AppLogger.warn(
-          "Initial iframe document not found. Cannot set up event listener for button clicks.",
-        );
-        return;
-      }
-      initialIframeDoc.addEventListener("click", function (event) {
-        const target = event.target;
-        if (!target) return;
-        let buttonSpan = (target as HTMLElement).closest(
-          '[class^="showClassSectionsLink"]',
-        );
-        if (!buttonSpan) {
-          buttonSpan = (target as HTMLElement).closest(
-            '[class^=" control center"]',
-          );
-          if (buttonSpan) {
-            debouncedScrapePlanner();
-            AppLogger.info("Button clicked:", buttonSpan.textContent);
-          }
-        }
-        if (!buttonSpan) return;
-        if (buttonSpan.role === "button") {
-          AppLogger.info("Button clicked:", buttonSpan.textContent);
-          debouncedScrapePlanner();
-        }
-      });
-    } else {
-      AppLogger.warn(
-        "Initial iframe not found. Cannot set up event listener for button clicks.",
-      );
-    }
-
-    AppLogger.info("Initial planner element found, performing first scrape.");
+    const { startTopFrame } = await import("./topFrame");
+    await startTopFrame(extensionCssRaw);
   } catch (error) {
     AppLogger.error(
       "An error occurred during the main execution block:",
