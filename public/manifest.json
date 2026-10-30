@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+
+  "name": "MyPack Plus",
+  "version": "4.0.0",
+
+  "description": "Plan NC State courses with section comparisons, live availability, schedule previews, grades, and professor ratings.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://*.acs.ncsu.edu/*",
+    "https://webappprd.acs.ncsu.edu/*"
+  ],
+  "action": {
+    "default_icon": "icon.png"
+  },
+  "background": {
+    "service_worker": "src/extension/background.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://portalsp.acs.ncsu.edu/*",
+        "https://webappprd.acs.ncsu.edu/*"
+      ],
+      "js": ["src/extension/content.tsx"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["realFetchHook.js", "assets/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

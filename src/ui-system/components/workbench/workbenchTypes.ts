@@ -1,0 +1,43 @@
+import type { ModifiedSection } from "../../../course-management/types/section";
+
+export type PlannerWorkbenchTab =
+  | "schedule"
+  | "course_search"
+  | "gep_search"
+  | "major_plan_search";
+
+export type PlannerSectionPreview = {
+  id: string;
+  tab: PlannerWorkbenchTab;
+  section: ModifiedSection;
+  courseCode: string;
+  courseTitle: string;
+};
+
+export const getPreviewSectionId = (section: ModifiedSection): string =>
+  [
+    section.classNumber,
+    section.section,
+    section.component,
+    section.dayTime,
+    section.location,
+    ...(section.linkedMeetings?.flatMap((m) => [
+      m.dayTime,
+      m.location,
+      m.component,
+      m.classNumber ?? "",
+    ]) ?? []),
+  ]
+    .filter(Boolean)
+    .join("::");
+
+export const createSectionPreview = (
+  tab: PlannerWorkbenchTab,
+  section: ModifiedSection,
+): PlannerSectionPreview => ({
+  id: getPreviewSectionId(section),
+  tab,
+  section,
+  courseCode: section.courseData?.code ?? section.course_id ?? "Course",
+  courseTitle: section.courseData?.title ?? "Section details",
+});

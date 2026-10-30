@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+public
+*.config.js
+*.config.ts
+*.config.cjs
+coverage
+src/generated/catalogs
+supabase/functions

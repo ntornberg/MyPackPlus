@@ -1,0 +1,1617 @@
+{
+  "checkedOn": "2026-10-24",
+  "catalog": "2026-2027",
+  "indexUrl": "https://catalog.ncsu.edu/undergraduate/",
+  "method": "Match repository major base titles to links in the official Majors A-Z HTML, normalizing degree labels, punctuation, ampersands, and the Joint with UNC-CH qualifier. Related-program links are explicitly labeled. A link match is not verification of every requirement or subplan.",
+  "repositoryFile": "src/generated/catalogs/major-plan-search/majorPlans.ts",
+  "repositorySha256": "3b5b05060689b9fd82627a31499b159ebd9ed4853c5b624cf847bb84702653e9",
+  "counts": {
+    "majors": 105,
+    "subplans": 245,
+    "requirements": 1712,
+    "zeroMinUnits": 1641,
+    "courseRows": 10791,
+    "blankCourseCodeRows": 1949,
+    "baseTitleMatches": 102,
+    "relatedCurrentPrograms": 2,
+    "unresolved": 1
+  },
+  "entries": [
+    {
+      "major": "Agribusiness Management - AAS",
+      "planId": "11AGBAAS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-institute/agribusiness-management-aas/"
+      ]
+    },
+    {
+      "major": "Field Crops Technology - AAS",
+      "planId": "11FCTAAS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-institute/field-crops-technology-aas/"
+      ]
+    },
+    {
+      "major": "General Agriculture - AAS",
+      "planId": "11GNAAAS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-institute/general-agriculture-aas/"
+      ]
+    },
+    {
+      "major": "Horticultural Science Management - AAS",
+      "planId": "11HSMAAS",
+      "subplanIds": [
+        "11HSMOLT",
+        "11HSMSSF"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-institute/horticultural-science-management-aas-ornamentals-landscape-technology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-institute/horticultural-science-management-aas-small-scale-farming-concentration/"
+      ]
+    },
+    {
+      "major": "Livestock and Poultry Management - AAS",
+      "planId": "11LPMAAS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-institute/livestock-poultry-management-aas/"
+      ]
+    },
+    {
+      "major": "Turfgrass Management - AAS",
+      "planId": "11TGMAS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-institute/turfgrass-management-aas/"
+      ]
+    },
+    {
+      "major": "Agricultural Business Management - BS",
+      "planId": "11AGBUSBS",
+      "subplanIds": [
+        "11AGBUSBBM",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-resource-economics/agricultural-business-management-bs/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-resource-economics/agricultural-business-management-bs-biological-sciences-concentration/"
+      ]
+    },
+    {
+      "major": "Agricultural Education - BS",
+      "planId": "11AGEDBS",
+      "subplanIds": [
+        "11AGEDAET",
+        "11AGEDAGB",
+        "11AGEDAGR",
+        "11AGEDANS",
+        "11AGEDHS",
+        "11AGEDNRS",
+        "11AGEDPSC"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-education-bs-agricultural-business-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-education-bs-agricultural-engineering-technology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-education-bs-agronomy-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-education-bs-animal-science-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-education-bs-horticultural-science-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-education-bs-natural-resources-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-education-bs-poultry-science-concentration/"
+      ]
+    },
+    {
+      "major": "Biological and Agricultural Engineering Technology - BS",
+      "planId": "11AGEVTBS",
+      "subplanIds": [
+        "11AGEVTASM",
+        "11AGEVTESM",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/biological-agricultural-engineering/biological-agricultural-engineering-technology-bs/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/biological-agricultural-engineering/biological-agricultural-engineering-technology-bs-agricultural-systems-management-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/biological-agricultural-engineering/biological-agricultural-engineering-technology-bs-environmental-systems-management-concentration/"
+      ]
+    },
+    {
+      "major": "Agricultural Science - BS",
+      "planId": "11AGSBS",
+      "subplanIds": [
+        "11AGSBSZ",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-science-bs/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/agricultural-human-sciences/agricultural-science-bs-online/"
+      ]
+    },
+    {
+      "major": "Animal Science - BS",
+      "planId": "11ANSCBS",
+      "subplanIds": [
+        "11ANSCIAS",
+        "11ANSCSAS",
+        "11ANSCVET"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/animal-science/animal-science-bs-industry-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/animal-science/animal-science-bs-science-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/animal-science/animal-science-bs-veterinary-bioscience-concentration/"
+      ]
+    },
+    {
+      "major": "Applied Sociology - BS",
+      "planId": "11APSOCBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "unresolved",
+      "note": "No current major with this base title was found in the index. Its legacy status and requirements were not resolved.",
+      "catalogUrls": []
+    },
+    {
+      "major": "Agroecology & Sustainable Food Systems - BS",
+      "planId": "11ASFSBS",
+      "subplanIds": [
+        "11ARP",
+        "11CFS",
+        "11UH"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/crop-soil-sciences/agroecology-sustainable-food-systems-bs-agroecology-research-production-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/crop-soil-sciences/agroecology-sustainable-food-systems-bs-community-food-systems-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/horticultural-science/agroecology-sustainable-food-systems-bs-urban-horticulture-concentration/"
+      ]
+    },
+    {
+      "major": "Bioprocessing Science - BS",
+      "planId": "11BBSBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/food-bioprocessing-nutrition-science/bioprocessing-science-bs/"
+      ]
+    },
+    {
+      "major": "Biological Engineering - BS",
+      "planId": "11BEBS",
+      "subplanIds": [
+        "11BEBEA",
+        "11BEBEC",
+        "11BEBEE",
+        "11BEBEP",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/biological-agricultural-engineering/biological-engineering-bs-agricultural-engineering-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/biological-agricultural-engineering/biological-engineering-bs-bioprocessing-engineering-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/biological-agricultural-engineering/biological-engineering-bs-ecological-engineering-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/biological-agricultural-engineering/biological-engineering-bs-environmental-engineering-concentration/"
+      ]
+    },
+    {
+      "major": "Biochemistry - BS",
+      "planId": "11BIOCHBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/molecular-structural-biochemistry/biochemistry-bs/"
+      ]
+    },
+    {
+      "major": "Crop and Soil Sciences - BS",
+      "planId": "11CSSCBS",
+      "subplanIds": [
+        "11CSSCAG",
+        "11CSSCPCB",
+        "11CSSCSSC",
+        "11CSSCTFG"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/crop-soil-sciences/crop-soil-sciences-bs-agronomy/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/crop-soil-sciences/crop-soil-sciences-bs-crop-biotechnology-semester/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/crop-soil-sciences/crop-soil-sciences-bs-soil-science/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/crop-soil-sciences/turfgrass-science-bs/"
+      ]
+    },
+    {
+      "major": "Food Science - BS",
+      "planId": "11FOODSBS",
+      "subplanIds": [
+        "11FOODSSFS",
+        "11FOODSTFS"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/food-bioprocessing-nutrition-science/food-science-bs-business-technology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/food-bioprocessing-nutrition-science/food-science-bs-science-concentration/"
+      ]
+    },
+    {
+      "major": "Horticultural Science - BS",
+      "planId": "11HORTBS",
+      "subplanIds": [
+        "11HORTSHG",
+        "11HORTTHG",
+        "11HORTTHL"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/horticultural-science/horticultural-science-bs-landscape-design-construction-management-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/horticultural-science/horticultural-science-bs-plant-breeding-biotechnology-horticulture-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/horticultural-science/horticultural-science-bs-production-systems-entrepreneurship-horticulture-concentration/"
+      ]
+    },
+    {
+      "major": "Natural Resources - BS",
+      "planId": "11NATRLBS",
+      "subplanIds": [
+        "11NATRLNRW",
+        "15NATREECO",
+        "15NATREPOL",
+        "17NATREMC"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/natural-resources-bs-ecosystem-assessment-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/natural-resources-bs-marine-coastal-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/natural-resources-bs-policy-administration-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/crop-soil-sciences/natural-resources-bs-soil-water-land-use-concentration/"
+      ]
+    },
+    {
+      "major": "Nutrition Sciences - BS",
+      "planId": "11NTSBS",
+      "subplanIds": [
+        "11NTSAN",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/food-bioprocessing-nutrition-science/nutrition-sciences-bs/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/food-bioprocessing-nutrition-science/nutrition-sciences-bs-applied-nutrition-concentration/"
+      ]
+    },
+    {
+      "major": "Plant Biology - BS",
+      "planId": "11PBBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/plant-microbial-biology/plant-biology-bs/"
+      ]
+    },
+    {
+      "major": "Poultry Science - BS",
+      "planId": "11PLTRYBS",
+      "subplanIds": [
+        "11PLTRYSPS",
+        "11PLTRYTPS"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/poultry-science/poultry-science-bs-science-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/agriculture-life-sciences/poultry-science/poultry-science-bs-technology-concentration/"
+      ]
+    },
+    {
+      "major": "Applied Education Studies - BS",
+      "planId": "13EDGENBS",
+      "subplanIds": [
+        "13EDGENLDT",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/education/teacher-education-learning-sciences/applied-education-studies-bs/",
+        "https://catalog.ncsu.edu/undergraduate/education/teacher-education-learning-sciences/applied-education-studies-bs/applied-education-studies-ldt/"
+      ]
+    },
+    {
+      "major": "Elementary Education - BS",
+      "planId": "13ELMEDBS",
+      "subplanIds": [
+        "13ELMEDSTM"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/education/teacher-education-learning-sciences/elementary-education-bs-science-technology-engineering-mathematics-concentration/"
+      ]
+    },
+    {
+      "major": "Middle Grades Education - BS",
+      "planId": "13MIDEDBS",
+      "subplanIds": [
+        "13MIDEDLAS",
+        "13MIDEDMSD"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/education/teacher-education-learning-sciences/middle-grades-education-bs-language-arts-social-studies-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/middle-grades-education-bs-mathematics-sciences-concentration/"
+      ]
+    },
+    {
+      "major": "Mathematics Education - BS",
+      "planId": "13MTHEDBS",
+      "subplanIds": [
+        "13MTHEDCPS",
+        "13MTHEDMA",
+        "13MTHEDMSM",
+        "13MTHEDMS",
+        "13MTHEDSD",
+        "13MTHEDST"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/education/stem/mathematics-education-bs-computer-specialization/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/mathematics-education-bs-mathematics-specialization/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/mathematics-education-bs-middle-grades-mathematics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/mathematics-education-bs-statistics-specialization/"
+      ]
+    },
+    {
+      "major": "Science Education - BS",
+      "planId": "13SCIEDBS",
+      "subplanIds": [
+        "13SCIEDBIO",
+        "13SCIEDCH",
+        "13SCIEDES",
+        "13SCIEDMID",
+        "13SCIEDPY"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/education/stem/science-education-bs-biology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/science-education-bs-chemistry-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/science-education-bs-earth-science-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/science-education-bs-middle-grades-science-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/science-education-bs-physics-concentration/"
+      ]
+    },
+    {
+      "major": "Technology, Engineering and Design Education - BS",
+      "planId": "13TDEBS",
+      "subplanIds": [
+        "13TDEEDL",
+        "13TDEGC"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/education/stem/technology-engineering-design-education-bs-graphic-communication-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/education/stem/technology-engineering-design-education-bs-licensure-concentration/"
+      ]
+    },
+    {
+      "major": "Anthropology - BA",
+      "planId": "16ANTHBA",
+      "subplanIds": [
+        "16ANTHGEN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/sociology-anthropology/anthropology-ba-general-anthropology-concentration/"
+      ]
+    },
+    {
+      "major": "Arts Studies - BA",
+      "planId": "16ARTSTBA",
+      "subplanIds": [
+        "16ARTSTFLM",
+        "16ARTSTMUS",
+        "16ARTSTTHE",
+        "16ARTSTVIS"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/arts-studies-program/arts-studies-ba-film-studies-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/arts-studies-program/arts-studies-ba-music-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/arts-studies-program/arts-studies-ba-theater-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/arts-studies-program/arts-studies-ba-visual-arts-concentration/"
+      ]
+    },
+    {
+      "major": "Communication - BA",
+      "planId": "16COMBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/communication/communication-ba/"
+      ]
+    },
+    {
+      "major": "Criminology - BA",
+      "planId": "16CRIMNBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/sociology-anthropology/criminology-ba/"
+      ]
+    },
+    {
+      "major": "English - BA",
+      "planId": "16ENGLBA",
+      "subplanIds": [
+        "16ENGLCRW",
+        "16ENGLFLM",
+        "16ENGLLIN",
+        "16ENGLLLT",
+        "16ENGLLWR",
+        "16ENGLTED"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/english/english-ba-creative-writing-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/english/english-ba-film-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/english/english-ba-linguistics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/english/english-ba-literature-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/english/english-ba-language-writing-rhetoric-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/english/english-ba-teacher-education-concentration/"
+      ]
+    },
+    {
+      "major": "World Languages and Cultures - BA",
+      "planId": "16FLLBA",
+      "subplanIds": [
+        "16FLCED",
+        "16FLFED",
+        "16FLGED",
+        "16FLLARAB",
+        "16FLLASIAN",
+        "16FLLED",
+        "16FLLFRNCH",
+        "16FLLGER",
+        "16FLLGIE",
+        "16FLLGSCI",
+        "16FLLSPNSH",
+        "16FLSED"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-arabic-language-culture-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-asian-language-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-foreign-language-chinese-education-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-foreign-language-french-education-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-french-studies-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-foreign-language-german-education-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-german-studies-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-german-studies-international-economics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-german-studies-science-technology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-foreign-language-spanish-education-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/world-languages-cultures/foreign-languages-literatures-ba-spanish-language-literature-concentration/"
+      ]
+    },
+    {
+      "major": "History - BA",
+      "planId": "16HISTBA",
+      "subplanIds": [
+        "16HISBA",
+        "16HISTTED",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/history/history-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/history/history-ba-legal-history-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/history/history-ba-teacher-education-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/history/history-bs/"
+      ]
+    },
+    {
+      "major": "History - BS",
+      "planId": "16HISTBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/history/history-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/history/history-ba-legal-history-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/history/history-ba-teacher-education-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/history/history-bs/"
+      ]
+    },
+    {
+      "major": "Interdisciplinary Studies - BA",
+      "planId": "16IDSBA",
+      "subplanIds": [
+        "16IDSAFSC",
+        "16IDSAFS",
+        "16IDSSD",
+        "16IDSWGS"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/africana-studies-program/africana-studies-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/interdisciplinary-studies/interdisciplinary-studies-ba-self-design-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/womens-gender-studies-program/womens-gender-studies-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/interdisciplinary-studies/interdisciplinary-studies-bs/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/womens-gender-studies-program/womens-gender-studies-bs/"
+      ]
+    },
+    {
+      "major": "Interdisciplinary Studies - BS",
+      "planId": "16IDSBS",
+      "subplanIds": [
+        "16IDSSDM",
+        "16WGS"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/africana-studies-program/africana-studies-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/interdisciplinary-studies/interdisciplinary-studies-ba-self-design-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/womens-gender-studies-program/womens-gender-studies-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/interdisciplinary-studies/interdisciplinary-studies-bs/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/womens-gender-studies-program/womens-gender-studies-bs/"
+      ]
+    },
+    {
+      "major": "International Studies - BA",
+      "planId": "16INTSTBA",
+      "subplanIds": [
+        "16INTSTAFR",
+        "16INTSTESA",
+        "16INTSTEUR",
+        "16INTSTGCS",
+        "16INTSTGRE",
+        "16INTSTGSD",
+        "16INTSTLAT",
+        "16INTSTSME",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/international-studies-program/international-studies-ba-africa-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/international-studies-program/international-studies-ba-east-southeast-asia-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/international-studies-program/international-studies-ba-europe-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/international-studies-program/international-studies-ba-global-cultural-studies/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/international-studies-program/international-studies-ba-global-relations/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/international-studies-program/international-studies-ba-global-sustainability-development/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/international-studies-program/international-studies-ba-latin-america-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/international-studies-program/international-studies-ba-south-asia-middle-east-concentration/"
+      ]
+    },
+    {
+      "major": "Leadership in the Public Sector - BA",
+      "planId": "16LPSBA",
+      "subplanIds": [
+        "16LPSBAZ"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/leadership-public-sector-ba-de/"
+      ]
+    },
+    {
+      "major": "Philosophy - BA",
+      "planId": "16PHILBA",
+      "subplanIds": [
+        "16PHILETH",
+        "16PHILLAW",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-ba-philosophy-ethics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-ba-philosophy-law-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-bs/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-bs-logic-representation-reasoning-concentration/"
+      ]
+    },
+    {
+      "major": "Philosophy - BS",
+      "planId": "16PHILBS",
+      "subplanIds": [
+        "16PHILLOG",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-ba-philosophy-ethics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-ba-philosophy-law-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-bs/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/philosophy-bs-logic-representation-reasoning-concentration/"
+      ]
+    },
+    {
+      "major": "Political Science - BA",
+      "planId": "16PSBA",
+      "subplanIds": [
+        "16PSAM",
+        "16PSINT",
+        "16PSLJ",
+        "16PSPUB",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba-american-politics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba-international-politics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba-law-justice-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba-public-policy-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-bs/"
+      ]
+    },
+    {
+      "major": "Political Science - BS",
+      "planId": "16PSBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba-american-politics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba-international-politics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba-law-justice-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-ba-public-policy-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/political-science/political-science-bs/"
+      ]
+    },
+    {
+      "major": "Psychology - BA",
+      "planId": "16PSYCHBA",
+      "subplanIds": [
+        "16PSYCHGEN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/psychology/psychology-ba-general-psychology-concentration/"
+      ]
+    },
+    {
+      "major": "Religious Studies - BA",
+      "planId": "16RELSTBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/philosophy-religious-studies/religious-studies-ba/"
+      ]
+    },
+    {
+      "major": "Sociology - BA",
+      "planId": "16SOCBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/sociology-anthropology/sociology-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/sociology-anthropology/sociology-bs/"
+      ]
+    },
+    {
+      "major": "Sociology - BS",
+      "planId": "16SOCBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/sociology-anthropology/sociology-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/sociology-anthropology/sociology-bs/"
+      ]
+    },
+    {
+      "major": "Social Work - B",
+      "planId": "16SOCWKB",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/social-work/social-work-bachelor/"
+      ]
+    },
+    {
+      "major": "Science, Technology and Society - BA",
+      "planId": "16STSBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/science-technology-society-program/science-technology-society-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/science-technology-society-program/science-technology-society-bs/"
+      ]
+    },
+    {
+      "major": "Science, Technology and Society - BS",
+      "planId": "16STSBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/science-technology-society-program/science-technology-society-ba/",
+        "https://catalog.ncsu.edu/undergraduate/humanities-social-sciences/interdisciplinary/science-technology-society-program/science-technology-society-bs/"
+      ]
+    },
+    {
+      "major": "Environmental Sciences - BS",
+      "planId": "15ENVSCBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/environmental-sciences-bs/"
+      ]
+    },
+    {
+      "major": "Environmental Technology and Management - BS",
+      "planId": "15ENVTBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/environmental-technology-management-bs/"
+      ]
+    },
+    {
+      "major": "Forest Management - BS",
+      "planId": "15FORMTBS",
+      "subplanIds": [
+        "15FORMTECO",
+        "15FORMTPRD",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/forest-management-bs-ecology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/forest-management-bs-production-concentration/"
+      ]
+    },
+    {
+      "major": "Fisheries, Wildlife, and Conservation Biology - BS",
+      "planId": "15FWSCIBS",
+      "subplanIds": [
+        "15FWSCICB",
+        "15FWSCIF",
+        "15FWSCIW"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/fisheries-wildlife-conservation-biology-bs-conservation-biology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/fisheries-wildlife-conservation-biology-bs-fisheries-science-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forestry-environmental-resources/fisheries-wildlife-conservation-biology-bs-wildlife-science-concentration/"
+      ]
+    },
+    {
+      "major": "Professional Golf Management - BS",
+      "planId": "15PGMBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "related-current-program",
+      "note": "The current catalog lists this subject as a Sport Management concentration and says it is not accepting students. This does not establish equivalence to legacy plan 15PGMBS.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/parks-recreation-tourism-management/sport-management-bs-professional-golf-management/"
+      ]
+    },
+    {
+      "major": "Parks, Recreation, and Tourism Management - BS",
+      "planId": "15PRTBS",
+      "subplanIds": [
+        "15PRTNRR",
+        "15PRTST"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/parks-recreation-tourism-management/parks-recreation-tourism-management-bs-parks-natural-resource-recreation-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/parks-recreation-tourism-management/parks-recreation-tourism-management-bs-sustainable-tourism-concentration/"
+      ]
+    },
+    {
+      "major": "Paper Science and Engineering - BS",
+      "planId": "15PSEBS",
+      "subplanIds": [
+        "15PSENDM",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forest-biomaterials/paper-science-engineering-bs/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forest-biomaterials/paper-science-engineering-bs-dual-major/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forest-biomaterials/paper-science-engineering-bs-sustainable-packaging-production-concentration/"
+      ]
+    },
+    {
+      "major": "Sustainable Materials and Technology - BS",
+      "planId": "15SMTBS",
+      "subplanIds": [
+        "15SMTWP",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forest-biomaterials/sustainable-materials-technology-bs/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forest-biomaterials/sustainable-materials-technology-bs-smt-wood-products-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/forest-biomaterials/sustainable-materials-technology-bs-sustainable-packaging-concentration/"
+      ]
+    },
+    {
+      "major": "Sport Management - BS",
+      "planId": "15SPMGTBS",
+      "subplanIds": [
+        "15SPMGTPGM",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/parks-recreation-tourism-management/sport-management-bs/",
+        "https://catalog.ncsu.edu/undergraduate/natural-resources/parks-recreation-tourism-management/sport-management-bs-professional-golf-management/"
+      ]
+    },
+    {
+      "major": "Aerospace Engineering - BS",
+      "planId": "14AEBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/mechanical-aerospace/aerospace-engineering-bs/"
+      ]
+    },
+    {
+      "major": "Biomedical Engineering (Joint with UNC-CH) - BS",
+      "planId": "14BMHBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/biomedical/biomedical-engineering-bs/"
+      ]
+    },
+    {
+      "major": "Civil Engineering - BS",
+      "planId": "14CEBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/civil-construction-environmental/civil-engineering-bs/"
+      ]
+    },
+    {
+      "major": "Chemical Engineering - BS",
+      "planId": "14CHEBS",
+      "subplanIds": [
+        "14CHEBIO",
+        "14CHEBMF",
+        "14CHEHON",
+        "14CHENAN",
+        "14CHESEE",
+        "14CHETE",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/chemical-biomolecular/chemical-engineering-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/chemical-biomolecular/chemical-engineering-bs-biomanufacturing-sciences-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/chemical-biomolecular/chemical-engineering-bs-biomolecular-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/chemical-biomolecular/chemical-engineering-bs-textile-dual-major/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/chemical-biomolecular/chemical-engineering-bs-honors-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/chemical-biomolecular/chemical-engineering-bs-nanoscience-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/chemical-biomolecular/chemical-engineering-bs-sustainable-engineering-energy-environment/"
+      ]
+    },
+    {
+      "major": "Construction Engineering - BS",
+      "planId": "14CONBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/civil-construction-environmental/construction-engineering-bs/"
+      ]
+    },
+    {
+      "major": "Computer Engineering - BS",
+      "planId": "14CPEBS",
+      "subplanIds": [
+        "14CPEEE",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/computer-engineering-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/computer-engineering-ai-machine-learning-concentration-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/computer-engineering-computer-architecture-emerging-systems-concentration-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/computer-engineering-computer-systems-software-concentration-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/computer-engineering-embedded-systems-concentration-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/networking-hardware-concentration-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/networking-software-concentration-bs/"
+      ]
+    },
+    {
+      "major": "Computer Science - BS",
+      "planId": "14CSCBS",
+      "subplanIds": [
+        "14CSCAI",
+        "14CSCGAME",
+        "14CSCYSEC",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/computer-science/computer-science-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/computer-science/artificial-intelligence-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/computer-science/computer-science-bs-cybersecurity-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/computer-science/computer-science-bs-game-development-concentration/"
+      ]
+    },
+    {
+      "major": "Electrical Engineering - BS",
+      "planId": "14EEBS",
+      "subplanIds": [
+        "14EECPE",
+        "14EEREN",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-analog-circuits-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-ai-machine-learning-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-biomedical-instrumentation-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-communications-signal-processing-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-controls-robotics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-digital-circuits-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-electronic-devices-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-music-technology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-optics-photonics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-power-systems-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-radio-frequency-circuits-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/electrical-computer/electrical-engineering-bs-renewable-electric-energy-systems-concentration/"
+      ]
+    },
+    {
+      "major": "Environmental Engineering - BS",
+      "planId": "14ENEBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/civil-construction-environmental/environmental-engineering-bs/"
+      ]
+    },
+    {
+      "major": "Industrial Engineering - BS",
+      "planId": "14IEBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/industrial-systems/industrial-engineering-bs/"
+      ]
+    },
+    {
+      "major": "Mechanical Engineering - BS",
+      "planId": "14MEBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/mechanical-aerospace/mechanical-engineering-bs/"
+      ]
+    },
+    {
+      "major": "Materials Science and Engineering - BS",
+      "planId": "14MSEBS",
+      "subplanIds": [
+        "14MSEBIO",
+        "14MSENANO",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/materials-science-engineering/materials-science-engineering-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/materials-science-engineering/materials-science-engineering-bs-biomaterials-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/materials-science-engineering/materials-science-engineering-bs-nanomaterials-concentration/"
+      ]
+    },
+    {
+      "major": "Nuclear Engineering - BS",
+      "planId": "14NEBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/engineering/nuclear/nuclear-engineering-bs/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/nuclear/nuclear-engineering-bs-nuclear-fuels-materials-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/nuclear/nuclear-engineering-bs-plasma-sciences-fusion-energy-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/engineering/nuclear/nuclear-engineering-bs-radiological-engineering-concentration/"
+      ]
+    },
+    {
+      "major": "Applied Mathematics - BS",
+      "planId": "17AMATHBS",
+      "subplanIds": [
+        "17AMATHFIN",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/mathematics/applied-mathematics-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/mathematics/applied-mathematics-bs-financial-mathematics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/mathematics/applied-mathematics-bs-mathematical-foundations-data-science-concentration/"
+      ]
+    },
+    {
+      "major": "Biological Sciences - BA",
+      "planId": "17BIOBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-ba/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs-ecology-evolution-conservation-biology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs-human-biology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs-integrative-physiology-neurobiology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs-molecular-cellular-developmental-biology-concentration/"
+      ]
+    },
+    {
+      "major": "Biological Sciences - BS",
+      "planId": "17BIOSCBS",
+      "subplanIds": [
+        "17BIOSCEEC",
+        "17BIOSCHB",
+        "17BIOSCIPN",
+        "17BIOSCMCD",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-ba/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs-ecology-evolution-conservation-biology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs-human-biology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs-integrative-physiology-neurobiology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/biological-sciences-bs-molecular-cellular-developmental-biology-concentration/"
+      ]
+    },
+    {
+      "major": "Chemistry - BA",
+      "planId": "17CHEMBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/chemistry/chemistry-ba/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/chemistry/chemistry-bs/"
+      ]
+    },
+    {
+      "major": "Chemistry - BS",
+      "planId": "17CHEMBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/chemistry/chemistry-ba/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/chemistry/chemistry-bs/"
+      ]
+    },
+    {
+      "major": "Geology - BS",
+      "planId": "17GEOLBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/geology-bs/"
+      ]
+    },
+    {
+      "major": "Genetics - BS",
+      "planId": "17GNBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/genetics-bs/"
+      ]
+    },
+    {
+      "major": "Marine Sciences - BS",
+      "planId": "17MARSCBS",
+      "subplanIds": [
+        "17MARSCBIO",
+        "17MARSCCHM",
+        "17MARSCGEO",
+        "17MARSCMET",
+        "17MARSCPHY"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/marine-sciences-bs-biological-oceanography-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/marine-sciences-bs-chemistry-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/marine-sciences-bs-geology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/marine-sciences-bs-meteorology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/marine-sciences-bs-physics-concentration/"
+      ]
+    },
+    {
+      "major": "Mathematics - BS",
+      "planId": "17MATHBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/mathematics/mathematics-bs/"
+      ]
+    },
+    {
+      "major": "Microbiology - BS",
+      "planId": "17MBIOBS",
+      "subplanIds": [
+        "11MBIOMBT",
+        "17MBIOHS",
+        "17MBIOMR",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/microbiology-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/microbiology-bs-microbial-biotechnology/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/microbiology-bs-microbial-health-science/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/microbiology-bs-microbial-research/"
+      ]
+    },
+    {
+      "major": "Meteorology - BS",
+      "planId": "17METBS",
+      "subplanIds": [
+        "17METMAR",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/meteorology-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/marine-earth-atmospheric-sciences/meteorology-bs-marine-sciences-concentration/"
+      ]
+    },
+    {
+      "major": "Physics - BA",
+      "planId": "17PHYSBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/physics/physics-ba/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/physics/physics-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/physics/physics-bs-interdisciplinary/"
+      ]
+    },
+    {
+      "major": "Physics - BS",
+      "planId": "17PHYSBS",
+      "subplanIds": [
+        "17PHYSBSIP",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/physics/physics-ba/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/physics/physics-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/physics/physics-bs-interdisciplinary/"
+      ]
+    },
+    {
+      "major": "Statistics - BS",
+      "planId": "17STBS",
+      "subplanIds": [
+        "17STBSDS",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/statistics/statistics-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/statistics/statistics-bs-data-science-concentration/"
+      ]
+    },
+    {
+      "major": "Zoology - BS",
+      "planId": "17ZOOBS",
+      "subplanIds": [
+        "17ZOOAZBS",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/zoology-bs/",
+        "https://catalog.ncsu.edu/undergraduate/sciences/biological-sciences/zoology-bs-applied-zoology/"
+      ]
+    },
+    {
+      "major": "Art and Design - B",
+      "planId": "12ADNB",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "related-current-program",
+      "note": "The current catalog uses Media Arts, Design and Technology at the art-design-bachelor URL. This does not establish equivalence of plan IDs or older requirements.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/design/art-design/art-design-bachelor/"
+      ]
+    },
+    {
+      "major": "Architecture - B",
+      "planId": "12ARCB",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/design/architecture/architecture-bachelor/"
+      ]
+    },
+    {
+      "major": "Design Studies - BA",
+      "planId": "12DSBA",
+      "subplanIds": [
+        "12DSBUS",
+        "12DSNPS",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/design/art-design/design-studies-ba/",
+        "https://catalog.ncsu.edu/undergraduate/design/art-design/design-studies-ba-business-administration-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/design/art-design/design-studies-ba-nonprofit-studies-concentration/"
+      ]
+    },
+    {
+      "major": "Environmental Design in Architecture - B",
+      "planId": "12EDAB",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/design/architecture/environmental-design-architecture-bachelor/"
+      ]
+    },
+    {
+      "major": "Graphic and Experience Design - B",
+      "planId": "12GEDB",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/design/graphic-industrial-design/graphic-design-bachelor/"
+      ]
+    },
+    {
+      "major": "Industrial Design - B",
+      "planId": "12IDB",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/design/graphic-industrial-design/industrial-design-bachelor/"
+      ]
+    },
+    {
+      "major": "Accounting - BS",
+      "planId": "20ACCBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/management/accounting/accounting-bs/"
+      ]
+    },
+    {
+      "major": "Business Administration - BS",
+      "planId": "20BUSBS",
+      "subplanIds": [
+        "20BUSBSBA",
+        "20BUSENT",
+        "20BUSFIN",
+        "20BUSHR",
+        "20BUSIT",
+        "20BUSMKT",
+        "20BUSOP",
+        "20BUSUD",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/management/itao/business-administration-bs/",
+        "https://catalog.ncsu.edu/undergraduate/management/itao/business-administration-bs-business-analytics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/mie/business-administration-bs-entrepreneurship-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/finance/business-administration-bs-finance-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/itao/business-administration-bs-information-technology-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/marketing/business-administration-bs-marketing-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/itao/business-administration-bs-operations-supply-chain-management/",
+        "https://catalog.ncsu.edu/undergraduate/management/mie/business-administration-bs-people-management-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/itao/business-administration-bs-undeclared/"
+      ]
+    },
+    {
+      "major": "Economics - BA",
+      "planId": "20ECONBA",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-ba/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-ba-business-analytics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-ba-finance-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-bs/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-bs-business-analytics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-bs-finance-concentration/"
+      ]
+    },
+    {
+      "major": "Economics - BS",
+      "planId": "20ECONBS",
+      "subplanIds": [
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-ba/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-ba-business-analytics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-ba-finance-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-bs/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-bs-business-analytics-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/management/economics/economics-bs-finance-concentration/"
+      ]
+    },
+    {
+      "major": "Fashion and Textile Design - BS",
+      "planId": "18FTDBS",
+      "subplanIds": [
+        "18FTDFAS",
+        "18FTDTEX"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-apparel-technology-management/fashion-textile-design-bs-fashion-design-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-apparel-technology-management/fashion-textile-design-bs-textile-design-concentration/"
+      ]
+    },
+    {
+      "major": "Fashion and Textile Management - BS",
+      "planId": "18FTMBS",
+      "subplanIds": [
+        "18FTMBMM",
+        "18FTMFDP"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-apparel-technology-management/fashion-textile-management-bs-brand-management-marketing-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-apparel-technology-management/fashion-textile-management-bs-fashion-development-product-management-concentration/"
+      ]
+    },
+    {
+      "major": "Polymer and Color Chemistry - BS",
+      "planId": "18PCCBS",
+      "subplanIds": [
+        "18PCCACS",
+        "18PCCMED",
+        "18PCCSOP"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/polymer-color-chemistry-bs-acs-certification-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/polymer-color-chemistry-bs-medical-sciences-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/polymer-color-chemistry-bs-science-operations-concentration/"
+      ]
+    },
+    {
+      "major": "Textile Engineering - BS",
+      "planId": "18TEBS",
+      "subplanIds": [
+        "18TECP",
+        "18TEIS",
+        "18TEPE"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/textile-engineering-bs-chemical-processing-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/textile-engineering-bs-information-systems-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/textile-engineering-bs-product-engineering-concentration/"
+      ]
+    },
+    {
+      "major": "Textile Technology - BS",
+      "planId": "18TXTECHBS",
+      "subplanIds": [
+        "18TXTECHMT",
+        "18TXTECHSC",
+        "18TXTECHTT",
+        "NOSUBPLAN"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/textile-technology-bs/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/textile-technology-bs-medical-textiles-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/textile-technology-bs-supply-chain-operations-concentration/",
+        "https://catalog.ncsu.edu/undergraduate/textiles/textile-engineering-chemistry-science/textile-technology-bs-technical-textiles-concentration/"
+      ]
+    },
+    {
+      "major": "Music Technology - BS",
+      "planId": "24MUTBS",
+      "subplanIds": [
+        "24MUTEC",
+        "24MUTSDH"
+      ],
+      "match": "base-title-match",
+      "note": "Links found in the current official catalog index; individual subplan IDs and requirements have not all been matched.",
+      "catalogUrls": [
+        "https://catalog.ncsu.edu/undergraduate/university-college/music/music-technology-bs/"
+      ]
+    }
+  ]
+}
