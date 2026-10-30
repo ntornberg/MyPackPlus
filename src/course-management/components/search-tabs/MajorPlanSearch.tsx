@@ -11,7 +11,6 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
-import catalogSources from "../../../generated/catalogs/major-plan-search/requirementSources.json";
 import {
   auditDisplayName,
   auditKey,
@@ -34,6 +33,7 @@ import type {
 } from "../../../degree-planning/types/Plans";
 import { majorPlans } from "../../../generated/catalogs/major-plan-search/majorPlans";
 import { minorPlans } from "../../../generated/catalogs/major-plan-search/minorPlans";
+import catalogSources from "../../../generated/catalogs/major-plan-search/requirementSources.json";
 import { TermIdByName } from "../../../generated/catalogs/termIds";
 import {
   HideEmptySectionsField,

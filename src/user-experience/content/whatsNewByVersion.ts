@@ -21,6 +21,49 @@ export type WhatsNewRelease = {
 };
 
 export const whatsNewByVersion: Record<string, WhatsNewRelease> = {
+  "4.0.0": {
+    title: "MyPack Plus 4.0",
+    subtitle:
+      "Manage your cart from the planner, track your degree progress, and recover from problems in one click.",
+    sections: [
+      {
+        title: "Cart changes",
+        kind: "new",
+        icon: "sections",
+        items: [
+          "Swap a section or its lab right from the planner; waitlist, grading, and credit choices carry over.",
+          "Remove a section from your cart, with a confirmation first.",
+          "Cart changes stay on the class's own term and stay in sync across open tabs.",
+        ],
+      },
+      {
+        title: "Degree progress",
+        kind: "improved",
+        icon: "progress",
+        items: [
+          "GEP Search opens on the first category you still need after syncing your audit.",
+          "Approved course choices load requirement by requirement, and a failed list can be retried on its own.",
+        ],
+      },
+      {
+        title: "Calendar and grades",
+        kind: "improved",
+        icon: "calendar",
+        items: [
+          "Calendars show credit hours, and carted and enrolled units add up correctly.",
+          "Grade history shows the class average, standard deviation, and S/U grades.",
+        ],
+      },
+      {
+        title: "Clear cache & reset",
+        kind: "new",
+        icon: "polish",
+        items: [
+          "If something looks stuck, Clear cache & reset wipes saved data and starts fresh.",
+        ],
+      },
+    ],
+  },
   "3.9.0": {
     title: "Your schedule, front and center",
     subtitle:
