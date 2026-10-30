@@ -25,16 +25,16 @@ coverage/
 # Supabase local state and secrets
 supabase/.temp/
 supabase/.branches/
-supabase/functions/.env
+supabase/functions/
+supabase/migrations/
 
 # Browser smoke-test artifacts and authenticated profiles
 .auth/
 playwright-report/
 test-results/
 
-# Local catalog audit snapshots and cart verification images
-/outputs/catalog-audit-*/
-/outputs/live-cart-*.jpg
+# Local catalog refresh reports and audit output
+/outputs/
 
 # Editor directories and files
 .vscode/*
@@ -48,7 +48,7 @@ Thumbs.db
 *.sln
 *.sw?
 
-# Local agent/editor tooling
+# Local editor tooling
 .agents/
 .claude/
 .cursor/

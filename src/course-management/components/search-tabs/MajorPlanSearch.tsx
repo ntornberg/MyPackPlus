@@ -11,7 +11,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
-import catalogSources from "../../../../docs/research/ncsu-major-requirement-sources.json";
+import catalogSources from "../../../generated/catalogs/major-plan-search/requirementSources.json";
 import {
   auditDisplayName,
   auditKey,
