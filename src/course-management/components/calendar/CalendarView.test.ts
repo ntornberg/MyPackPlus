@@ -68,6 +68,35 @@ it("preserves class metadata across table/calendar merging and conflicts", async
   });
 });
 
+it("reads a cart row's credits from unt_taken when it has no units", async () => {
+  const meeting = {
+    section: "001",
+    class_nbr: "10610",
+    meet_days: "Mon/Wed",
+    time: "11:45 AM - 1:00 PM",
+    type: "Lecture",
+  };
+  categories.shopCartTableData = cached([
+    {
+      classs: "CSC 406",
+      _mypackTerm: "2027 Spring Term",
+      unt_taken: "3",
+      section_details: [meeting],
+    },
+    {
+      classs: "CSC 440",
+      _mypackTerm: "2027 Spring Term",
+      add_to_cart_data: [{ unt_taken: "4" }],
+      section_details: [{ ...meeting, class_nbr: "9395", meet_days: "Tue" }],
+    },
+  ]);
+  const events = await loadCartScheduleEvents();
+  expect(events.map((e) => [e.course?.code, e.course?.units])).toEqual([
+    ["CSC 406", 3],
+    ["CSC 440", 4],
+  ]);
+});
+
 it("merges table and calendar copies of a class when the table pads hours", async () => {
   categories.scheduleTableData = cached([
     {

@@ -52,6 +52,7 @@ installStagingEnvironment({
   choicesUnavailable: params.has("unavailable"),
   realNetwork: bare || params.get("network") === "real",
   seedStorage: !bare,
+  updateAvailable: params.has("update"),
 });
 
 const theme = params.get("theme");

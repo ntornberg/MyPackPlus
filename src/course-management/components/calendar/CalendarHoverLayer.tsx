@@ -46,7 +46,6 @@ export function CalendarHoverLayer({
   const [nativePopup, setNativePopup] = useState<{
     element: HTMLElement;
     rect: DOMRect;
-    side: "right" | "left" | "bottom";
   } | null>(null);
   // The last card stays rendered after `active` clears so it can animate out.
   const [shown, setShown] = useState(active);
@@ -220,19 +219,7 @@ export function CalendarHoverLayer({
       if (!found || found === popup) return;
       release();
       popup = found;
-      const rect = found.getBoundingClientRect();
-      const width =
-        doc.defaultView?.innerWidth ?? doc.documentElement.clientWidth;
-      setNativePopup({
-        element: found,
-        rect,
-        side:
-          width - rect.right >= 364
-            ? "right"
-            : rect.left >= 364
-              ? "left"
-              : "bottom",
-      });
+      setNativePopup({ element: found, rect: found.getBoundingClientRect() });
       found.addEventListener("pointerenter", cancelClose);
       found.addEventListener("pointerleave", scheduleClose);
       found.addEventListener("focusin", cancelClose);
@@ -310,6 +297,17 @@ export function CalendarHoverLayer({
     }
   }, [visible]);
 
+  const anchorRect = () =>
+    card
+      ? cardAnchorRect(
+          card.anchor,
+          nativePopup &&
+            (nativePopup.element.isConnected
+              ? nativePopup.element.getBoundingClientRect()
+              : nativePopup.rect),
+        )
+      : new DOMRect();
+
   return (
     <Popover
       open={visible}
@@ -319,16 +317,7 @@ export function CalendarHoverLayer({
     >
       {card && (
         <Primitive.Anchor
-          virtualRef={{
-            current: nativePopup
-              ? {
-                  getBoundingClientRect: () =>
-                    nativePopup.element.isConnected
-                      ? nativePopup.element.getBoundingClientRect()
-                      : nativePopup.rect,
-                }
-              : card.anchor,
-          }}
+          virtualRef={{ current: { getBoundingClientRect: anchorRect } }}
         />
       )}
       {card && (
@@ -336,10 +325,12 @@ export function CalendarHoverLayer({
           ref={content}
           id={id}
           container={container}
-          side={nativePopup?.side ?? "bottom"}
+          side={sideBeside(anchorRect(), card.anchor.ownerDocument)}
+          align="center"
           updatePositionStrategy="always"
           collisionPadding={12}
-          className="w-[340px] max-h-[min(460px,80vh)] overflow-y-auto text-sm"
+          // Shrinks to the room beside the anchor so it never flips above or below.
+          className="w-[min(340px,var(--radix-popover-content-available-width))] min-w-[220px] max-w-none max-h-[min(460px,var(--radix-popover-content-available-height))] overflow-y-auto text-sm"
           aria-label={`${card.event.course?.code} class information`}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
@@ -378,6 +369,40 @@ export function CalendarHoverLayer({
       )}
     </Popover>
   );
+}
+
+const viewportWidth = (doc: Document) =>
+  doc.defaultView?.innerWidth ?? doc.documentElement.clientWidth;
+
+/** The card always sits beside its anchor: right when it fits, else the roomier side. */
+function sideBeside(rect: DOMRect, doc: Document): "right" | "left" {
+  const right = viewportWidth(doc) - rect.right;
+  return right >= 364 || right >= rect.left ? "right" : "left";
+}
+
+/** Narrowest card (min-w plus collision padding) worth placing beside both. */
+const MIN_CARD_ROOM = 232;
+
+/**
+ * The card goes beside the hovered class and MyPack's popup together. Placing
+ * it beside the popup alone can land it on the class, which steals the hover
+ * and closes MyPack's popup. With no room beside both, it keeps clear of the
+ * class and covers the popup instead.
+ */
+function cardAnchorRect(event: HTMLElement, popup: DOMRect | null): DOMRect {
+  const rect = event.getBoundingClientRect();
+  if (!popup) return rect;
+  const left = Math.min(rect.left, popup.left);
+  const right = Math.max(rect.right, popup.right);
+  const top = Math.min(rect.top, popup.top);
+  const both = new DOMRect(
+    left,
+    top,
+    right - left,
+    Math.max(rect.bottom, popup.bottom) - top,
+  );
+  const room = Math.max(left, viewportWidth(event.ownerDocument) - right);
+  return room >= MIN_CARD_ROOM ? both : rect;
 }
 
 function CourseCard({ event }: { event: ScheduleEvent }) {

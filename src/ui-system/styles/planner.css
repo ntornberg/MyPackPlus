@@ -1,27 +1,62 @@
 /* Unlayered and scoped so it outranks the Button's size utilities (h-7, px-2.5, ...). */
 .mypack-shell .planner-floating-trigger {
-  height: 2.75rem;
+  --mpp-trigger-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 0 0 1px rgb(15 23 42 / 0.12),
+    0 1px 2px rgb(15 23 42 / 0.12),
+    0 6px 16px -4px rgb(15 23 42 / 0.22);
+  height: 2.5rem;
   gap: 0.5rem;
   border-radius: 9999px;
-  padding-inline: 1.25rem;
-  background-image: linear-gradient(180deg, #4f8bff 0%, #2f6bf5 100%);
-  color: var(--primary-foreground);
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  box-shadow:
-    0 0 0 1px rgb(255 255 255 / 0.35) inset,
-    0 8px 20px rgb(47 107 245 / 0.38),
-    0 2px 4px rgb(47 107 245 / 0.25);
+  padding-inline: 0.75rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  box-shadow: var(--mpp-trigger-shadow);
 }
 
 .mypack-shell .planner-floating-trigger:hover {
-  filter: brightness(1.08);
+  background: #1d4ed8;
   translate: 0 -1px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 0 0 1px rgb(15 23 42 / 0.12),
+    0 2px 4px rgb(15 23 42 / 0.12),
+    0 10px 22px -6px rgb(15 23 42 / 0.28);
 }
 
 .mypack-shell .planner-floating-trigger:active {
-  scale: 0.97;
+  scale: 0.98;
+  translate: 0 0;
+}
+
+.mypack-shell .planner-floating-trigger:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+
+.mypack-shell .planner-trigger-badge {
+  display: grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.16);
+}
+
+.mypack-shell .planner-trigger-chevron {
+  opacity: 0.6;
+  margin-inline-start: -0.125rem;
+  transition:
+    opacity 150ms ease-out,
+    translate 150ms ease-out;
+}
+
+.mypack-shell .planner-floating-trigger:hover .planner-trigger-chevron {
+  opacity: 0.9;
+  translate: -2px 0;
 }
 
 @layer components {
@@ -290,15 +325,13 @@
   0%,
   100% {
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.35) inset,
-      0 8px 20px rgb(47 107 245 / 0.38),
-      0 0 0 0 rgb(47 107 245 / 0);
+      var(--mpp-trigger-shadow),
+      0 0 0 0 rgb(37 99 235 / 0);
   }
   35% {
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.35) inset,
-      0 8px 20px rgb(47 107 245 / 0.38),
-      0 0 0 8px rgb(47 107 245 / 0.2);
+      var(--mpp-trigger-shadow),
+      0 0 0 6px rgb(37 99 235 / 0.18);
   }
 }
 

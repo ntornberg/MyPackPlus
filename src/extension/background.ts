@@ -14,7 +14,6 @@ import {
   forceResetBackgroundStorage,
   initializeBackgroundStorage,
   refreshMigratedTabs,
-  reloadOtherMyPackTabs,
   STORAGE_READY_MESSAGE,
 } from "./storageMigration";
 import {
@@ -22,8 +21,12 @@ import {
   applyIfNoMyPackTabs,
   applyPendingUpdate,
   finishUpdate,
+  FORCE_UPDATE_CHECK_MESSAGE,
+  forceUpdateCheck,
   handleUpdateAvailable,
   maybeCheckForUpdate,
+  OPEN_EXTENSIONS_PAGE_MESSAGE,
+  openExtensionsPage,
   takeUpdateReloadRequest,
 } from "./updates";
 
@@ -37,7 +40,7 @@ function setupMessageListener() {
     return;
   }
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     AppLogger.info("[Background] Received message:", message);
 
     if (message?.type === STORAGE_READY_MESSAGE) {
@@ -57,9 +60,9 @@ function setupMessageListener() {
       void (async () => {
         try {
           await forceResetBackgroundStorage();
-          // The sender reloads itself once it has this answer.
+          // The sender reloads itself once it has this answer; other tabs
+          // pick up the reset on their next load.
           sendResponse({ success: true });
-          await reloadOtherMyPackTabs(sender.tab?.id);
         } catch (error) {
           AppLogger.error("[Reset] Forced reset failed", error);
           sendResponse({ success: false, error: String(error) });
@@ -117,6 +120,18 @@ function setupMessageListener() {
     if (message?.type === APPLY_UPDATE_MESSAGE) {
       void applyPendingUpdate().catch((error) => {
         AppLogger.error("[Updates] Could not apply update", error);
+      });
+      return false;
+    }
+
+    if (message?.type === FORCE_UPDATE_CHECK_MESSAGE) {
+      void forceUpdateCheck().then((status) => sendResponse({ status }));
+      return true;
+    }
+
+    if (message?.type === OPEN_EXTENSIONS_PAGE_MESSAGE) {
+      void openExtensionsPage().catch((error) => {
+        AppLogger.error("[Updates] Could not open the extensions page", error);
       });
       return false;
     }

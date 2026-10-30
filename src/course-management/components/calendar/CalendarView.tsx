@@ -11,6 +11,7 @@ import {
   isUntimedDayTime,
   parseDayTimeEvents,
 } from "../../schedule/parseScheduleDayTime";
+import { cartSettingsOf } from "../../services/cartRows";
 import { enrichScheduleTopics } from "../../services/sectionMetadata";
 import {
   type ScheduleEvent,
@@ -278,7 +279,11 @@ function buildEventsFromTableEntries(
       continue;
     }
 
-    const units = Number.parseFloat(scheduleEntry.units ?? "");
+    // MyPack's schedule lists `units`; cart rows (ours and some of MyPack's)
+    // only record the credits chosen at add time, as `unt_taken`.
+    const units = Number.parseFloat(
+      scheduleEntry.units ?? cartSettingsOf(scheduleEntry).unt_taken ?? "",
+    );
     for (const section of scheduleEntry.section_details) {
       const course = {
         code: scheduleEntry.classs?.trim() ?? "",

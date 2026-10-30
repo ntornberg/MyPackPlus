@@ -142,6 +142,7 @@ export async function getCourseAndProfessorDetails(
     return {
       gradeElement,
       professorElement,
+      data: combinedData,
     };
   } catch (error) {
     AppLogger.error("Exception while creating course elements:", error);
@@ -156,6 +157,7 @@ export async function getCourseAndProfessorDetails(
     return {
       gradeElement: gradeErrorElement,
       professorElement: profErrorElement,
+      data: null,
     };
   }
 }

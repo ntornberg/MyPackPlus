@@ -60,9 +60,7 @@ test("special topics wrap in both densities", async ({ page }, info) => {
   expect(errors).toEqual([]);
 });
 
-test("native search topic link wraps with info toggled", async ({
-  page,
-}, info) => {
+test("native search topic link wraps", async ({ page }, info) => {
   await page.route("**/native-topic-fixture.html", (route) =>
     route.fulfill({
       contentType: "text/html",
@@ -79,7 +77,7 @@ test("native search topic link wraps with info toggled", async ({
     host.append(frame);
     document.body.append(host);
     const doc = frame.contentDocument!;
-    doc.body.innerHTML = `<div role="dialog" class="ui-dialog cust-ui-dialog"><div class="ui-dialog-titlebar">Search results</div><div id="dialogTopics" style="position:relative"><table id="classSearchTable"><tbody><tr><td>-</td><td>CSC 491</td><td><a href="#details" style="display:block;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Special Topics in CSC (Generative AI for Computer Systems and Long Topic Names)</a></td><td>Graded</td><td>3.00</td><td>Open</td><td><button>Add To Cart</button></td><td class="mypack-course-info-cell">Course information</td></tr><tr class="child"><td colspan="7">Section 001 - Wed/Fri</td><td class="mypack-extension-cell">Grades and ratings</td></tr></tbody></table></div></div>`;
+    doc.body.innerHTML = `<div role="dialog" class="ui-dialog cust-ui-dialog"><div class="ui-dialog-titlebar">Search results</div><div id="dialogTopics" style="position:relative"><table id="classSearchTable"><tbody><tr><td>-</td><td>CSC 491</td><td><a href="#details" style="display:block;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Special Topics in CSC (Generative AI for Computer Systems and Long Topic Names)</a></td><td>Graded</td><td>3.00</td><td>Open</td><td><button>Add To Cart</button></td></tr><tr class="child"><td colspan="7">Section 001 - Wed/Fri<details class="mypack-info-strip"><summary class="mypack-info-strip-summary">Grades and ratings</summary></details></td></tr></tbody></table></div></div>`;
     doc.querySelector("a")!.addEventListener("click", (e) => {
       e.preventDefault();
       doc.body.dataset.clicked = "yes";
@@ -98,27 +96,19 @@ test("native search topic link wraps with info toggled", async ({
   });
   const frame = page.frameLocator("#testdivPSPAGECONTAINER iframe");
   const link = frame.getByRole("link");
-  for (let i = 0; i < 2; i++) {
-    await expect(link).toBeVisible();
-    expect(
-      await link.evaluate((el) => ({
-        wrap: getComputedStyle(el).whiteSpace,
-        fits: el.scrollWidth <= el.clientWidth + 1,
-      })),
-    ).toEqual({ wrap: "normal", fits: true });
-    await expect(
-      frame.getByRole("button", { name: "Add To Cart", exact: true }),
-    ).toBeEnabled();
-    await link.click();
-    await page.screenshot({
-      path: info.outputPath(`native-topics-${i}.png`),
-      fullPage: true,
-    });
-    await frame
-      .getByRole("button", {
-        name:
-          i === 0 ? "Hide extension info panel" : "Show extension info panel",
-      })
-      .click();
-  }
+  await expect(link).toBeVisible();
+  expect(
+    await link.evaluate((el) => ({
+      wrap: getComputedStyle(el).whiteSpace,
+      fits: el.scrollWidth <= el.clientWidth + 1,
+    })),
+  ).toEqual({ wrap: "normal", fits: true });
+  await expect(
+    frame.getByRole("button", { name: "Add To Cart", exact: true }),
+  ).toBeEnabled();
+  await link.click();
+  await page.screenshot({
+    path: info.outputPath("native-topics.png"),
+    fullPage: true,
+  });
 });

@@ -40,41 +40,6 @@ export function injectCssOnce(
 }
 
 /**
- * Ensures that an extension cell exists in the given row, creating one if necessary.
- *
- * @param {HTMLTableRowElement} row The table row where the cell should be added
- * @returns {HTMLTableCellElement} The extension cell
- */
-export function ensureExtensionCell(
-  row: HTMLTableRowElement,
-): HTMLTableCellElement {
-  let cell = row.querySelector<HTMLTableCellElement>(
-    "td.mypack-extension-cell",
-  );
-  if (cell) {
-    cell.innerHTML = "";
-    return cell;
-  }
-
-  cell = row.ownerDocument!.createElement("td");
-  cell.className = "mypack-extension-cell";
-  cell.colSpan = row.cells.length;
-  Object.assign(cell.style, {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
-    justifyContent: "flex-start",
-    gap: ".5rem",
-    padding: ".25rem",
-    whiteSpace: "normal",
-    verticalAlign: "top",
-  });
-
-  row.appendChild(cell);
-  return cell;
-}
-
-/**
  * Waits for the schedule table ('#scheduleTable') within the MyPack iframe.
  *
  * @returns {Promise<Element>} Resolves with the '#scheduleTable' element

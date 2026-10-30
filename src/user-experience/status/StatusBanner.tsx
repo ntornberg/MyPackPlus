@@ -8,8 +8,13 @@ import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { UpdateAvailablePill } from "../update/UpdateAvailablePill";
+import { usePendingUpdate } from "../update/usePendingUpdate";
+
 import {
+  currentVersion,
   fetchStatusWorkerStatus,
+  isOutdated,
   type StatusLevel,
   type StatusWorkerStatus,
 } from "./statusWorker";
@@ -55,6 +60,7 @@ function StatusIcon({ level }: { level: StatusLevel }) {
 
 export function StatusBanner({ className }: { className?: string }) {
   const [status, setStatus] = useState<StatusWorkerStatus | null>(null);
+  const { version: pendingVersion } = usePendingUpdate();
 
   useEffect(() => {
     let isMounted = true;
@@ -81,6 +87,24 @@ export function StatusBanner({ className }: { className?: string }) {
 
   if (!status) {
     return null;
+  }
+
+  // Outages outrank the nudge, and a downloaded update has its own pill.
+  const running = currentVersion();
+  if (
+    (status.level === "ok" || status.level === "info") &&
+    !pendingVersion &&
+    status.latestVersion &&
+    isOutdated(running, status.latestVersion)
+  ) {
+    return (
+      <UpdateAvailablePill
+        running={running}
+        latest={status.latestVersion}
+        notes={status.releaseNotes}
+        className={className}
+      />
+    );
   }
 
   const role = status.level === "error" ? "alert" : "status";

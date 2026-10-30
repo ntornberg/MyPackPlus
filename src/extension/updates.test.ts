@@ -13,6 +13,7 @@ import {
   applyIfNoMyPackTabs,
   applyPendingUpdate,
   finishUpdate,
+  forceUpdateCheck,
   handleUpdateAvailable,
   maybeCheckForUpdate,
   PENDING_UPDATE_KEY,
@@ -68,6 +69,18 @@ describe("update checks", () => {
   it("swallows rejected checks", async () => {
     requestUpdateCheck.mockRejectedValueOnce(new Error("throttled"));
     await expect(maybeCheckForUpdate()).resolves.toBeUndefined();
+  });
+
+  it("forced checks skip the hourly limit and report Chrome's answer", async () => {
+    await maybeCheckForUpdate();
+    requestUpdateCheck.mockResolvedValueOnce({ status: "update_available" });
+    await expect(forceUpdateCheck()).resolves.toBe("update_available");
+    expect(requestUpdateCheck).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a rejected forced check as failed", async () => {
+    requestUpdateCheck.mockRejectedValueOnce(new Error("unpacked"));
+    await expect(forceUpdateCheck()).resolves.toBe("failed");
   });
 });
 

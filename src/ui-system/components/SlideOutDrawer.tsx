@@ -728,8 +728,14 @@ export default function SlideOutDrawer({
             plannerLauncherClassName,
           )}
         >
-          <ChevronLeftIcon className="size-4" aria-hidden="true" />
-          <GraduationCapIcon className="size-5" strokeWidth={2.25} />
+          <ChevronLeftIcon
+            className="planner-trigger-chevron size-3.5"
+            strokeWidth={2.5}
+            aria-hidden="true"
+          />
+          <span className="planner-trigger-badge" aria-hidden="true">
+            <GraduationCapIcon className="size-4" strokeWidth={2} />
+          </span>
           MyPack+ Planner
         </Button>
       </PlannerLauncherHint>

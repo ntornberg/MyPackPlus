@@ -199,6 +199,8 @@ export interface V2Envelope<T> {
 export interface CourseElements {
   gradeElement: HTMLDivElement;
   professorElement: HTMLDivElement;
+  /** The lookup the cards were rendered from; null when it failed. */
+  data: SingleCourseDataResponse | null;
 }
 
 export {};

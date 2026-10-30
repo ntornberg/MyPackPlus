@@ -33,7 +33,9 @@ function installChromeStorageMock(storageState: Record<string, any>): {
   const chromeMock: ChromeStorageMock = {
     storage: {
       local: {
-        get: vi.fn(async (key: string) => ({ [key]: storageState[key] })),
+        get: vi.fn(async (key: string | null) =>
+          key === null ? { ...storageState } : { [key]: storageState[key] },
+        ),
         set: vi.fn(async (payload: Record<string, any>) => {
           setCalls.push(payload);
           for (const [key, value] of Object.entries(payload)) {
@@ -184,6 +186,23 @@ describe("CourseRetrieval cache expiration", () => {
     );
     expect(storageState.openCourses).toBeUndefined();
     expect(storageState.scheduleTableData).toBeUndefined();
+  });
+
+  it("clears every revision of versioned categories on update", async () => {
+    const entry = { a: { combinedData: "{}", timestamp: 1 } };
+    const storageState: Record<string, any> = {
+      "openCourses-v3-2026-10": entry,
+      "openCourses-v2-2026-08": entry,
+      gradeDatasetVersion: "v-1",
+    };
+    installChromeStorageMock(storageState);
+
+    await clearAllExtensionCaches();
+
+    expect(storageState["openCourses-v3-2026-10"]).toBeUndefined();
+    expect(storageState["openCourses-v2-2026-08"]).toBeUndefined();
+    expect(storageState.gradeDatasetVersion).toBe("v-1");
+    expect(typeof storageState.cacheEpoch).toBe("number");
   });
 });
 

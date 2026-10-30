@@ -168,13 +168,6 @@ describe("background forced reset", () => {
       "mypack.forceResetAt": expect.any(Number),
     });
   });
-
-  it("reloads only the MyPack tabs that did not ask for the reset", async () => {
-    const chrome = installChrome();
-    await (await import("./storageMigration")).reloadOtherMyPackTabs(1);
-    expect(chrome.tabs.reload).toHaveBeenCalledTimes(1);
-    expect(chrome.tabs.reload).toHaveBeenCalledWith(2);
-  });
 });
 
 describe("page storage migration", () => {
@@ -210,8 +203,9 @@ describe("page storage migration", () => {
       migration.initializePageStorage(),
       migration.initializePageStorage(),
     ]);
-    expect(localStorage.length).toBe(2);
-    expect(sessionStorage.length).toBe(2);
+    // The website's own key plus our revision and version markers.
+    expect(localStorage.length).toBe(3);
+    expect(sessionStorage.length).toBe(3);
     expect(localStorage.getItem("mypackWebsitePreference")).toBe("keep");
     expect(cache.resetCacheDatabase).toHaveBeenCalledTimes(1);
     localStorage.setItem("mypack-theme-mode", "light");
@@ -226,6 +220,29 @@ describe("page storage migration", () => {
     expect(sessionStorage.getItem("mypack-pack-planner-session-v1")).toBeNull();
     expect(sessionStorage.getItem("website")).toBe("keep");
     expect(localStorage.getItem("mypack-theme-mode")).toBe("light");
+    expect(cache.resetCacheDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops cached course sections, but not settings, when the build changes", async () => {
+    const chrome = installChrome();
+    const migration = await import("./storageMigration");
+    await migration.initializePageStorage();
+    localStorage.setItem("mypack-theme-mode", "light");
+    sessionStorage.setItem(
+      "mypack-course-sections-v2:rev:v5:term",
+      "old build",
+    );
+    await migration.initializePageStorage();
+    expect(
+      sessionStorage.getItem("mypack-course-sections-v2:rev:v5:term"),
+    ).toBe("old build");
+    chrome.runtime.getManifest = () => ({ version: "3.8.18" });
+    await migration.initializePageStorage();
+    expect(
+      sessionStorage.getItem("mypack-course-sections-v2:rev:v5:term"),
+    ).toBeNull();
+    expect(localStorage.getItem("mypack-theme-mode")).toBe("light");
+    expect(sessionStorage.getItem("mypack.extensionVersion")).toBe("3.8.18");
     expect(cache.resetCacheDatabase).toHaveBeenCalledTimes(1);
   });
 

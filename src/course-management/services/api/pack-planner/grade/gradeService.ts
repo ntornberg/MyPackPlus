@@ -15,6 +15,35 @@ import { createShadowHost, injectCssOnce } from "../../../../../utils/dom";
 const DEGREE_AUDIT_CARD_STYLE_ID = "mpp-degree-audit-card-styles";
 
 /**
+ * Coerces API grade fields (which may arrive as strings) to numbers and fills
+ * missing names from the scraped course.
+ */
+export function normalizeGradeData(
+  course: Course,
+  courseData: GradeData,
+): GradeData {
+  const toNumber = (value: unknown) => {
+    const parsed = parseFloat(String(value ?? "0"));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  return {
+    ...courseData,
+    course_name: courseData.course_name || course.abr,
+    instructor_name: courseData.instructor_name || course.instructor,
+    a_average: toNumber(courseData.a_average),
+    b_average: toNumber(courseData.b_average),
+    c_average: toNumber(courseData.c_average),
+    d_average: toNumber(courseData.d_average),
+    f_average: toNumber(courseData.f_average),
+    class_avg_min: toNumber(courseData.class_avg_min),
+    class_avg_max: toNumber(courseData.class_avg_max),
+    s_average: toNumber(courseData.s_average),
+    u_average: toNumber(courseData.u_average),
+    w_average: toNumber(courseData.w_average),
+  };
+}
+
+/**
  * Creates a grade card component from course data.
  * @param {Course} course - The course to create the grade card for.
  * @param {SingleCourseDataResponse} data - The data to use for the card.
@@ -43,25 +72,7 @@ export function createGradeCard(
     return wrapper;
   }
 
-  const toNumber = (value: unknown) => {
-    const parsed = parseFloat(String(value ?? "0"));
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-  const gradeData: GradeData = {
-    ...courseData,
-    course_name: courseData.course_name || course.abr,
-    instructor_name: courseData.instructor_name || course.instructor,
-    a_average: toNumber(courseData.a_average),
-    b_average: toNumber(courseData.b_average),
-    c_average: toNumber(courseData.c_average),
-    d_average: toNumber(courseData.d_average),
-    f_average: toNumber(courseData.f_average),
-    class_avg_min: toNumber(courseData.class_avg_min),
-    class_avg_max: toNumber(courseData.class_avg_max),
-    s_average: toNumber(courseData.s_average),
-    u_average: toNumber(courseData.u_average),
-    w_average: toNumber(courseData.w_average),
-  };
+  const gradeData = normalizeGradeData(course, courseData);
 
   if (!hasGradeDistribution(gradeData)) {
     wrapper.textContent = "No grade data available.";

@@ -9,6 +9,9 @@ export type StatusWorkerStatus = {
   message: string;
   details?: string;
   updatedAt: string;
+  /** Newest version on the Web Store, set from the worker's admin page. */
+  latestVersion?: string;
+  releaseNotes?: string;
 };
 
 const STATUS_ENDPOINT = `${STATUS_WORKER_ORIGIN}/status/simple`;
@@ -20,6 +23,48 @@ type StatusWorkerFetchResponse = {
   status?: unknown;
   error?: string;
 };
+
+export function currentVersion(): string {
+  try {
+    return chrome.runtime.getManifest().version;
+  } catch {
+    return "";
+  }
+}
+
+const VERSION_PATTERN = /^\d+(\.\d+){0,3}$/;
+
+/** Compares dotted Chrome versions numerically; missing parts count as 0. */
+export function compareVersions(a: string, b: string): number {
+  const left = a.split(".").map(Number);
+  const right = b.split(".").map(Number);
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    const diff = (left[index] ?? 0) - (right[index] ?? 0);
+    if (diff !== 0) return Math.sign(diff);
+  }
+  return 0;
+}
+
+/** True only when both versions are well formed and running is older. */
+export function isOutdated(
+  running: string,
+  latest: string | undefined,
+): boolean {
+  return (
+    VERSION_PATTERN.test(running) &&
+    latest !== undefined &&
+    VERSION_PATTERN.test(latest) &&
+    compareVersions(running, latest) < 0
+  );
+}
+
+/** The status URL, tagged with the running extension's version when known. */
+export function statusEndpointUrl(): string {
+  const version = currentVersion();
+  return version
+    ? `${STATUS_ENDPOINT}?version=${encodeURIComponent(version)}`
+    : STATUS_ENDPOINT;
+}
 
 function isStatusLevel(value: unknown): value is StatusLevel {
   return (
@@ -53,6 +98,14 @@ function parseStatusWorkerStatus(value: unknown): StatusWorkerStatus | null {
     details:
       typeof candidate.details === "string" ? candidate.details : undefined,
     updatedAt: candidate.updatedAt,
+    latestVersion:
+      typeof candidate.latestVersion === "string"
+        ? candidate.latestVersion
+        : undefined,
+    releaseNotes:
+      typeof candidate.releaseNotes === "string"
+        ? candidate.releaseNotes
+        : undefined,
   };
 }
 
@@ -64,7 +117,7 @@ export async function fetchStatusWorkerStatusDirect(): Promise<StatusWorkerStatu
   );
 
   try {
-    const response = await fetch(STATUS_ENDPOINT, {
+    const response = await fetch(statusEndpointUrl(), {
       cache: "no-store",
       signal: controller.signal,
     });

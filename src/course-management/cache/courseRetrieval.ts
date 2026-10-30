@@ -80,7 +80,8 @@ const SIZE_THRESHOLD = 100 * 1024;
 const DB_NAME = "mypack-extension-cache";
 const STORE_NAME = "cache-store";
 const DB_VERSION = 1;
-const STORAGE_REVISION_DB_KEY = "__meta:storageRevision";
+const META_KEY_PREFIX = "__meta:";
+const STORAGE_REVISION_DB_KEY = `${META_KEY_PREFIX}storageRevision`;
 
 /** Clear every legacy entry and commit the revision in the same transaction. */
 export async function resetCacheDatabase(revision: number): Promise<void> {
@@ -141,6 +142,20 @@ const EXTENSION_CACHE_CATEGORIES = [
   "instructorSearch",
   "myPackOfferings",
 ];
+
+/**
+ * Categories whose name carries a revision (e.g. `openCourses-v3-<catalog>`).
+ * Matched by prefix so every revision, including ones older builds left
+ * behind, is cleared on update.
+ */
+const VERSIONED_CACHE_CATEGORY_PREFIXES = ["openCourses-"];
+
+function isExtensionCacheCategory(key: string): boolean {
+  return (
+    EXTENSION_CACHE_CATEGORIES.includes(key) ||
+    VERSIONED_CACHE_CATEGORY_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
+}
 
 /**
  * Prefix for grade/RMP cache keys. Bump when the backend response shape changes so entries
@@ -569,6 +584,28 @@ async function clearFromIndexedDB(cacheCategory: string): Promise<void> {
   }
 }
 
+/**
+ * Clears every cached row in IndexedDB, keeping only `__meta:` bookkeeping, so
+ * categories this build no longer names (or names under a new revision) go too.
+ */
+async function clearAllCacheRowsFromIndexedDB(): Promise<void> {
+  try {
+    const db = await openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      // Keys sort as strings, so these two ranges cover everything but `__meta:*`.
+      store.delete(IDBKeyRange.upperBound(META_KEY_PREFIX, true));
+      store.delete(IDBKeyRange.lowerBound(`${META_KEY_PREFIX}￿`, true));
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = transaction.onabort = () =>
+        reject(transaction.error ?? new Error("Cache clear aborted"));
+    });
+  } catch (error) {
+    AppLogger.error(`[CACHE ERROR] IndexedDB clear-all error:`, error);
+  }
+}
+
 async function deleteIndexedDBEntries(keys: string[]): Promise<void> {
   if (keys.length === 0 || typeof indexedDB === "undefined") {
     return;
@@ -937,16 +974,18 @@ const CACHE_EPOCH_LOCK_NAME = "mypack-extension-cache-epoch";
 export async function clearAllExtensionCaches(): Promise<void> {
   try {
     if (isChromeStorageAvailable()) {
-      await chrome.storage.local.remove([...EXTENSION_CACHE_CATEGORIES]);
+      const stored = await chrome.storage.local.get(null);
+      await chrome.storage.local.remove([
+        ...new Set([
+          ...EXTENSION_CACHE_CATEGORIES,
+          ...Object.keys(stored ?? {}).filter(isExtensionCacheCategory),
+        ]),
+      ]);
       await chrome.storage.local.set({ [CACHE_EPOCH_STORAGE_KEY]: Date.now() });
     }
 
     if (typeof indexedDB !== "undefined") {
-      await Promise.all(
-        EXTENSION_CACHE_CATEGORIES.map((cacheCategory) =>
-          clearFromIndexedDB(cacheCategory),
-        ),
-      );
+      await clearAllCacheRowsFromIndexedDB();
     }
   } catch (error) {
     AppLogger.error(`[CACHE ERROR] clearAllExtensionCaches failed`, error);
@@ -1045,11 +1084,7 @@ async function syncIndexedDBCacheEpochUnlocked(): Promise<void> {
       return;
     }
 
-    await Promise.all(
-      EXTENSION_CACHE_CATEGORIES.map((cacheCategory) =>
-        clearFromIndexedDB(cacheCategory),
-      ),
-    );
+    await clearAllCacheRowsFromIndexedDB();
 
     const writeDb = await openDatabase();
     await new Promise<void>((resolve) => {

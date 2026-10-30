@@ -4,6 +4,14 @@ import { queryMyPackTabs, reloadMyPackTabs } from "./storageMigration";
 
 export const PENDING_UPDATE_KEY = "mypack.pendingUpdate";
 export const APPLY_UPDATE_MESSAGE = "mypack-apply-update";
+export const FORCE_UPDATE_CHECK_MESSAGE = "mypack-force-update-check";
+export const OPEN_EXTENSIONS_PAGE_MESSAGE = "mypack-open-extensions-page";
+
+export type ForceUpdateCheckResult =
+  | "update_available"
+  | "no_update"
+  | "throttled"
+  | "failed";
 const LAST_CHECK_KEY = "mypack.lastUpdateCheck";
 const RELOAD_TABS_KEY = "mypack.reloadTabsAfterUpdate";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -21,6 +29,30 @@ export async function maybeCheckForUpdate(): Promise<void> {
     // Unpacked builds and throttled checks reject; Chrome's own schedule still runs.
     AppLogger.warn("[Updates] Update check failed", error);
   }
+}
+
+/**
+ * Asks the Web Store now, skipping the hourly limit, because the status
+ * worker says a newer version exists. A found update arrives through
+ * onUpdateAvailable, which the existing "Update ready" flow handles.
+ */
+export async function forceUpdateCheck(): Promise<ForceUpdateCheckResult> {
+  try {
+    await chrome.storage.local.set({ [LAST_CHECK_KEY]: Date.now() });
+    const result = await chrome.runtime.requestUpdateCheck();
+    AppLogger.info("[Updates] Forced update check:", result.status, result.version);
+    return result.status;
+  } catch (error) {
+    AppLogger.warn("[Updates] Forced update check failed", error);
+    return "failed";
+  }
+}
+
+/** Opens this extension's row on chrome://extensions, which pages can't link to. */
+export async function openExtensionsPage(): Promise<void> {
+  await chrome.tabs.create({
+    url: `chrome://extensions/?id=${chrome.runtime.id}`,
+  });
 }
 
 /**

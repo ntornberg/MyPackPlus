@@ -54,5 +54,7 @@ export function matchNativeCourse(
       e.course.section === identity.section,
   );
   const identities = new Set(matches.map((e) => JSON.stringify(e.course)));
-  return identities.size === 1 ? matches[0] : undefined;
+  if (identities.size !== 1) return undefined;
+  // The native calendar only draws timed meetings, so describe one of those.
+  return matches.find((e) => !e.allDay) ?? matches[0];
 }

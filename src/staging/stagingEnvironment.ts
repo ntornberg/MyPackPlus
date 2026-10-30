@@ -3,6 +3,7 @@ import {
   parseRegistrarSearch,
   SEARCH_COURSES_MESSAGE,
 } from "../course-management/services/api/planner-search/searchService";
+import { FORCE_UPDATE_CHECK_MESSAGE } from "../extension/updates";
 import type { V2GradeRequest } from "../types/api";
 import { STATUS_WORKER_ORIGIN } from "../user-experience/status/statusWorker";
 
@@ -34,7 +35,11 @@ export type StagingEnvironmentOptions = {
   realNetwork: boolean;
   /** Seed degree audit, planner and schedule data into `chrome.storage`. */
   seedStorage: boolean;
+  /** Have the status worker report a version newer than the running one. */
+  updateAvailable?: boolean;
 };
+
+const STAGING_VERSION = "1.0.0";
 
 type StorageListener = (
   changes: Record<string, chrome.storage.StorageChange>,
@@ -60,6 +65,7 @@ async function fetchRegistrar(url: string, formData: string) {
 function installChromeStub(
   stored: Record<string, unknown>,
   realNetwork: boolean,
+  updateAvailable: boolean,
 ) {
   const listeners = new Set<StorageListener>();
   const notify = (changes: Record<string, chrome.storage.StorageChange>) => {
@@ -102,12 +108,24 @@ function installChromeStub(
             level: "ok",
             message: "All systems operational",
             updatedAt: new Date().toISOString(),
+            ...(updateAvailable
+              ? { latestVersion: "1.1.0", releaseNotes: "Faster search." }
+              : {}),
           },
         };
+      } else if (message.type === FORCE_UPDATE_CHECK_MESSAGE) {
+        response = { status: "no_update" };
       }
-      // Answer asynchronously, like the real background worker.
-      window.setTimeout(() => callback?.(response), 30);
+      // Answer asynchronously, like the real background worker, and resolve a
+      // promise for callers that await instead of passing a callback.
+      return new Promise((resolve) =>
+        window.setTimeout(() => {
+          callback?.(response);
+          resolve(response);
+        }, 30),
+      );
     },
+    getManifest: () => ({ version: STAGING_VERSION }),
   };
   Object.defineProperty(globalThis, "chrome", {
     configurable: true,
@@ -242,6 +260,7 @@ export function installStagingEnvironment(options: StagingEnvironmentOptions) {
         }
       : {},
     options.realNetwork,
+    options.updateAvailable ?? false,
   );
   if (!options.realNetwork) {
     installFetchStub();

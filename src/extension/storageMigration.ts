@@ -22,7 +22,8 @@ const SITE_KEYS = [
   "mypack.whatsNewSeenVersion",
   "firstStartDismissed",
 ];
-const COURSE_CACHE_PREFIX = "mypack-course-sections-v1:";
+/** Every revision of the per-tab course section cache (see useCourseSections). */
+const COURSE_CACHE_PREFIX = "mypack-course-sections-";
 
 let initialization: Promise<{ revision: number; migrated: boolean }> | undefined;
 
@@ -88,13 +89,23 @@ export function refreshMigratedTabs(): Promise<void> {
   return refresh;
 }
 
-function clearSiteKeys(storage: Storage): void {
+function clearSiteKeys(storage: Storage, cachesOnly = false): void {
   const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index));
   for (const key of keys) {
-    if (key && (SITE_KEYS.includes(key) || key.startsWith(COURSE_CACHE_PREFIX))) {
+    if (
+      key &&
+      ((!cachesOnly && SITE_KEYS.includes(key)) || key.startsWith(COURSE_CACHE_PREFIX))
+    ) {
       storage.removeItem(key);
     }
   }
+}
+
+/** A new build may parse data differently: drop this page's caches, keep preferences. */
+function clearCachesOnVersionChange(storage: Storage, version: string): void {
+  if (storage.getItem(VERSION_KEY) === version) return;
+  clearSiteKeys(storage, true);
+  storage.setItem(VERSION_KEY, version);
 }
 
 /** Website storage is shared with MyPack: remove only our exact keys/prefix. */
@@ -117,6 +128,9 @@ export async function initializePageStorage(): Promise<void> {
       clearSiteKeys(sessionStorage);
       sessionStorage.setItem(REVISION_KEY, String(STORAGE_REVISION));
     }
+    const version = chrome.runtime.getManifest().version;
+    clearCachesOnVersionChange(localStorage, version);
+    clearCachesOnVersionChange(sessionStorage, version);
     // A forced reset from another origin or tab: wipe what only this page can reach.
     if (typeof resetAt === "number") {
       if (localStorage.getItem(RESET_KEY) !== String(resetAt)) {
@@ -135,7 +149,9 @@ export async function initializePageStorage(): Promise<void> {
 /**
  * Worker half of a forced reset: wipes every storage area and its own cache
  * database, re-runs first-install setup, then records the reset so other
- * origins and tabs wipe their page storage on their next load.
+ * origins and tabs wipe their page storage on their next load. Those tabs are
+ * not reloaded here: a burst of PeopleSoft reloads on one session stalls them
+ * all (proxy errors, even sign-out).
  */
 export async function forceResetBackgroundStorage(): Promise<void> {
   const resetAt = Date.now();
@@ -148,14 +164,6 @@ export async function forceResetBackgroundStorage(): Promise<void> {
   initialization = undefined;
   await initializeBackgroundStorage();
   await chrome.storage.local.set({ [RESET_KEY]: resetAt });
-}
-
-/** Reloads the MyPack tabs other than the one that asked for the reset. */
-export async function reloadOtherMyPackTabs(
-  senderTabId?: number,
-): Promise<void> {
-  const tabs = await queryMyPackTabs();
-  await reloadMyPackTabs(tabs.filter((tab) => tab.id !== senderTabId));
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
