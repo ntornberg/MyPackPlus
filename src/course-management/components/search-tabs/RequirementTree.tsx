@@ -95,7 +95,7 @@ type RequirementModel = {
   entry: RequirementTreeEntry;
   progress: RequirementProgress;
   courses: CourseRowModel[];
-  /** Completed or enrolled rows the filter hid; shown on request. */
+  /** Rows the view tucks away: completed, or in "Options" enrolled too. */
   finished: CourseRowModel[];
   /** Still-needed or planned courses with sections this term. */
   offered: number;
@@ -127,9 +127,37 @@ export function matchesCourseQuery(
     .every((word) => text.includes(word));
 }
 
-/** Courses that already fill a requirement, so "Still needed" hides them. */
+/** Courses already taken or being taken, so "Options" leaves them out. */
 const isFinished = (row: CourseRowModel) =>
   row.audit?.status === "completed" || row.audit?.status === "enrolled";
+
+/** Groups with something left to add first, finished ones last. */
+function groupRank(status: RequirementStatus): number {
+  switch (status) {
+    case "needed":
+      return 0;
+    case "unknown":
+      return 1;
+    case "planned":
+      return 2;
+    case "enrolled":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+/** "CSC 297 ×3, DSA 201": a course applied more than once is named once. */
+export function courseCodesLabel(rows: readonly CourseRowModel[]): string {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const code = `${row.course.course_abr} ${stripLeadingZeros(row.course.catalog_num)}`;
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([code, count]) => (count > 1 ? `${code} ×${count}` : code))
+    .join(", ");
+}
 
 /** Courses the student still has to register for: needed or only planned. */
 export const wantsSections = (row: CourseRowModel) =>
@@ -487,7 +515,8 @@ export function CourseRow({
       <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
         {inCart ? <InCartBadge /> : null}
         {row.audit && !isNeeded(row) ? <AuditChip state={row.audit} /> : null}
-        {wantsSections(row) ? <AvailabilityChips row={row} /> : null}
+        {/* A course in the cart already sits on the calendar it would fit. */}
+        {wantsSections(row) && !inCart ? <AvailabilityChips row={row} /> : null}
       </span>
     </>
   );
@@ -585,6 +614,9 @@ export type NeedProgress = {
   text: string;
   /** Share done from 0 to 1; null when MyPack gives no minimum. */
   fraction: number | null;
+  /** Shares enrolled and planned, drawn after the done share. */
+  enrolled?: number;
+  planned?: number;
 };
 
 /** How far along one unmet requirement is, in hours or courses as its list counts. */
@@ -638,13 +670,44 @@ export function groupProgress(
   };
 }
 
-/** A filled bar with its percentage; the label is read out in its place. */
+/**
+ * How much of a group with nothing unmet is done, when what's left is only
+ * enrolled or planned. Null otherwise, since then the total isn't known.
+ */
+export function coverageProgress(
+  progress: Pick<
+    RequirementProgress,
+    "status" | "completed" | "enrolled" | "planned"
+  >,
+): NeedProgress | null {
+  const { status, completed, enrolled, planned } = progress;
+  const total = completed + enrolled + planned;
+  if ((status !== "planned" && status !== "enrolled") || total === 0) {
+    return null;
+  }
+  const rest = [
+    enrolled ? `${enrolled} enrolled` : null,
+    planned ? `${planned} planned` : null,
+  ].filter(Boolean);
+  return {
+    text: `${completed} of ${coursesLabel(total)} done · ${rest.join(" · ")}`,
+    fraction: completed / total,
+    enrolled: enrolled / total,
+    planned: planned / total,
+  };
+}
+
+/** A filled bar with its percentage done; the label is read out in its place. */
 function ProgressBar({
   fraction,
+  enrolled = 0,
+  planned = 0,
   label,
   className,
 }: {
   fraction: number;
+  enrolled?: number;
+  planned?: number;
   label: string;
   className?: string;
 }) {
@@ -657,13 +720,22 @@ function ProgressBar({
     >
       <span
         className={cn(
-          "h-2 w-24 overflow-hidden rounded-full bg-foreground/15 ring-1 ring-foreground/25 ring-inset",
+          "flex h-2 w-24 overflow-hidden rounded-full bg-foreground/15 ring-1 ring-foreground/25 ring-inset",
           className,
         )}
       >
+        {/* Same colors as the degree units bar. */}
         <span
-          className="block h-full rounded-full bg-emerald-500"
+          className="block h-full bg-emerald-500"
           style={{ width: `${fraction * 100}%` }}
+        />
+        <span
+          className="block h-full bg-primary"
+          style={{ width: `${enrolled * 100}%` }}
+        />
+        <span
+          className="block h-full bg-violet-500"
+          style={{ width: `${planned * 100}%` }}
         />
       </span>
       <span className="w-8 text-right font-medium text-foreground tabular-nums">
@@ -818,15 +890,16 @@ function RequirementRow({
   onToggleCourse,
   renderSections,
   onOpen,
-  showAlternatives,
+  view,
 }: {
   model: RequirementModel;
   expandedCourses: Set<string>;
   onToggleCourse: (id: string) => void;
   renderSections: (course: RequiredCourse) => ReactNode;
   onOpen?: (requirementId: string) => void;
-  showAlternatives: boolean;
+  view: RequirementFilter;
 }) {
+  const showAlternatives = view === "options";
   const { entry, progress, finished } = model;
   const alternativeCodes = new Set(
     entry.alternatives?.flatMap((alternative) =>
@@ -858,16 +931,23 @@ function RequirementRow({
   const [showFinished, setShowFinished] = useState(false);
   // A closed group renders only its summary; long option lists cost every render.
   const [isOpen, setIsOpen] = useState(false);
+  // The checklist only lists choices for unmet parts; skip loading the rest.
+  const loadsOnOpen = showAlternatives || needs.length > 0;
   // A group left open while a new search deferred it loads right away.
   const detailsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
-    if (model.deferred && !model.loading && detailsRef.current?.open) {
+    if (
+      loadsOnOpen &&
+      model.deferred &&
+      !model.loading &&
+      detailsRef.current?.open
+    ) {
       onOpen?.(entry.requirementId);
     }
-  }, [model.deferred, model.loading, onOpen, entry.requirementId]);
+  }, [loadsOnOpen, model.deferred, model.loading, onOpen, entry.requirementId]);
   const sections = needSections(courses, needs);
   const met = metParts([...courses, ...finished], needs);
-  const overall = groupProgress(met, needs);
+  const overall = groupProgress(met, needs) ?? coverageProgress(progress);
   // Each need starts folded except the first, which shows how they open.
   const [openNeeds, setOpenNeeds] = useState<Set<number>>(() => new Set([0]));
   const toggleNeed = (index: number) =>
@@ -886,7 +966,8 @@ function RequirementRow({
       onToggle={(event) => {
         if (event.target !== event.currentTarget) return;
         setIsOpen(event.currentTarget.open);
-        if (event.currentTarget.open) onOpen?.(entry.requirementId);
+        if (event.currentTarget.open && loadsOnOpen)
+          onOpen?.(entry.requirementId);
       }}
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
@@ -917,6 +998,8 @@ function RequirementRow({
         {overall ? (
           <ProgressBar
             fraction={overall.fraction ?? 0}
+            enrolled={overall.enrolled}
+            planned={overall.planned}
             label={overall.text}
             className="w-28"
           />
@@ -926,72 +1009,23 @@ function RequirementRow({
             <Badge className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
               Complete
             </Badge>
-          ) : model.loading ? (
+          ) : null}
+          {!loadsOnOpen ? null : model.loading ? (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="size-3 animate-spin" aria-hidden />
               Loading choices and sections…
             </span>
           ) : model.deferred ? (
             <Badge variant="outline" className="font-normal">
-              Open to load sections
+              {showAlternatives
+                ? "Open to see choices"
+                : "Open to load sections"}
             </Badge>
           ) : null}
         </span>
       </summary>
       {isOpen ? (
         <div className="border-t border-border">
-          {showAlternatives
-            ? entry.alternatives?.map((alternative) => {
-                const codes = new Set(
-                  alternative.courses.map((course) =>
-                    plannerCourseCode(course.course_abr, course.catalog_num),
-                  ),
-                );
-                const rows = model.courses.filter(
-                  (row) =>
-                    codes.has(rowCode(row)) &&
-                    (isNeeded(row) ||
-                      row.audit?.elsewhere ||
-                      row.audit?.fromPlanner),
-                );
-                return (
-                  <div key={alternative.key} className="border-b border-border">
-                    <p className="bg-muted/50 px-4 py-2 text-xs font-medium">
-                      Approved alternatives · {alternative.name}
-                    </p>
-                    {alternative.error ? (
-                      <p
-                        role="status"
-                        className="px-4 py-2 text-xs text-destructive"
-                      >
-                        Approved choices couldn&apos;t load. Use Retry failed
-                        lists above.
-                      </p>
-                    ) : null}
-                    {rows.length ? (
-                      <OptionList
-                        rows={rows}
-                        label={alternative.name}
-                        idPrefix={`${entry.requirementKey}|alternative|${alternative.key}`}
-                        expandedCourses={expandedCourses}
-                        onToggleCourse={onToggleCourse}
-                        renderSections={renderSections}
-                      />
-                    ) : (
-                      <p className="px-4 py-2 text-xs text-muted-foreground">
-                        {alternative.error
-                          ? "Approved alternatives are unavailable."
-                          : model.loading || model.deferred
-                            ? "Approved alternatives have not finished loading."
-                            : alternative.courses.length
-                              ? "No options match the current filters."
-                              : "No approved alternatives available from MyPack."}
-                      </p>
-                    )}
-                  </div>
-                );
-              })
-            : null}
           {met.map((part) => (
             <div
               key={`met:${part.name}`}
@@ -1013,12 +1047,7 @@ function RequirementRow({
                 <span className="font-medium text-foreground">{part.name}</span>
                 <span className="text-muted-foreground">
                   {part.done ? " · done with " : " · filled by "}
-                  {part.rows
-                    .map(
-                      (row) =>
-                        `${row.course.course_abr} ${stripLeadingZeros(row.course.catalog_num)}`,
-                    )
-                    .join(", ")}
+                  {courseCodesLabel(part.rows)}
                 </span>
               </span>
             </div>
@@ -1112,7 +1141,67 @@ function RequirementRow({
               />
             </>
           )}
-          {showFinished
+          {showAlternatives
+            ? entry.alternatives?.map((alternative) => {
+                const codes = new Set(
+                  alternative.courses.map((course) =>
+                    plannerCourseCode(course.course_abr, course.catalog_num),
+                  ),
+                );
+                const rows = model.courses.filter(
+                  (row) =>
+                    codes.has(rowCode(row)) &&
+                    (isNeeded(row) || row.audit?.fromPlanner),
+                );
+                return (
+                  <div
+                    key={alternative.key}
+                    className="border-t border-border first:border-t-0"
+                  >
+                    <p className="bg-muted/50 px-4 py-2 text-xs">
+                      <span className="font-medium text-foreground">
+                        {alternative.name}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {alternative.met
+                          ? " · already met, more choices in this area"
+                          : " · covered by your plan, other approved choices"}
+                      </span>
+                    </p>
+                    {alternative.error ? (
+                      <p
+                        role="status"
+                        className="px-4 py-2 text-xs text-destructive"
+                      >
+                        Approved choices couldn&apos;t load. Use Retry failed
+                        lists above.
+                      </p>
+                    ) : null}
+                    {rows.length ? (
+                      <OptionList
+                        rows={rows}
+                        label={alternative.name}
+                        idPrefix={`${entry.requirementKey}|alternative|${alternative.key}`}
+                        expandedCourses={expandedCourses}
+                        onToggleCourse={onToggleCourse}
+                        renderSections={renderSections}
+                      />
+                    ) : (
+                      <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+                        {alternative.error
+                          ? "Approved choices are unavailable."
+                          : model.loading || model.deferred
+                            ? "Approved choices have not finished loading."
+                            : alternative.courses.length
+                              ? "No options left that match the current filters."
+                              : "MyPack didn't list choices for this one."}
+                      </p>
+                    )}
+                  </div>
+                );
+              })
+            : null}
+          {showFinished && !showAlternatives
             ? finished.map((row) => {
                 const id = `${entry.requirementKey}|${row.id}`;
                 return (
@@ -1126,15 +1215,15 @@ function RequirementRow({
                 );
               })
             : null}
-          {finished.length > 0 ? (
+          {finished.length > 0 && !showAlternatives ? (
             <button
               type="button"
               onClick={() => setShowFinished((shown) => !shown)}
               className="w-full border-t border-border px-4 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50"
             >
               {showFinished
-                ? "Hide completed and enrolled"
-                : `Show ${finished.length} completed or enrolled`}
+                ? "Hide completed"
+                : `Show ${finished.length} completed`}
             </button>
           ) : null}
         </div>
@@ -1185,9 +1274,8 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
 }
 
 const FILTER_OPTIONS: { value: RequirementFilter; label: string }[] = [
-  { value: "needed", label: "Still needed" },
-  { value: "fits", label: "Fits my schedule" },
-  { value: "all", label: "All" },
+  { value: "graduate", label: "To graduate" },
+  { value: "options", label: "Options" },
 ];
 
 /** "just now", "12 min ago", "3 hr ago", or a date. */
@@ -1409,6 +1497,7 @@ export function RequirementTree({
   openCourses,
   scheduleBackground,
   hideNoSections,
+  fitsOnly,
   sectionsSearched = true,
   sectionsLoading = false,
   filter,
@@ -1431,6 +1520,8 @@ export function RequirementTree({
   openCourses: Record<string, MergedCourseData>;
   scheduleBackground: ScheduleEvent[] | null;
   hideNoSections: boolean;
+  /** Only list options with a section that fits the schedule. */
+  fitsOnly: boolean;
   /** Whether sections were searched for this term; defaults to true. */
   sectionsSearched?: boolean;
   /** Whether a term-wide section search is running. */
@@ -1533,55 +1624,52 @@ export function RequirementTree({
     ],
   );
 
-  const visible = useMemo(
-    () =>
+  const visible = useMemo(() => {
+    const options = filter === "options";
+    // The checklist keeps enrolled and planned work in view as the plan;
+    // options leave out anything already being taken.
+    const tucked = (row: CourseRowModel) =>
+      options ? isFinished(row) : row.audit?.status === "completed";
+    return (
       models
-        .filter((model) => {
-          if (filter === "needed") {
-            // An enrolled requirement has nothing unmet left to add.
-            return (
-              model.progress.status !== "complete" &&
-              model.progress.status !== "enrolled"
-            );
-          }
-          if (filter === "fits") {
-            // Unsearched options might fit; opening the group finds out.
-            return model.fitting > 0 || model.deferred;
-          }
-          return true;
-        })
         .map((model) => {
-          // Only "All" lists finished courses; the others tuck them away.
-          const hideFinished = filter !== "all";
+          // Counted toward another group; it shows there.
+          const own = model.courses.filter((row) => !row.audit?.elsewhere);
           return {
             ...model,
-            courses: model.courses.filter((row) => {
-              if (hideFinished && isFinished(row)) {
+            courses: own.filter((row) => {
+              if (tucked(row)) {
                 return false;
               }
               if (!isNeeded(row)) {
                 return true;
               }
               if (!row.searched) {
-                return filter !== "fits" || model.deferred;
+                // Unsearched options might fit; opening the group finds out.
+                return !fitsOnly || model.deferred;
               }
-              if (filter === "fits") {
-                return row.fitCount > 0;
+              if (fitsOnly && row.fitCount === 0) {
+                return false;
               }
               return !hideNoSections || row.sectionCount > 0;
             }),
-            finished: hideFinished ? model.courses.filter(isFinished) : [],
+            finished: own.filter(tucked),
           };
         })
+        // The checklist shows every group; options only those with choices left.
         .filter(
           (model) =>
-            model.courses.length > 0 ||
+            !options ||
+            model.courses.some(isNeeded) ||
             model.deferred ||
-            unresolvedRequirements?.has(model.entry.requirementId) ||
-            (filter === "needed" && model.finished.length > 0),
-        ),
-    [models, filter, hideNoSections, unresolvedRequirements],
-  );
+            model.loading ||
+            !!unresolvedRequirements?.has(model.entry.requirementId),
+        )
+        .sort(
+          (a, b) => groupRank(a.progress.status) - groupRank(b.progress.status),
+        )
+    );
+  }, [models, filter, fitsOnly, hideNoSections, unresolvedRequirements]);
 
   const known = models.filter((m) => m.progress.status !== "unknown");
   const complete = known.filter((m) => m.progress.status === "complete");
@@ -1608,11 +1696,11 @@ export function RequirementTree({
               value={`${complete.length} / ${known.length}`}
             />
             <SummaryStat
-              label="Offered this term"
+              label="Unfinished, offered now"
               value={sectionsSearched ? String(offeredNeeds.length) : "—"}
             />
             <SummaryStat
-              label="Fit your schedule"
+              label="Unfinished, fits schedule"
               value={
                 sectionsSearched && scheduleBackground
                   ? String(fittingNeeds.length)
@@ -1653,6 +1741,11 @@ export function RequirementTree({
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
+      <p className="-mt-1 text-xs text-muted-foreground">
+        {filter === "options"
+          ? "Approved courses you could still take, including more in areas you've already finished."
+          : "What's left for your degree and what your plan already covers. Use Options to browse more courses."}
+      </p>
 
       {visible.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -1664,23 +1757,15 @@ export function RequirementTree({
               onToggleCourse={toggleCourse}
               renderSections={renderSections}
               onOpen={onLoadRequirement}
-              showAlternatives={filter !== "needed"}
+              view={filter}
             />
           ))}
         </div>
       ) : (
         <p className="p-3 text-center text-sm text-muted-foreground">
-          {filter === "fits"
-            ? "No remaining courses have a section that fits your schedule."
-            : filter === "needed" && hasAudit
-              ? known.some(
-                  (model) =>
-                    model.progress.status !== "complete" &&
-                    model.progress.status !== "enrolled",
-                )
-                ? "No courses match the current filters. Some requirements still need courses."
-                : "Every requirement in this plan is complete."
-              : "No courses match the current filters."}
+          {filter === "options" && fitsOnly
+            ? "No remaining options have a section that fits your schedule."
+            : "No courses match the current filters."}
         </p>
       )}
     </div>

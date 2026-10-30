@@ -8,10 +8,12 @@ import type {
   V2GradeRequest,
   V2GradeRow,
   V2Instructor,
+  V2ResolveData,
   V2SearchData,
   V2UpcomingData,
 } from "../../../types/api";
 import { fetchWithTimeout } from "../../../utils/fetchWithTimeout";
+import { AppLogger } from "../../../utils/logger";
 import {
   GRADE_DATA_CACHE_VERSION,
   generateCacheKey,
@@ -20,6 +22,16 @@ import {
   setGenericCache,
 } from "../../cache/courseRetrieval";
 
+import { aggregateGradientSections } from "./gradient/gradientAggregate";
+import {
+  type GradientCourse,
+  loadGradientCourses,
+} from "./gradient/gradientClient";
+import {
+  normalizeCourse,
+  sectionsForInstructor,
+} from "./gradient/gradientMatch";
+
 /** Registrar term id for the upcoming-sections snapshot (Spring 2027). */
 export const UPCOMING_TERM_ID = "2271";
 
@@ -27,7 +39,7 @@ const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000;
 
 /**
  * POSTs to a v2 edge function and unwraps `{ data, meta }`. Every response reports the
- * backend dataset version so stale cached grade data can be dropped.
+ * backend dataset version so stale cached instructor/rating data can be dropped.
  */
 async function postV2<T>(slug: string, body: unknown): Promise<T> {
   const response = await fetchWithTimeout(
@@ -51,16 +63,133 @@ async function postV2<T>(slug: string, body: unknown): Promise<T> {
   return envelope.data;
 }
 
+/** Request echoes with no instructor match, for when the backend lookup fails. */
+function unresolved(items: V2GradeRequest[]): V2ResolveData {
+  return {
+    results: items.map((request) => ({
+      request,
+      instructor_id: null,
+      ambiguous: false,
+    })),
+    instructors: {},
+  };
+}
+
+/** Joins resolved instructors with Gradient history; `courses` null means none loaded. */
+function joinGrades(
+  base: V2ResolveData,
+  courses: Map<string, GradientCourse> | null,
+  incomplete: boolean,
+): V2CoursesData {
+  return {
+    results: base.results.map((result) => {
+      const courseKey = normalizeCourse(result.request.course);
+      const course = courses?.get(courseKey);
+      const instructor = result.instructor_id
+        ? base.instructors[result.instructor_id]
+        : undefined;
+      // MyPack rows without a Unity ID still match Gradient by the backend's resolved one.
+      const lookup = {
+        instructor_name: result.request.instructor_name,
+        unity_id: result.request.unity_id || instructor?.unity_id,
+      };
+      return {
+        ...result,
+        grade: course
+          ? aggregateGradientSections(
+              sectionsForInstructor(course, lookup, instructor?.names ?? []),
+              courseKey,
+            )
+          : null,
+      };
+    }),
+    instructors: base.instructors,
+    ...(incomplete ? { incomplete: true } : {}),
+  };
+}
+
+/** One course's grades, ready before the rest of the batch. */
+export type V2CourseUpdate = {
+  /** Normalized course key, e.g. "CSC 316". */
+  course: string;
+  /** Only this course's requests; `incomplete` when its grades or instructors failed. */
+  data: V2CoursesData;
+  done: number;
+  total: number;
+};
+
+/**
+ * Grades from Gradient (in the browser, with the student's session) joined with instructor
+ * matches and ratings from the backend, which never sees grade data. Either side failing
+ * leaves its fields empty and marks the result `incomplete`; both failing throws.
+ * `onCourse` gets each course as soon as it and the instructor lookup are in.
+ */
+async function fetchCoursesV2(
+  items: V2GradeRequest[],
+  onCourse?: (update: V2CourseUpdate) => void,
+): Promise<V2CoursesData> {
+  const resolving = postV2<V2ResolveData>("instructors-v2-resolve", items);
+  // Per-course updates wait for instructors; a failed lookup still lets grades through.
+  const base = resolving.then(
+    (value) => ({ value, failed: false }),
+    () => ({ value: unresolved(items), failed: true }),
+  );
+  const [resolved, gradient] = await Promise.allSettled([
+    resolving,
+    loadGradientCourses(
+      items.map((item) => normalizeCourse(item.course)),
+      onCourse &&
+        (({ key, course, done, total }) =>
+          void base.then(({ value, failed }) =>
+            onCourse({
+              course: key,
+              data: joinGrades(
+                {
+                  ...value,
+                  results: value.results.filter(
+                    (result) => normalizeCourse(result.request.course) === key,
+                  ),
+                },
+                course ? new Map([[key, course]]) : null,
+                failed || !course,
+              ),
+              done,
+              total,
+            }),
+          )),
+    ),
+  ]);
+  if (resolved.status === "rejected" && gradient.status === "rejected") {
+    throw gradient.reason;
+  }
+  if (resolved.status === "rejected") {
+    AppLogger.error("Instructor lookup failed:", resolved.reason);
+  }
+  if (gradient.status === "rejected") {
+    AppLogger.warn("Gradient grades unavailable:", gradient.reason);
+  } else if (gradient.value.failure !== undefined) {
+    AppLogger.warn("Some Gradient grades unavailable:", gradient.value.failure);
+  }
+  return joinGrades(
+    resolved.status === "fulfilled" ? resolved.value : unresolved(items),
+    gradient.status === "fulfilled" ? gradient.value.courses : null,
+    resolved.status === "rejected" ||
+      gradient.status === "rejected" ||
+      gradient.value.failure !== undefined,
+  );
+}
+
 export function fetchGradesBatchV2(
   items: V2GradeRequest[],
+  onCourse?: (update: V2CourseUpdate) => void,
 ): Promise<V2CoursesData> {
-  return postV2<V2CoursesData>("grades-v2-batch", items);
+  return fetchCoursesV2(items, onCourse);
 }
 
 export function fetchGradeCourseV2(
   item: V2GradeRequest,
 ): Promise<V2CoursesData> {
-  return postV2<V2CoursesData>("grades-v2-course", item);
+  return fetchCoursesV2([item]);
 }
 
 /**
@@ -217,5 +346,7 @@ export function v2ToBatchResponse(
       );
     }
   }
-  return { courses, profs };
+  return data.incomplete
+    ? { courses, profs, incomplete: true }
+    : { courses, profs };
 }

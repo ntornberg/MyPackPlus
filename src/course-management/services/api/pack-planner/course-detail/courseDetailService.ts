@@ -11,6 +11,7 @@ import {
   setGenericCache,
 } from "../../../../cache/courseRetrieval";
 import { fetchGradeCourseV2, v2ToBatchResponse } from "../../gradesV2";
+import { gradeUnavailableText } from "../../gradient/gradientAuthState";
 import { createGradeCard } from "../grade/gradeService";
 import { createProfessorCard } from "../professor/ratingService";
 
@@ -76,6 +77,9 @@ async function fetchInlineCourseMetadata(
       RateMyProfInfo: batch.profs?.[0] ?? null,
     };
 
+    // Partial answers (Gradient signed out, lookup down) are shown but not kept.
+    if (batch.incomplete) return combinedData;
+
     courseDataCache.set(cacheKey, combinedData);
 
     // Empty answers expire sooner so newly added grades/ratings show up quickly.
@@ -114,7 +118,9 @@ export async function getCourseAndProfessorDetails(
     if (!combinedData) {
       // Create fallback elements if no data is available
       const gradeFallback = document.createElement("div");
-      gradeFallback.textContent = "No grade data available.";
+      gradeFallback.textContent = gradeUnavailableText(
+        "No grade data available.",
+      );
       gradeElement = gradeFallback;
 
       const profFallback = document.createElement("div");
@@ -126,7 +132,9 @@ export async function getCourseAndProfessorDetails(
         gradeElement = createGradeCard(course, combinedData);
       } else {
         const gradeFallback = document.createElement("div");
-        gradeFallback.textContent = "No grade data available.";
+        gradeFallback.textContent = gradeUnavailableText(
+          "No grade data available.",
+        );
         gradeElement = gradeFallback;
       }
 

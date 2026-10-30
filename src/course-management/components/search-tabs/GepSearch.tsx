@@ -503,6 +503,9 @@ export default function GepSearch({
                   ...(statusMessage ? { progressLabel: statusMessage } : {}),
                 });
               },
+              (partial) => {
+                if (isCurrent()) setGepSearchTabData("courseData", partial);
+              },
             );
 
             if (!isCurrent()) return;
@@ -552,8 +555,12 @@ export default function GepSearch({
     courseSearch,
   ]);
 
+  // Sections show while grades are still loading; their grade blocks show placeholders.
+  const hasPartialResults =
+    !isLoaded && Object.keys(courseData ?? {}).length > 0;
   const filteredCourses = useMemo(() => {
-    if (!isLoaded || !courses || courses.length === 0) return [];
+    if ((!isLoaded && !hasPartialResults) || !courses || courses.length === 0)
+      return [];
     if (!hideNoSections || !courseData) return courses;
     return courses.filter((course: RequiredCourse) => {
       const key = `${course.course_abr} ${course.catalog_num}`;
@@ -566,7 +573,7 @@ export default function GepSearch({
         Object.keys(courseDataEntry.sections).length > 0
       );
     });
-  }, [courses, hideNoSections, courseData, isLoaded]);
+  }, [courses, hideNoSections, courseData, isLoaded, hasPartialResults]);
 
   const groupedAndFilteredCourses = useMemo(() => {
     if (!filteredCourses || filteredCourses.length === 0) return [];
@@ -695,10 +702,12 @@ export default function GepSearch({
 
   // With no category chosen, open on the first one the audit says is still
   // needed (else the first not yet covered) so the tiles read as clickable.
-  // Waits out an in-flight audit sync so the pick reflects the student.
-  const syncing = planningData.sync.status === "syncing";
+  // Waits for the stored audit and any in-flight sync so the pick reflects
+  // the student: the first render has no audit yet and isn't "syncing".
+  const auditReady =
+    planningData.loaded && planningData.sync.status !== "syncing";
   useEffect(() => {
-    if (!isActive || searchSubject || syncing) return;
+    if (!isActive || searchSubject || !auditReady) return;
     const statuses = GEP_SUBJECTS.map(({ code }) => ({
       code,
       status: categoryProgress[code]?.status,
@@ -710,7 +719,13 @@ export default function GepSearch({
       ) ??
       statuses[0];
     if (pick) handleCategorySelect(pick.code);
-  }, [isActive, searchSubject, syncing, categoryProgress, handleCategorySelect]);
+  }, [
+    isActive,
+    searchSubject,
+    auditReady,
+    categoryProgress,
+    handleCategorySelect,
+  ]);
 
   const controlsPanel = (
     <PlannerPanel
@@ -757,7 +772,9 @@ export default function GepSearch({
   );
 
   const showResults =
-    !!selectedTerm && isLoaded && groupedAndFilteredCourses.length > 0;
+    !!selectedTerm &&
+    (isLoaded || hasPartialResults) &&
+    groupedAndFilteredCourses.length > 0;
 
   // Counts courses still needed for the category, not every listed course.
   const fittingNeeded = useMemo(() => {
@@ -827,9 +844,7 @@ export default function GepSearch({
   );
 
   const resultsPanel = (
-    <PlannerPanel
-      title="Requirement Matches"
-    >
+    <PlannerPanel title="Requirement Matches">
       <section className="mb-6 flex flex-col gap-2">
         <SectionHeading
           title={hasProgress ? "Your GEP progress" : "GEP categories"}

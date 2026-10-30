@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CATALOG_REVISION } from "../../../../generated/catalogs/course-search/catalog";
 import { mergeData } from "../../../../utils/course-search/mergeDataUtil";
+import type { MergedCourseData } from "../../../types/section";
 import { v2ToBatchResponse } from "../gradesV2";
 
 import {
@@ -49,6 +50,12 @@ vi.mock(
     return { ...actual, mergeData: vi.fn(actual.mergeData) };
   },
 );
+
+const gradientMocks = vi.hoisted(() => ({ loadGradientCourses: vi.fn() }));
+
+vi.mock("../gradient/gradientClient", () => ({
+  loadGradientCourses: gradientMocks.loadGradientCourses,
+}));
 
 vi.mock("./searchService", () => ({
   searchOpenCoursesByParams: mocks.searchOpenCoursesByParams,
@@ -215,23 +222,6 @@ describe("dataService v2 grade/RMP requests", () => {
           },
           instructor_id: "jrgriggs",
           ambiguous: false,
-          grade: {
-            unique_hash: "1008776286501506839",
-            subject: "MA",
-            course_name: "MA 241",
-            instructor_name: "Griggs,John Richard",
-            a_average: 33.4,
-            b_average: 21.5,
-            c_average: 16.5,
-            d_average: 5.2,
-            f_average: 12.1,
-            class_avg_max: 86.62,
-            class_avg_min: 69.8,
-            link_status: "linked",
-            section_count: 52,
-            has_letter_grades: true,
-            terms: ["Fall '22"],
-          },
         },
       ],
       instructors: {
@@ -267,9 +257,27 @@ describe("dataService v2 grade/RMP requests", () => {
       "fetch",
       vi.fn(async () => Response.json(v2Response)),
     );
+    gradientMocks.loadGradientCourses.mockResolvedValue({
+      courses: new Map([
+        [
+          "MA 241",
+          {
+            instructors: [{ name: "Griggs,John Richard", unityId: "jrgriggs" }],
+            sections: [
+              {
+                instructorName: "Griggs,John Richard",
+                term: "Fall '22",
+                termCode: "2228",
+                counts: { A: 33, B: 22, C: 16, D: 5, F: 12, TOTAL: 88 },
+              },
+            ],
+          },
+        ],
+      ]),
+    });
   });
 
-  it("sends Unity IDs to grades-v2-batch and merges the v2 rating fields", async () => {
+  it("sends Unity IDs to instructors-v2-resolve and merges Gradient grades with ratings", async () => {
     mocks.getGenericCache.mockResolvedValue(null);
     mocks.searchOpenCoursesByParams.mockResolvedValueOnce(courseData);
 
@@ -283,7 +291,11 @@ describe("dataService v2 grade/RMP requests", () => {
     const fetchMock = vi.mocked(fetch);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toMatch(/\/functions\/v1\/grades-v2-batch$/);
+    expect(String(url)).toMatch(/\/functions\/v1\/instructors-v2-resolve$/);
+    expect(gradientMocks.loadGradientCourses).toHaveBeenCalledWith(
+      ["MA 241"],
+      expect.any(Function),
+    );
     expect(JSON.parse(String(init?.body))).toEqual([
       {
         course: "MA 241",
@@ -304,6 +316,95 @@ describe("dataService v2 grade/RMP requests", () => {
       numRatings: 160,
       ratingState: "rated",
       unity_id: "jrgriggs",
+    });
+  });
+
+  describe("partial results while grades load", () => {
+    const gradientCourse = {
+      instructors: [{ name: "Griggs,John Richard", unityId: "jrgriggs" }],
+      sections: [
+        {
+          instructorName: "Griggs,John Richard",
+          term: "Fall '22",
+          termCode: "2228",
+          counts: { A: 33, B: 22, C: 16, D: 5, F: 12, TOTAL: 88 },
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      // Reports the course, then answers a task later, like the real client.
+      gradientMocks.loadGradientCourses.mockImplementation(
+        async (keys: string[], onCourse?: (update: unknown) => void) => {
+          onCourse?.({
+            key: keys[0],
+            course: gradientCourse,
+            done: 1,
+            total: 1,
+          });
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          return { courses: new Map([[keys[0], gradientCourse]]) };
+        },
+      );
+    });
+
+    it("shows a batch's sections with pending grades, then reports each course", async () => {
+      mocks.getGenericCache.mockResolvedValue(null);
+      mocks.batchSearchOpenCourses.mockResolvedValueOnce([courseData]);
+      const onPartial =
+        vi.fn<(data: Record<string, MergedCourseData>) => void>();
+      const onProgress = vi.fn();
+
+      const result = await batchFetchCoursesData(
+        [
+          {
+            course_abr: "MA",
+            catalog_num: "241",
+            course_descrip: "",
+            course_id: "id-1",
+          },
+        ],
+        "Spring 2027",
+        onProgress,
+        undefined,
+        onPartial,
+      );
+
+      const partial = onPartial.mock.calls[0]![0]["MA 241"]!;
+      const partialLecture = Object.values(partial.sections)[0]!.lecture!;
+      expect(partialLecture.gradesPending).toBe(true);
+      expect(partialLecture.grade_distribution).toBeUndefined();
+      expect(onProgress).toHaveBeenCalledWith(
+        75,
+        "Loaded MA 241 grades from Gradient (1 of 1)",
+      );
+      const lecture = Object.values(result["MA 241"]!.sections)[0]!.lecture!;
+      expect(lecture.gradesPending).toBeUndefined();
+      expect(lecture.grade_distribution?.has_letter_grades).toBe(true);
+    });
+
+    it("shows a single course's sections before its grades", async () => {
+      mocks.getGenericCache.mockResolvedValue(null);
+      mocks.searchOpenCoursesByParams.mockResolvedValueOnce(courseData);
+      const onPartial = vi.fn<(data: MergedCourseData) => void>();
+
+      const result = await fetchPlannerCourseSections(
+        "MA",
+        "241",
+        "id-1",
+        "Spring 2027",
+        undefined,
+        onPartial,
+      );
+
+      expect(onPartial).toHaveBeenCalledTimes(1);
+      const partialLecture = Object.values(
+        onPartial.mock.calls[0]![0].sections,
+      )[0]!.lecture!;
+      expect(partialLecture.gradesPending).toBe(true);
+      const lecture = Object.values(result!.sections)[0]!.lecture!;
+      expect(lecture.gradesPending).toBeUndefined();
+      expect(lecture.grade_distribution).toBeDefined();
     });
   });
 

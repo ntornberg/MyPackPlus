@@ -15,6 +15,7 @@ import {
   formatRatingCount,
 } from "../../utils/rmpDisplay";
 
+import { gradeUnavailableText } from "./api/gradient/gradientAuthState";
 import { normalizeGradeData } from "./api/pack-planner/grade/gradeService";
 
 export const INFO_STRIP_CLASS = "mypack-info-strip";
@@ -137,7 +138,9 @@ function buildStrip(
     return el(
       "div",
       `${INFO_STRIP_CLASS} ${INFO_STRIP_CLASS}--empty`,
-      "No grades or ratings found for this instructor yet.",
+      gradeUnavailableText(
+        "No grades or ratings found for this instructor yet.",
+      ),
     );
   }
 

@@ -80,6 +80,8 @@ export interface SingleCourseDataResponse {
 export interface BatchDataRequestResponse {
   courses?: GradeData[];
   profs?: MatchedRateMyProf[];
+  /** Grades or ratings failed to load; show what came back but don't cache it. */
+  incomplete?: boolean;
 }
 
 // ---- v2 endpoints (grades-v2-*, instructors-v2-*) ----
@@ -161,6 +163,14 @@ export interface V2CourseResult {
 
 export interface V2CoursesData {
   results: V2CourseResult[];
+  instructors: Record<string, V2Instructor>;
+  /** True when Gradient or the instructor lookup failed, so the data shouldn't be cached. */
+  incomplete?: boolean;
+}
+
+/** `instructors-v2-resolve`: instructor/RMP matches only; grades come from Gradient. */
+export interface V2ResolveData {
+  results: Omit<V2CourseResult, "grade">[];
   instructors: Record<string, V2Instructor>;
 }
 

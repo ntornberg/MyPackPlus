@@ -11,6 +11,7 @@ import type {
 import { ErrorBoundary } from "../../../../../ui-system/components/shared/ErrorBoundary";
 import { hasGradeDistribution } from "../../../../../ui-system/components/shared/GradeDistributionChart";
 import { createShadowHost, injectCssOnce } from "../../../../../utils/dom";
+import { gradeUnavailableText } from "../../gradient/gradientAuthState";
 
 const DEGREE_AUDIT_CARD_STYLE_ID = "mpp-degree-audit-card-styles";
 
@@ -68,14 +69,14 @@ export function createGradeCard(
 
   const courseData = data.CourseData;
   if (!courseData) {
-    wrapper.textContent = "No grade data available.";
+    wrapper.textContent = gradeUnavailableText("No grade data available.");
     return wrapper;
   }
 
   const gradeData = normalizeGradeData(course, courseData);
 
   if (!hasGradeDistribution(gradeData)) {
-    wrapper.textContent = "No grade data available.";
+    wrapper.textContent = gradeUnavailableText("No grade data available.");
     return wrapper;
   }
 
