@@ -2,10 +2,8 @@
 
 ## Cart review regressions
 
-See [cart-review-results.md](cart-review-results.md) for the finding ledger and
-authenticated-test limitations. These tests assert correct behavior and currently
-include ordinary failing reproductions. Do not change them to expected failures
-or weaken assertions to make a release green.
+These tests assert correct cart behavior. Do not change failing reproductions to
+expected failures or weaken assertions to make a release green.
 
 ```bash
 npx vitest run src/course-management/services/cartReview.integration.test.ts
