@@ -182,10 +182,15 @@ function groupFromOfferings(
       offerings.flatMap((o) => o.related.filter((n) => !always.has(n))),
     ),
   ];
+  // Every listed choice needs MyPack's payload. When two related sections
+  // vary together (lab + recitation), each maps to the first offering that
+  // includes it, so picking it sends a combination MyPack actually offers.
   const cartPayloads: Record<string, ToCartPayload> = {};
   for (const offering of offerings) {
-    const choice = offering.related.find((n) => !always.has(n)) ?? "";
-    cartPayloads[choice] ??= offering.payload;
+    const choices = offering.related.filter((n) => !always.has(n));
+    for (const choice of choices.length > 0 ? choices : [""]) {
+      cartPayloads[choice] ??= offering.payload;
+    }
   }
   const resolve = (numbers: Iterable<string>) =>
     [...numbers]

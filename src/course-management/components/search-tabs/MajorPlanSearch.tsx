@@ -63,6 +63,7 @@ import type { ScheduleEvent } from "../../types/calendar";
 import type { MergedCourseData, ModifiedSection } from "../../types/section";
 import type { SectionSortMode } from "../../types/sectionSorting";
 import {
+  requirementView,
   type MajorPlanSearchData,
   type TabUpdater,
 } from "../tab-state/tabState";
@@ -724,6 +725,14 @@ export default function MajorPlanSearch({
             setMajorPlanSearchTabData("hideNoSections", checked)
           }
         />
+        <HideEmptySectionsField
+          id="fits-only-plan"
+          label="Only show options that fit my schedule"
+          checked={majorPlanSearchData.fitsOnly ?? false}
+          onCheckedChange={(checked) =>
+            setMajorPlanSearchTabData("fitsOnly", checked)
+          }
+        />
       </FieldGroup>
       <LoadingProgress
         className="mt-4"
@@ -774,14 +783,23 @@ export default function MajorPlanSearch({
                 {personalError}
               </p>
             ) : null}
-            {personalLoader.choiceBusy ? (
-              <p role="status" className="text-xs text-muted-foreground">
-                Loading approved choices:{" "}
-                {personalLoader.choiceProgress.settled} of{" "}
-                {personalLoader.choiceProgress.total}
-              </p>
-            ) : personalLoader.failureCount > 0 ||
-              personalLoader.choiceError ? (
+            <LoadingProgress
+              active={personalLoader.choiceBusy}
+              value={
+                personalLoader.choiceProgress.total
+                  ? (personalLoader.choiceProgress.settled /
+                      personalLoader.choiceProgress.total) *
+                    100
+                  : 0
+              }
+              label={`Loading approved choices: ${personalLoader.choiceProgress.settled} of ${personalLoader.choiceProgress.total}`}
+              succeeded={
+                !personalLoader.choiceError && personalLoader.failureCount === 0
+              }
+              doneLabel="Loaded approved choices"
+            />
+            {personalLoader.choiceBusy ? null : personalLoader.failureCount >
+                0 || personalLoader.choiceError ? (
               <div
                 role="status"
                 className="flex flex-wrap items-center gap-2 text-sm text-destructive"
@@ -825,7 +843,8 @@ export default function MajorPlanSearch({
               searchedCourseKeys={personalLoader.searched}
               loadingRequirements={personalLoader.loadingGroups}
               onLoadRequirement={personalLoader.openGroup}
-              filter={majorPlanSearchData.requirementFilter ?? "needed"}
+              fitsOnly={majorPlanSearchData.fitsOnly ?? false}
+              filter={requirementView(majorPlanSearchData.requirementFilter)}
               onFilterChange={(value) =>
                 setMajorPlanSearchTabData("requirementFilter", value)
               }
@@ -852,7 +871,8 @@ export default function MajorPlanSearch({
           }
           scheduleBackground={scheduleBackground}
           hideNoSections={majorPlanSearchData.hideNoSections ?? false}
-          filter={majorPlanSearchData.requirementFilter ?? "needed"}
+          fitsOnly={majorPlanSearchData.fitsOnly ?? false}
+          filter={requirementView(majorPlanSearchData.requirementFilter)}
           onFilterChange={(value) =>
             setMajorPlanSearchTabData("requirementFilter", value)
           }

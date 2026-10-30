@@ -56,8 +56,18 @@ export const CourseSearchDataInitialState: CourseSearchData = {
   sortMode: "recommended",
   compactSections: true,
 };
-/** Which requirements the plan tree shows. */
-export type RequirementFilter = "needed" | "fits" | "all";
+/**
+ * How the plan tree reads: "graduate" is the checklist of what's left and
+ * what's planned; "options" lists every approved course still open to take.
+ */
+export type RequirementFilter = "graduate" | "options";
+
+/** Reads a stored view, including the older "needed" | "fits" | "all" values. */
+export function requirementView(value: string | undefined): RequirementFilter {
+  return value === "options" || value === "all" || value === "fits"
+    ? "options"
+    : "graduate";
+}
 
 export type MajorPlanSearchData = {
   planSource?: "personal" | "explore";
@@ -78,6 +88,8 @@ export type MajorPlanSearchData = {
   sortMode: SectionSortMode;
   compactSections: boolean;
   requirementFilter: RequirementFilter;
+  /** Only list options with a section that fits the schedule. */
+  fitsOnly?: boolean;
 };
 export const MajorPlanSearchDataInitialState: MajorPlanSearchData = {
   planSource: "personal",
@@ -97,7 +109,8 @@ export const MajorPlanSearchDataInitialState: MajorPlanSearchData = {
   instructorFilter: null,
   sortMode: "recommended",
   compactSections: true,
-  requirementFilter: "needed",
+  requirementFilter: "graduate",
+  fitsOnly: false,
 };
 
 export type ScheduleData = {

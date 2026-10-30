@@ -52,6 +52,8 @@ export type PlanningData = {
   planner: PlannerIndex | null;
   syncedAt: number | null;
   sync: PlanningSyncState;
+  /** False until the stored audits and Pack Planner have been read once. */
+  loaded: boolean;
   /** Fetches audits and Pack Planner again, ignoring the freshness window. */
   refresh: () => void;
 };
@@ -220,5 +222,14 @@ export function usePlanningData(): PlanningData {
   );
   const refresh = useCallback(() => runSync(true), [runSync]);
 
-  return { audits, choices, plannerTerms, planner, syncedAt, sync, refresh };
+  return {
+    audits,
+    choices,
+    plannerTerms,
+    planner,
+    syncedAt,
+    sync,
+    loaded,
+    refresh,
+  };
 }

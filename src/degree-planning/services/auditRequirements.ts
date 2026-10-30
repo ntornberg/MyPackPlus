@@ -30,6 +30,8 @@ export type RequirementAlternative = {
   key: string;
   name: string;
   courses: NeedCourse[];
+  /** The audit already counts this requirement complete, not just planned. */
+  met: boolean;
   error?: string;
 };
 
@@ -235,6 +237,9 @@ export function auditRequirementEntries(
           key: ref,
           name: results[ref]?.list?.name || line.requirement || line.title,
           courses: listCourses(results[ref]?.list),
+          met: group.lines
+            .filter((other) => other.requirementId === line.requirementId)
+            .every((other) => other.status === "C"),
           error: results[ref]?.error,
         });
       }
