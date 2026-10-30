@@ -693,6 +693,25 @@ export default function GepSearch({
     [handleSubjectChange],
   );
 
+  // With no category chosen, open on the first one the audit says is still
+  // needed (else the first not yet covered) so the tiles read as clickable.
+  // Waits out an in-flight audit sync so the pick reflects the student.
+  const syncing = planningData.sync.status === "syncing";
+  useEffect(() => {
+    if (!isActive || searchSubject || syncing) return;
+    const statuses = GEP_SUBJECTS.map(({ code }) => ({
+      code,
+      status: categoryProgress[code]?.status,
+    }));
+    const pick =
+      statuses.find(({ status }) => status === "needed") ??
+      statuses.find(
+        ({ status }) => status !== "complete" && status !== "enrolled",
+      ) ??
+      statuses[0];
+    if (pick) handleCategorySelect(pick.code);
+  }, [isActive, searchSubject, syncing, categoryProgress, handleCategorySelect]);
+
   const controlsPanel = (
     <PlannerPanel
       eyebrow="GEP Search"
