@@ -7,11 +7,13 @@ import type {
 } from "../../../types/api";
 
 import {
+  fetchGradesBatchV2,
   instructorToProf,
   splitInstructorName,
   v2GradeToGradeData,
   v2ToBatchResponse,
 } from "./gradesV2";
+import { loadGradientCourses } from "./gradient/gradientClient";
 
 vi.mock("../../cache/courseRetrieval", () => ({
   GRADE_DATA_CACHE_VERSION: "v2",
@@ -19,6 +21,10 @@ vi.mock("../../cache/courseRetrieval", () => ({
   getGenericCache: vi.fn(),
   setGenericCache: vi.fn(),
   noteGradeDatasetVersion: vi.fn(),
+}));
+
+vi.mock("./gradient/gradientClient", () => ({
+  loadGradientCourses: vi.fn(),
 }));
 
 const instructor: V2Instructor = {
@@ -177,5 +183,61 @@ describe("instructorToProf", () => {
     expect(prof.first_name).toBe("Madi");
     expect(prof.last_name).toBe("Varron");
     expect(prof.instructor).toBe(instructor);
+  });
+});
+
+describe("fetchGradesBatchV2", () => {
+  it("matches Gradient by the backend's Unity ID when MyPack gives only a name", async () => {
+    vi.mocked(loadGradientCourses).mockResolvedValue({
+      courses: new Map([
+        [
+          "DAN 227",
+          {
+            instructors: [
+              { name: "Kagendo PhD,Joy Ireri", unityId: "jikagend" },
+            ],
+            sections: [
+              {
+                instructorName: "Kagendo PhD,Joy Ireri",
+                term: "Fall '25",
+                termCode: "2258",
+                counts: { A: 15, B: 5, TOTAL: 20 },
+              },
+            ],
+          },
+        ],
+      ]),
+    });
+    const request = { course: "DAN 227", instructor_name: "Kagendo,Joy Ireri" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          data: {
+            results: [{ request, instructor_id: "jikagend", ambiguous: false }],
+            instructors: {
+              jikagend: {
+                ...instructor,
+                instructor_id: "jikagend",
+                unity_id: "jikagend",
+                instructor_name: "Kagendo PhD,Joy Ireri",
+                names: [],
+              },
+            },
+          },
+          meta: { dataset_version: "test" },
+        }),
+      ),
+    );
+
+    const data = await fetchGradesBatchV2([request]);
+
+    expect(data.incomplete).toBeUndefined();
+    expect(data.results[0]!.grade).toMatchObject({
+      a_average: 75,
+      b_average: 25,
+      section_count: 1,
+    });
+    vi.unstubAllGlobals();
   });
 });

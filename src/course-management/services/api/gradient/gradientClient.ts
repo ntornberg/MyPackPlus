@@ -1,6 +1,6 @@
 import {
   generateCacheKey,
-  getGenericCache,
+  getGenericCacheMany,
   setGenericCache,
 } from "../../../cache/courseRetrieval";
 
@@ -43,7 +43,11 @@ const CACHE_CATEGORY = "gradientCourse";
 const GRADIENT_CACHE_VERSION = "v1";
 /** History only changes once a term. */
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_CONCURRENT_COURSES = 4;
+/**
+ * Fetched courses are written together after this long: each write rewrites the whole
+ * category in chrome.storage, so one write per course made big searches quadratic.
+ */
+const CACHE_WRITE_DELAY_MS = 2000;
 /** After a signed-out answer, skip requests for this long instead of redirecting each one. */
 const SIGNED_OUT_BACKOFF_MS = 60 * 1000;
 
@@ -84,24 +88,6 @@ function requestGradient(
   });
 }
 
-let activeCourses = 0;
-const waitingCourses: (() => void)[] = [];
-
-function acquireSlot(): Promise<void> {
-  if (activeCourses < MAX_CONCURRENT_COURSES) {
-    activeCourses++;
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => waitingCourses.push(resolve));
-}
-
-/** Hands the slot straight to the next waiter so the limit is never overshot. */
-function releaseSlot(): void {
-  const next = waitingCourses.shift();
-  if (next) next();
-  else activeCourses--;
-}
-
 export function toGradientCourse(
   options: GradientCourseOptions,
   distributions: GradientDistributions,
@@ -132,33 +118,27 @@ async function fetchGradientCourse(
   if (signedOutAt && Date.now() - signedOutAt < SIGNED_OUT_BACKOFF_MS) {
     throw new GradientAuthRequiredError();
   }
-  await acquireSlot();
-  try {
-    const params = { subject, course };
-    // No filters: every term and instructor in one response.
-    const [options, distributions] = await Promise.all([
-      requestGradient("/api/course-options", params),
-      requestGradient("/api/course-distributions", params),
-    ]);
-    return toGradientCourse(
-      options as GradientCourseOptions,
-      distributions as GradientDistributions,
-    );
-  } finally {
-    releaseSlot();
-  }
+  // The background worker queues these, so every tab shares one request limit.
+  const params = { subject, course };
+  // No filters: every term and instructor in one response.
+  const [options, distributions] = await Promise.all([
+    requestGradient("/api/course-options", params),
+    requestGradient("/api/course-distributions", params),
+  ]);
+  return toGradientCourse(
+    options as GradientCourseOptions,
+    distributions as GradientDistributions,
+  );
 }
 
 const inflightCourses = new Map<string, Promise<GradientCourse>>();
 
-/**
- * A course's Gradient history (cached for a week), e.g. for "CSC 316". Throws
- * `GradientAuthRequiredError` when the student isn't signed in to Gradient.
- */
-export function loadGradientCourse(courseKey: string): Promise<GradientCourse> {
+/** Fetches a course once, however many callers ask for it at the same time. */
+function fetchShared(courseKey: string): Promise<GradientCourse> {
   let request = inflightCourses.get(courseKey);
   if (!request) {
-    request = loadUncached(courseKey).finally(() =>
+    const [subject = "", course = ""] = courseKey.split(" ");
+    request = fetchGradientCourse(subject, course).finally(() =>
       inflightCourses.delete(courseKey),
     );
     inflightCourses.set(courseKey, request);
@@ -166,23 +146,106 @@ export function loadGradientCourse(courseKey: string): Promise<GradientCourse> {
   return request;
 }
 
-async function loadUncached(courseKey: string): Promise<GradientCourse> {
-  const [subject, course] = courseKey.split(" ");
-  if (!subject || !course) return { sections: [], instructors: [] };
-  const hash = await generateCacheKey(
-    `gradient-${GRADIENT_CACHE_VERSION}-${courseKey}`,
+const pendingWrites: Record<string, string> = {};
+let writeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function queueCacheWrite(hash: string, course: GradientCourse): void {
+  pendingWrites[hash] = JSON.stringify(course);
+  writeTimer ??= setTimeout(
+    () => void flushCacheWrites(),
+    CACHE_WRITE_DELAY_MS,
   );
-  const cached = await getGenericCache(CACHE_CATEGORY, hash);
-  if (cached) {
-    return JSON.parse(cached.combinedData) as GradientCourse;
+}
+
+async function flushCacheWrites(): Promise<void> {
+  if (writeTimer) clearTimeout(writeTimer);
+  writeTimer = null;
+  const entries = { ...pendingWrites };
+  for (const hash of Object.keys(entries)) delete pendingWrites[hash];
+  if (Object.keys(entries).length === 0) return;
+  try {
+    await setGenericCache(CACHE_CATEGORY, entries, CACHE_TTL_MS);
+  } catch {
+    // Caching is best effort; the courses are fetched again next time.
   }
-  const data = await fetchGradientCourse(subject, course);
-  await setGenericCache(
-    CACHE_CATEGORY,
-    { [hash]: JSON.stringify(data) },
-    CACHE_TTL_MS,
+}
+
+export type GradientCourses = {
+  /** Keyed by the requested course, e.g. "CSC 316". Missing when its fetch failed. */
+  courses: Map<string, GradientCourse>;
+  /** Why some courses are missing, when any are. */
+  failure?: unknown;
+};
+
+/** One course settling during `loadGradientCourses`, cached or fetched. */
+export type GradientCourseProgress = {
+  key: string;
+  /** Missing when this course's fetch failed. */
+  course?: GradientCourse;
+  /** Courses settled so far, this one included. */
+  done: number;
+  total: number;
+};
+
+/**
+ * Gradient history for each course (cached for a week), e.g. ["CSC 316", "MA 241"], with one
+ * cache read for the batch. Courses that fail are left out and reported in `failure`; throws
+ * only when every course fails, e.g. `GradientAuthRequiredError` when signed out.
+ * `onCourse` hears about each course as it settles, so callers can show it before the rest.
+ */
+export async function loadGradientCourses(
+  courseKeys: string[],
+  onCourse?: (progress: GradientCourseProgress) => void,
+): Promise<GradientCourses> {
+  const keys = [...new Set(courseKeys)].filter((key) => {
+    const [subject, course] = key.split(" ");
+    return !!subject && !!course;
+  });
+  const courses = new Map<string, GradientCourse>();
+  if (keys.length === 0) return { courses };
+
+  const hashes = await Promise.all(
+    keys.map((key) =>
+      generateCacheKey(`gradient-${GRADIENT_CACHE_VERSION}-${key}`),
+    ),
   );
-  return data;
+  const cached = await getGenericCacheMany(CACHE_CATEGORY, hashes);
+  let done = 0;
+  const settle = (key: string, course?: GradientCourse) =>
+    onCourse?.({ key, course, done: ++done, total: keys.length });
+  const results = await Promise.allSettled(
+    keys.map(async (key, index) => {
+      const hash = hashes[index]!;
+      const hit = cached[hash];
+      if (hit) {
+        try {
+          const course = JSON.parse(hit.combinedData) as GradientCourse;
+          settle(key, course);
+          return course;
+        } catch {
+          // Refetch a malformed entry.
+        }
+      }
+      try {
+        const course = await fetchShared(key);
+        queueCacheWrite(hash, course);
+        settle(key, course);
+        return course;
+      } catch (error) {
+        settle(key);
+        throw error;
+      }
+    }),
+  );
+  await flushCacheWrites();
+
+  let failure: unknown;
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") courses.set(keys[index]!, result.value);
+    else failure ??= result.reason;
+  });
+  if (courses.size === 0 && failure !== undefined) throw failure;
+  return failure === undefined ? { courses } : { courses, failure };
 }
 
 /** Lets the next request try Gradient again right away, e.g. after the student signs in. */
@@ -194,8 +257,9 @@ export function retryGradientSignIn(): void {
 /** Test hook: forget backoff and in-flight requests. */
 export function resetGradientClientForTests(): void {
   signedOutAt = 0;
-  activeCourses = 0;
-  waitingCourses.length = 0;
   inflightCourses.clear();
+  if (writeTimer) clearTimeout(writeTimer);
+  writeTimer = null;
+  for (const hash of Object.keys(pendingWrites)) delete pendingWrites[hash];
   setGradientAuthState("unknown");
 }

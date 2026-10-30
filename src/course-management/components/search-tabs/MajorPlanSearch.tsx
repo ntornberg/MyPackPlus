@@ -395,6 +395,8 @@ export default function MajorPlanSearch({
               ...(statusMessage ? { progressLabel: statusMessage } : {}),
             });
           },
+          undefined,
+          (partial) => setMajorPlanSearchTabData({ openCourses: partial }),
         );
 
         if (!data) {
@@ -499,8 +501,10 @@ export default function MajorPlanSearch({
       })),
     [requirements],
   );
+  // Partial results (sections before every grade is in) show the tree early too.
   const hasMajorPlanSearchRun = Boolean(
-    majorPlanSearchData.isLoaded &&
+    (majorPlanSearchData.isLoaded ||
+      Object.keys(majorPlanSearchData.openCourses ?? {}).length > 0) &&
       (majorPlanSearchData.searchMajor || majorPlanSearchData.searchMinor),
   );
 

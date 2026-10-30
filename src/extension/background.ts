@@ -1,5 +1,5 @@
 import {
-  fetchGradientDirect,
+  fetchGradientQueued,
   isGradientFetchMessage,
 } from "../course-management/services/api/gradient/gradientApi";
 import {
@@ -107,7 +107,7 @@ function setupMessageListener() {
 
     if (isGradientFetchMessage(message)) {
       // Sent with the student's Gradient cookies; the page can't make this request itself.
-      void fetchGradientDirect(message.path, message.params).then(sendResponse);
+      void fetchGradientQueued(message.path, message.params).then(sendResponse);
       return true;
     }
 

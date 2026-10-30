@@ -503,6 +503,9 @@ export default function GepSearch({
                   ...(statusMessage ? { progressLabel: statusMessage } : {}),
                 });
               },
+              (partial) => {
+                if (isCurrent()) setGepSearchTabData("courseData", partial);
+              },
             );
 
             if (!isCurrent()) return;
@@ -552,8 +555,12 @@ export default function GepSearch({
     courseSearch,
   ]);
 
+  // Sections show while grades are still loading; their grade blocks show placeholders.
+  const hasPartialResults =
+    !isLoaded && Object.keys(courseData ?? {}).length > 0;
   const filteredCourses = useMemo(() => {
-    if (!isLoaded || !courses || courses.length === 0) return [];
+    if ((!isLoaded && !hasPartialResults) || !courses || courses.length === 0)
+      return [];
     if (!hideNoSections || !courseData) return courses;
     return courses.filter((course: RequiredCourse) => {
       const key = `${course.course_abr} ${course.catalog_num}`;
@@ -566,7 +573,7 @@ export default function GepSearch({
         Object.keys(courseDataEntry.sections).length > 0
       );
     });
-  }, [courses, hideNoSections, courseData, isLoaded]);
+  }, [courses, hideNoSections, courseData, isLoaded, hasPartialResults]);
 
   const groupedAndFilteredCourses = useMemo(() => {
     if (!filteredCourses || filteredCourses.length === 0) return [];
@@ -765,7 +772,9 @@ export default function GepSearch({
   );
 
   const showResults =
-    !!selectedTerm && isLoaded && groupedAndFilteredCourses.length > 0;
+    !!selectedTerm &&
+    (isLoaded || hasPartialResults) &&
+    groupedAndFilteredCourses.length > 0;
 
   // Counts courses still needed for the category, not every listed course.
   const fittingNeeded = useMemo(() => {
@@ -835,9 +844,7 @@ export default function GepSearch({
   );
 
   const resultsPanel = (
-    <PlannerPanel
-      title="Requirement Matches"
-    >
+    <PlannerPanel title="Requirement Matches">
       <section className="mb-6 flex flex-col gap-2">
         <SectionHeading
           title={hasProgress ? "Your GEP progress" : "GEP categories"}

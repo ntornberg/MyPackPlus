@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getGradientAuthState } from "./gradientAuthState";
 import {
   GradientAuthRequiredError,
-  loadGradientCourse,
+  loadGradientCourses,
   resetGradientClientForTests,
   retryGradientSignIn,
 } from "./gradientClient";
@@ -13,8 +13,12 @@ const mocks = vi.hoisted(() => {
   return {
     store,
     generateCacheKey: vi.fn(async (value: string) => `hash:${value}`),
-    getGenericCache: vi.fn(async (_category: string, hash: string) =>
-      store.has(hash) ? { combinedData: store.get(hash)! } : null,
+    getGenericCacheMany: vi.fn(async (_category: string, hashes: string[]) =>
+      Object.fromEntries(
+        hashes
+          .filter((hash) => store.has(hash))
+          .map((hash) => [hash, { combinedData: store.get(hash)! }]),
+      ),
     ),
     setGenericCache: vi.fn(
       async (_category: string, entries: Record<string, string>) => {
@@ -28,7 +32,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../../../cache/courseRetrieval", () => ({
   generateCacheKey: mocks.generateCacheKey,
-  getGenericCache: mocks.getGenericCache,
+  getGenericCacheMany: mocks.getGenericCacheMany,
   setGenericCache: mocks.setGenericCache,
 }));
 
@@ -69,14 +73,20 @@ beforeEach(() => {
   resetGradientClientForTests();
 });
 
-describe("loadGradientCourse", () => {
+/** One course through the batch API, rejecting with its failure. */
+async function loadOne(key: string) {
+  const { courses } = await loadGradientCourses([key]);
+  return courses.get(key);
+}
+
+describe("loadGradientCourses", () => {
   it("loads options and distributions, trims them and caches the result", async () => {
     const send = stubBackground(({ path }) => ({
       success: true,
       data: path === "/api/course-options" ? options : distributions,
     }));
 
-    const course = await loadGradientCourse("CSC 316");
+    const course = await loadOne("CSC 316");
 
     expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls.map(([m]) => m.params)).toEqual([
@@ -96,7 +106,7 @@ describe("loadGradientCourse", () => {
     });
     expect(getGradientAuthState()).toBe("ok");
 
-    await loadGradientCourse("CSC 316");
+    await loadOne("CSC 316");
     expect(send).toHaveBeenCalledTimes(2);
   });
 
@@ -106,10 +116,7 @@ describe("loadGradientCourse", () => {
       data: path === "/api/course-options" ? options : distributions,
     }));
 
-    const [a, b] = await Promise.all([
-      loadGradientCourse("CSC 316"),
-      loadGradientCourse("CSC 316"),
-    ]);
+    const [a, b] = await Promise.all([loadOne("CSC 316"), loadOne("CSC 316")]);
 
     expect(a).toBe(b);
     expect(send).toHaveBeenCalledTimes(2);
@@ -121,22 +128,85 @@ describe("loadGradientCourse", () => {
       authRequired: true,
     }));
 
-    await expect(loadGradientCourse("CSC 316")).rejects.toBeInstanceOf(
+    await expect(loadOne("CSC 316")).rejects.toBeInstanceOf(
       GradientAuthRequiredError,
     );
     expect(getGradientAuthState()).toBe("signedOut");
     expect(mocks.setGenericCache).not.toHaveBeenCalled();
 
     const calls = send.mock.calls.length;
-    await expect(loadGradientCourse("MA 241")).rejects.toBeInstanceOf(
+    await expect(loadOne("MA 241")).rejects.toBeInstanceOf(
       GradientAuthRequiredError,
     );
     expect(send).toHaveBeenCalledTimes(calls);
 
     retryGradientSignIn();
-    await expect(loadGradientCourse("MA 241")).rejects.toBeInstanceOf(
+    await expect(loadOne("MA 241")).rejects.toBeInstanceOf(
       GradientAuthRequiredError,
     );
     expect(send.mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it("reads the cache once and writes fetched courses together", async () => {
+    const send = stubBackground(({ path }) => ({
+      success: true,
+      data: path === "/api/course-options" ? options : distributions,
+    }));
+
+    const { courses } = await loadGradientCourses(["CSC 316", "MA 241"]);
+
+    expect([...courses.keys()]).toEqual(["CSC 316", "MA 241"]);
+    expect(send).toHaveBeenCalledTimes(4);
+    expect(mocks.getGenericCacheMany).toHaveBeenCalledTimes(1);
+    expect(mocks.setGenericCache).toHaveBeenCalledTimes(1);
+    expect(Object.keys(mocks.setGenericCache.mock.calls[0]![1])).toHaveLength(
+      2,
+    );
+  });
+
+  it("keeps the courses that loaded when others fail", async () => {
+    stubBackground(({ path, params }) =>
+      params.subject === "MA"
+        ? { success: false, rateLimited: true, error: "HTTP 429" }
+        : {
+            success: true,
+            data: path === "/api/course-options" ? options : distributions,
+          },
+    );
+
+    const { courses, failure } = await loadGradientCourses([
+      "CSC 316",
+      "MA 241",
+    ]);
+
+    expect([...courses.keys()]).toEqual(["CSC 316"]);
+    expect(failure).toBeInstanceOf(Error);
+    expect(Object.keys(mocks.setGenericCache.mock.calls[0]![1])).toEqual([
+      "hash:gradient-v1-CSC 316",
+    ]);
+  });
+
+  it("reports each course as it settles, cached, fetched or failed", async () => {
+    mocks.store.set(
+      "hash:gradient-v1-ST 311",
+      JSON.stringify({ sections: [], instructors: [] }),
+    );
+    stubBackground(({ path, params }) =>
+      params.subject === "MA"
+        ? { success: false, error: "HTTP 500" }
+        : {
+            success: true,
+            data: path === "/api/course-options" ? options : distributions,
+          },
+    );
+    const onCourse = vi.fn();
+
+    await loadGradientCourses(["ST 311", "CSC 316", "MA 241"], onCourse);
+
+    const updates = onCourse.mock.calls.map(([update]) => update);
+    expect(updates[0]).toMatchObject({ key: "ST 311", done: 1, total: 3 });
+    expect(updates.map(({ done }) => done)).toEqual([1, 2, 3]);
+    expect(updates.find(({ key }) => key === "CSC 316")?.course).toBeDefined();
+    expect(updates.find(({ key }) => key === "MA 241")?.course).toBeUndefined();
   });
 });

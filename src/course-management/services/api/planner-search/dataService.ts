@@ -19,6 +19,7 @@ import type { CourseQuery } from "../../../types/courseQuery";
 import type { MergedCourseData } from "../../../types/section";
 import { REGISTRAR_COURSE_CACHE } from "../../sectionMetadata";
 import { fetchGradesBatchV2, v2ToBatchResponse } from "../gradesV2";
+import { normalizeCourse } from "../gradient/gradientMatch";
 
 import {
   batchSearchOpenCourses,
@@ -55,8 +56,18 @@ type GradeProfRequest = {
   unity_id?: string;
 };
 
+/** One course's grades from a batch, before the rest are in. */
+type GradeProfCourseUpdate = {
+  /** Normalized course key, e.g. "CSC 316". */
+  course: string;
+  data: BatchDataRequestResponse;
+  done: number;
+  total: number;
+};
+
 async function fetchGradeProfData(
   sections: GradeProfRequest[],
+  onCourse?: (update: GradeProfCourseUpdate) => void,
 ): Promise<BatchDataRequestResponse> {
   const data = await fetchGradesBatchV2(
     sections.map((section) => ({
@@ -64,6 +75,9 @@ async function fetchGradeProfData(
       instructor_name: section.instructor_name,
       unity_id: section.unity_id || null,
     })),
+    onCourse &&
+      ((update) =>
+        onCourse({ ...update, data: v2ToBatchResponse(update.data) })),
   );
   return v2ToBatchResponse(data);
 }
@@ -90,6 +104,17 @@ function gradeProfKeySource(
   return `${GRADE_DATA_CACHE_VERSION}-${courseKey}-${instructorName}-${term}`;
 }
 
+/** Grades loaded so far, while the rest are still being fetched. */
+type GradeProfSnapshot = {
+  gradeProfData: BatchDataRequestResponse;
+  /** Normalized course keys whose grades are still loading. */
+  pending: ReadonlySet<string>;
+  /** The course that just loaded; missing for the first snapshot, from the cache alone. */
+  course?: string;
+  done: number;
+  total: number;
+};
+
 type GradeProfLoad = {
   gradeProfData: BatchDataRequestResponse;
   /** Lookups that missed the cache and were requested from the API. */
@@ -107,6 +132,7 @@ type GradeProfLoad = {
 async function loadGradeProfData(
   openCourses: Record<string, CourseData>,
   term: string,
+  onSnapshot?: (snapshot: GradeProfSnapshot) => void,
 ): Promise<GradeProfLoad> {
   const sectionsToFetch: GradeProfRequest[] = [];
   const cachedProfKeys = new Set<string>();
@@ -164,8 +190,36 @@ async function loadGradeProfData(
 
   let failed = false;
   if (sectionsToFetch.length > 0) {
+    // Partial grades go out as each course lands; the final merge replaces them.
+    const pending = new Set(
+      sectionsToFetch.map((request) => normalizeCourse(request.course_title)),
+    );
+    const partial = {
+      courses: [...(gradeProfData.courses ?? [])],
+      profs: [...(gradeProfData.profs ?? [])],
+    };
+    onSnapshot?.({
+      gradeProfData: partial,
+      pending,
+      done: 0,
+      total: pending.size,
+    });
+    const onCourse =
+      onSnapshot &&
+      ((update: GradeProfCourseUpdate) => {
+        pending.delete(update.course);
+        partial.courses.push(...(update.data.courses ?? []));
+        partial.profs.push(...(update.data.profs ?? []));
+        onSnapshot({
+          gradeProfData: partial,
+          pending,
+          course: update.course,
+          done: update.done,
+          total: update.total,
+        });
+      });
     try {
-      const responseData = await fetchGradeProfData(sectionsToFetch);
+      const responseData = await fetchGradeProfData(sectionsToFetch, onCourse);
       if (responseData?.courses) {
         (gradeProfData.courses ??= []).push(...responseData.courses);
       }
@@ -245,6 +299,31 @@ async function cacheGradeProfByInstructor(
   await setGenericCache(CACHE_KEYS.GRADE_PROF, courseMap);
 }
 
+/** Partial batch results go out at most this often while grades load. */
+const PARTIAL_THROTTLE_MS = 300;
+
+/** Flags sections of courses still waiting on grades, so they show a placeholder. */
+function markGradesPending(
+  merged: Record<string, MergedCourseData>,
+  pending: ReadonlySet<string>,
+): void {
+  if (pending.size === 0) return;
+  for (const course of Object.values(merged)) {
+    if (!pending.has(normalizeCourse(course.code))) continue;
+    for (const group of Object.values(course.sections)) {
+      for (const section of [
+        group.lecture,
+        ...(group.labs ?? []),
+        ...(group.extras ?? []),
+      ]) {
+        if (section && !section.grade_distribution) {
+          section.gradesPending = true;
+        }
+      }
+    }
+  }
+}
+
 /** Subject searches in flight, so a single-course search can reuse one already running. */
 const inflightSubjects = new Map<string, Promise<CourseData[]>>();
 
@@ -293,8 +372,9 @@ export function fetchPlannerCourseSections(
   course_id: string | undefined,
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
+  onPartial?: (data: MergedCourseData) => void,
 ): Promise<MergedCourseData | null> {
-  // A caller joining a request already in flight gets no progress updates.
+  // A caller joining a request already in flight gets no progress or partial updates.
   const key = `${subjectCode(courseAbr)} ${catalogNum}|${term}`;
   let request = inflightCourses.get(key);
   if (!request) {
@@ -304,6 +384,7 @@ export function fetchPlannerCourseSections(
       course_id,
       term,
       onProgress,
+      onPartial,
     ).finally(() => inflightCourses.delete(key));
     inflightCourses.set(key, request);
   }
@@ -316,6 +397,7 @@ async function loadPlannerCourseSections(
   course_id: string | undefined,
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
+  onPartial?: (data: MergedCourseData) => void,
 ): Promise<MergedCourseData | null> {
   // Report initial progress
   onProgress?.(10, `Initializing search for ${courseAbr} ${catalogNum}`);
@@ -434,16 +516,33 @@ async function loadPlannerCourseSections(
   const courseDataMap: Record<string, CourseData> = {
     [courseKey]: courseData,
   };
-  const gradeLoad = await loadGradeProfData(courseDataMap, term);
+  const courseInfoMap: Record<string, CourseQuery> = {
+    [courseKey]: course,
+  };
+  const gradeLoad = await loadGradeProfData(
+    courseDataMap,
+    term,
+    ({ gradeProfData, pending }) => {
+      // One course: only the snapshot before Gradient answers is worth showing.
+      if (pending.size === 0) return;
+      onProgress?.(65, `Loading grade history from Gradient for ${courseKey}`);
+      if (!onPartial) return;
+      const merged = mergeData(
+        courseDataMap,
+        gradeProfData,
+        courseInfoMap,
+        term,
+      );
+      markGradesPending(merged, pending);
+      if (merged[courseKey]) onPartial(merged[courseKey]);
+    },
+  );
   if (gradeLoad.failed) {
     onProgress?.(85, `Grade/professor data unavailable for ${courseKey}`);
   }
 
   // Merge data
   onProgress?.(90, `Merging data for ${courseKey}`);
-  const courseInfoMap: Record<string, CourseQuery> = {
-    [courseKey]: course,
-  };
   const mergedData = mergeData(
     courseDataMap,
     gradeLoad.gradeProfData,
@@ -464,6 +563,7 @@ async function loadPlannerCourseSections(
  * @param {CourseQuery[]} courses Array of required courses to fetch data for
  * @param {string} term Academic term identifier
  * @param {(progress: number, statusMessage?: string) => void} [onProgress] Optional callback for tracking progress messages and percentages
+ * @param {(data: Record<string, MergedCourseData>) => void} [onPartial] Optional callback receiving sections before every grade is in; sections still waiting are marked `gradesPending`
  * @returns {Promise<Record<string, MergedCourseData>>} Map of course key (e.g., "CSC 316") to merged course data
  */
 export async function batchFetchCoursesData(
@@ -471,6 +571,7 @@ export async function batchFetchCoursesData(
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
   onError?: (message: string) => void,
+  onPartial?: (data: Record<string, MergedCourseData>) => void,
 ): Promise<Record<string, MergedCourseData>> {
   const result: Record<string, MergedCourseData> = {};
 
@@ -614,9 +715,45 @@ export async function batchFetchCoursesData(
 
   // Phase 4: Fetch Grade/Professor Data (per course, instructor)
   onProgress?.(50, "Processing grade/professor data for each course");
-  const gradeLoad = await loadGradeProfData(openCoursesCache, term);
+  // Merging every course on every update adds up, so partial results are throttled.
+  let latest: GradeProfSnapshot | null = null;
+  let partialTimer: ReturnType<typeof setTimeout> | null = null;
+  // A course update can trail the batch's own answer; the final merge wins.
+  let gradesDone = false;
+  const emitPartial = () => {
+    partialTimer = null;
+    if (gradesDone || !latest || !onPartial) return;
+    const merged = mergeData(
+      openCoursesCache,
+      latest.gradeProfData,
+      courseKeyMapping,
+      term,
+    );
+    markGradesPending(merged, latest.pending);
+    onPartial(merged);
+  };
+  const gradeLoad = await loadGradeProfData(
+    openCoursesCache,
+    term,
+    (snapshot) => {
+      if (gradesDone) return;
+      latest = snapshot;
+      onProgress?.(
+        50 + Math.round((25 * snapshot.done) / snapshot.total),
+        snapshot.course
+          ? `Loaded ${snapshot.course} grades from Gradient (${snapshot.done} of ${snapshot.total})`
+          : `Loading grade history from Gradient for ${snapshot.total} course${snapshot.total === 1 ? "" : "s"}`,
+      );
+      if (!onPartial) return;
+      // Sections show right away; later updates wait for the throttle.
+      if (!snapshot.course) emitPartial();
+      else partialTimer ??= setTimeout(emitPartial, PARTIAL_THROTTLE_MS);
+    },
+  );
+  gradesDone = true;
+  if (partialTimer) clearTimeout(partialTimer);
   if (gradeLoad.failed) {
-    onProgress?.(70, "Grade/professor data unavailable");
+    onProgress?.(75, "Some grade/professor data unavailable");
   }
 
   // Phase 5: Merge Data
@@ -648,6 +785,7 @@ export async function fetchCourseSearchData(
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
   onError?: (message: string) => void,
+  onPartial?: (data: Record<string, MergedCourseData>) => void,
 ): Promise<Record<string, MergedCourseData> | null> {
   const result: Record<string, MergedCourseData> = {};
 
@@ -673,6 +811,7 @@ export async function fetchCourseSearchData(
           onProgress?.(scaledProgress, statusMessage);
         },
         onError,
+        onPartial,
       );
 
       // Copy results to our result object
@@ -699,6 +838,7 @@ export async function fetchGEPCourseData(
   courses: CourseQuery[],
   term: string,
   onProgress?: (progress: number, statusMessage?: string) => void,
+  onPartial?: (data: Record<string, MergedCourseData>) => void,
 ): Promise<Record<string, MergedCourseData> | null> {
   // Initial progress
   onProgress?.(10, `Initializing search for ${courses.length} GEP courses`);
@@ -718,6 +858,8 @@ export async function fetchGEPCourseData(
         const scaledProgress = 10 + Math.round(progress * 0.85);
         onProgress?.(scaledProgress, statusMessage);
       },
+      undefined,
+      onPartial,
     );
 
     if (Object.keys(batchResults).length === 0) {
