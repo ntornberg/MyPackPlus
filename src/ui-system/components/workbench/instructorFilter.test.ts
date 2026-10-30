@@ -28,7 +28,7 @@ describe("formatInstructorDisplayName", () => {
   });
 
   it("drops credentials stuck to the last name", () => {
-    expect(formatInstructorDisplayName("Crume PhD,Jeff")).toBe("Jeff Crume");
+    expect(formatInstructorDisplayName("Crume PhD,Jeff")).toBe("Jeff Crume 🐐");
   });
 
   it("leaves names without a comma alone", () => {

@@ -141,6 +141,7 @@ const EXTENSION_CACHE_CATEGORIES = [
   "instructorUpcoming",
   "instructorSearch",
   "myPackOfferings",
+  "gradientCourse",
 ];
 
 /**
@@ -162,7 +163,8 @@ function isExtensionCacheCategory(key: string): boolean {
  * written by older builds are never read back.
  */
 // v5: v4 grade entries for instructors with no lecture section were cached empty.
-export const GRADE_DATA_CACHE_VERSION = "v5";
+// v6: grades come from Gradient in the browser instead of the backend.
+export const GRADE_DATA_CACHE_VERSION = "v6";
 
 /** Categories holding grade/RMP responses that a new backend dataset makes stale. */
 const GRADE_DATASET_CATEGORIES = [

@@ -280,6 +280,13 @@ export function usePersonalPlanLoader({
             if (valid())
               update(context, (state) => ({ ...state, sectionError: message }));
           },
+          (partial) => {
+            if (valid())
+              update(context, (state) => ({
+                ...state,
+                courses: { ...state.courses, ...partial },
+              }));
+          },
         );
         if (valid())
           update(context, (state) => ({

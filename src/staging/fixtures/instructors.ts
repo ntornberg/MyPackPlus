@@ -111,7 +111,12 @@ function buildInstructor(
 export const stagingInstructors: V2Instructor[] = ROSTER.map(buildInstructor);
 
 const byUnityId = new Map(stagingInstructors.map((i) => [i.unity_id!, i]));
-const byName = new Map(stagingInstructors.map((i) => [i.instructor_name, i]));
+// MyPack writes "Last,First"; the roster spaces it as "Last, First".
+const nameKey = (name: string) =>
+  name.replace(/\s*,\s*/, ",").trim().toLowerCase();
+const byName = new Map(
+  stagingInstructors.map((i) => [nameKey(i.instructor_name), i]),
+);
 
 /** Instructor teaching a given section: someone from the subject when possible. */
 export function instructorForSection(
@@ -127,7 +132,7 @@ function findInstructor(request: V2GradeRequest): V2Instructor | undefined {
   return (
     (request.unity_id ? byUnityId.get(request.unity_id) : undefined) ??
     (request.instructor_name
-      ? byName.get(request.instructor_name.trim())
+      ? byName.get(nameKey(request.instructor_name))
       : undefined)
   );
 }

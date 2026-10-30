@@ -330,3 +330,28 @@ describe("requirementNeeds", () => {
     expect(requirementNeeds({ ...core, minUnits: 30 })).toEqual([]);
   });
 });
+
+describe("auditRequirementEntries alternatives", () => {
+  const only = (keep: (status: string) => boolean): DegreeAudit => ({
+    ...personalAuditFixture,
+    groups: personalAuditFixture.groups.map((group) => ({
+      ...group,
+      lines: group.lines.filter((line) => keep(line.status)),
+    })),
+  });
+
+  it("lists choices for finished requirements, marked as met", () => {
+    const audit = only((status) => status === "C");
+    const entry = auditRequirementEntries(audit, choices(audit))[1];
+    expect(entry.alternatives.map((a) => [a.key, a.met])).toEqual([
+      ["000001|", true],
+      ["000002|", true],
+    ]);
+  });
+
+  it("isn't met while part of the requirement is only planned or enrolled", () => {
+    const audit = only((status) => status !== "U");
+    const entry = auditRequirementEntries(audit, choices(audit))[1];
+    expect(entry.alternatives.map((a) => a.met)).toEqual([false, false]);
+  });
+});

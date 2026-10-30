@@ -124,7 +124,9 @@ export function sectionInstructorNames(section: ModifiedSection): string[] {
 const NAME_CREDENTIALS =
   /\b(?:Ph\.?D|Ed\.?D|M\.?D|DVM|PharmD|DNP|MBA|MPH)\.?(?=\s|$)/gi;
 
-/** "Crume PhD,Jeff" -> "Jeff Crume"; names without a comma (e.g. "Staff") pass through. */
+const GOAT_NAMES = new Set(["jeff crume"]);
+
+/** "Crume PhD,Jeff" -> "Jeff Crume 🐐"; names without a comma (e.g. "Staff") pass through. */
 export function formatInstructorDisplayName(raw: string): string {
   const [last, ...rest] = raw.split(",");
   const first = rest.join(",").trim();
@@ -132,10 +134,12 @@ export function formatInstructorDisplayName(raw: string): string {
     .replace(NAME_CREDENTIALS, "")
     .replace(/\s+/g, " ")
     .trim();
-  if (!first) {
-    return cleanLast || raw.trim();
-  }
-  return cleanLast ? `${first} ${cleanLast}` : first;
+  const name = !first
+    ? cleanLast || raw.trim()
+    : cleanLast
+      ? `${first} ${cleanLast}`
+      : first;
+  return GOAT_NAMES.has(name.toLowerCase()) ? `${name} 🐐` : name;
 }
 
 export type InstructorFilterOptions = {

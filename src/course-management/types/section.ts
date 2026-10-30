@@ -22,6 +22,8 @@ export type SectionLinkedMeeting = {
 export type ModifiedSection = CourseSection & {
   grade_distribution?: GradeData;
   professor_rating?: MatchedRateMyProf;
+  /** Grade history is still loading; set only on partial search results. */
+  gradesPending?: boolean;
   // Cart functionality fields
   course_id?: string;
   /** No legacy identity: registration requires the exact MyPack combination. */

@@ -19,6 +19,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -41,6 +42,10 @@ import {
   hasGradeDistribution,
   isSatUnsatDistribution,
 } from "../shared/GradeDistributionChart";
+import {
+  GradientSignInLink,
+  useGradientSignedOut,
+} from "../shared/GradientSignIn";
 
 import { InCartBadge } from "./InCartBadge";
 import { InstructorPopover } from "./InstructorPopover";
@@ -70,7 +75,7 @@ const COMPACT_GRADE_PIE_SIZE = 72;
 /** The grade history and rating a grade block reads. */
 type GradeBlockSource = Pick<
   ModifiedSection,
-  "grade_distribution" | "professor_rating"
+  "grade_distribution" | "professor_rating" | "gradesPending"
 >;
 
 /** Explains an empty grade block: S/U-only history vs. an instructor with no history at all. */
@@ -104,6 +109,7 @@ export function SectionGradeDistributionBlock({
       ? formatGradePointAsLetter(averageGradePoint)
       : null;
   const classAverage = g ? formatGradeAverage(g) : null;
+  const gradientSignedOut = useGradientSignedOut();
 
   const detailRows = useMemo(() => {
     if (!hasSample || !g) {
@@ -122,9 +128,32 @@ export function SectionGradeDistributionBlock({
     [detailRows],
   );
 
+  // Partial results: the section is shown while its grade history is still on its way.
+  const gradesLoading = !hasSample && !g && section.gradesPending === true;
+
   if (compact) {
+    if (gradesLoading) {
+      return (
+        <Badge
+          variant="outline"
+          className="max-w-full gap-1.5 truncate rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground"
+          aria-label="Loading grade history"
+        >
+          <Skeleton className="size-2.5 shrink-0 rounded-full" />
+          Loading grades…
+        </Badge>
+      );
+    }
     if (!hasSample) {
-      return null;
+      // Without this, a signed-out student can't tell missing grades from no history.
+      return gradientSignedOut && !g ? (
+        <Badge
+          variant="outline"
+          className="max-w-full truncate rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground"
+        >
+          <GradientSignInLink className="no-underline" /> for grades
+        </Badge>
+      ) : null;
     }
     const satisfactoryPct = satUnsat
       ? (detailRows.find((r) => r.label === "S")?.pct ?? 0)
@@ -195,17 +224,38 @@ export function SectionGradeDistributionBlock({
       aria-label="Grade distribution"
       className={cn(
         "flex max-w-[min(100%,15.5rem)] shrink-0 flex-col gap-1.5 rounded-xl border border-border/60 bg-muted/15 p-2 ring-1 ring-foreground/5 shadow-sm sm:max-w-[min(100%,17.5rem)] sm:p-2.5",
-        !hasSample && "opacity-70",
+        !hasSample && !gradesLoading && "opacity-70",
       )}
+      aria-busy={gradesLoading || undefined}
       title={
-        hasSample
-          ? satUnsat
-            ? "Historical Sat/Unsat/Withdrawn mix"
-            : "Historical letter-grade mix and typical class grade range when available"
-          : "No grade distribution sample for this section"
+        gradesLoading
+          ? "Loading grade history from Gradient"
+          : hasSample
+            ? satUnsat
+              ? "Historical Sat/Unsat/Withdrawn mix"
+              : "Historical letter-grade mix and typical class grade range when available"
+            : "No grade distribution sample for this section"
       }
     >
-      {!hasSample ? (
+      {gradesLoading ? (
+        <div className="flex items-start gap-2.5 sm:gap-3">
+          <Skeleton
+            className="shrink-0 rounded-full"
+            style={{
+              width: CARD_GRADE_PIE_SIZE_EMPTY,
+              height: CARD_GRADE_PIE_SIZE_EMPTY,
+            }}
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Loading grades…
+            </span>
+            <Skeleton className="h-2 w-20" />
+            <Skeleton className="h-2 w-14" />
+            <Skeleton className="h-2 w-16" />
+          </div>
+        </div>
+      ) : !hasSample ? (
         <div className="flex flex-col items-center gap-1">
           <GradeDistributionChart
             data={chartData}
@@ -213,7 +263,11 @@ export function SectionGradeDistributionBlock({
             className="text-muted-foreground/35"
           />
           <span className="text-center text-[10px] font-medium text-muted-foreground">
-            {emptyGradeLabel(section)}
+            {gradientSignedOut && !section.grade_distribution ? (
+              <GradientSignInLink />
+            ) : (
+              emptyGradeLabel(section)
+            )}
           </span>
         </div>
       ) : (
@@ -660,11 +714,16 @@ export const SectionCompareCard = memo(function SectionCompareCard({
                 </span>
               ) : null}
             </span>
-            <RmpStarsWithScore
-              avgRating={section.professor_rating?.avgRating ?? null}
-              rating={section.professor_rating ?? null}
-              starClassName={compact ? "size-3" : "size-3.5"}
-            />
+            {/* Ratings arrive with grades; "No RMP" would be wrong until then. */}
+            {section.gradesPending && !section.professor_rating ? (
+              <Skeleton className="h-3.5 w-20 rounded-full" />
+            ) : (
+              <RmpStarsWithScore
+                avgRating={section.professor_rating?.avgRating ?? null}
+                rating={section.professor_rating ?? null}
+                starClassName={compact ? "size-3" : "size-3.5"}
+              />
+            )}
           </div>
           {conflictsWith ? (
             <div className={compact ? "pt-1" : "pt-2"}>

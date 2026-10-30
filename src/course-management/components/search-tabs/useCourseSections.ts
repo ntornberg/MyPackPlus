@@ -104,10 +104,20 @@ export function useCourseSections(
       },
     };
     // `load` shares requests already in flight for the same course and term.
-    void load(subject, catalogNum, id, term, (progress, label) => {
-      if (current.current?.key === key)
-        current.current.progress(progress, label);
-    })
+    void load(
+      subject,
+      catalogNum,
+      id,
+      term,
+      (progress, label) => {
+        if (current.current?.key === key)
+          current.current.progress(progress, label);
+      },
+      // Sections first; grade blocks show placeholders until the result replaces them.
+      (partial) => {
+        if (active) setResult((previous) => ({ ...previous, data: partial }));
+      },
+    )
       .then((data) => {
         try {
           sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data }));

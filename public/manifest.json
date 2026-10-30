@@ -8,7 +8,8 @@
   "permissions": ["storage"],
   "host_permissions": [
     "https://*.acs.ncsu.edu/*",
-    "https://webappprd.acs.ncsu.edu/*"
+    "https://webappprd.acs.ncsu.edu/*",
+    "https://gradient.ncsu.edu/*"
   ],
   "action": {
     "default_icon": "icon.png"

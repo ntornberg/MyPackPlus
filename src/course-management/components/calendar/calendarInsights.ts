@@ -42,6 +42,7 @@ async function requestGrades(request: V2GradeRequest): Promise<V2CoursesData> {
       }
     }
     const data = await fetchGradeCourseV2(request);
+    if (data.incomplete) return data;
     await setGenericCache(
       "gradeProfData",
       { [hash]: JSON.stringify(data) },
@@ -61,7 +62,10 @@ async function requestGrades(request: V2GradeRequest): Promise<V2CoursesData> {
 function uniqueInstructors(
   instructors: CalendarCourseDetails["instructors"],
 ): CalendarCourseDetails["instructors"] {
-  const byName = new Map<string, CalendarCourseDetails["instructors"][number]>();
+  const byName = new Map<
+    string,
+    CalendarCourseDetails["instructors"][number]
+  >();
   for (const instructor of instructors) {
     const key = instructor.name.trim().toLowerCase();
     const seen = byName.get(key);

@@ -15,6 +15,7 @@ import {
   GradeDistributionChart,
   gradeDistributionPercents,
 } from "@/ui-system/components/shared/GradeDistributionChart";
+import { NoGradeHistory } from "@/ui-system/components/shared/GradientSignIn";
 import { usePlannerNavigation } from "@/ui-system/components/workbench/plannerNavigation";
 import { describeRating, formatRatingCount } from "@/utils/rmpDisplay";
 
@@ -536,7 +537,10 @@ function CourseCard({ event }: { event: ScheduleEvent }) {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs">No grade history available.</p>
+                      <NoGradeHistory
+                        className="text-xs"
+                        fallback="No grade history available."
+                      />
                     )}
                   </>
                 )}

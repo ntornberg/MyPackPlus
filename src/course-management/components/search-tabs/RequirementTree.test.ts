@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { RequirementNeed } from "../../../degree-planning/services/auditRequirements";
+import { requirementView } from "../tab-state/tabState";
 
 import {
   buildCourseRow,
+  courseCodesLabel,
+  coverageProgress,
   matchesCourseQuery,
   groupProgress,
   metParts,
@@ -218,5 +221,48 @@ describe("groupProgress", () => {
 
   it("has nothing to show for a finished group", () => {
     expect(groupProgress([part("A")], [])).toBeNull();
+  });
+});
+
+describe("coverageProgress", () => {
+  it("splits a group covered by planned courses into done and planned", () => {
+    expect(
+      coverageProgress({
+        status: "planned",
+        completed: 4,
+        enrolled: 2,
+        planned: 2,
+      }),
+    ).toEqual({
+      text: "4 of 8 courses done · 2 enrolled · 2 planned",
+      fraction: 0.5,
+      enrolled: 0.25,
+      planned: 0.25,
+    });
+  });
+
+  it("has nothing to show when the total isn't known", () => {
+    const counts = { completed: 4, enrolled: 0, planned: 1 };
+    expect(coverageProgress({ status: "needed", ...counts })).toBeNull();
+    expect(coverageProgress({ status: "complete", ...counts })).toBeNull();
+  });
+});
+
+describe("courseCodesLabel", () => {
+  it("names a repeated course once with a count", () => {
+    const rows = ["CSC 406", "CSC 297", "CSC 297", "DSA 201", "CSC 297"].map(
+      (code) => row(...(code.split(" ") as [string, string]), code),
+    );
+    expect(courseCodesLabel(rows)).toBe("CSC 406, CSC 297 ×3, DSA 201");
+  });
+});
+
+describe("requirementView", () => {
+  it("reads older stored filters as the closest view", () => {
+    expect(requirementView("needed")).toBe("graduate");
+    expect(requirementView(undefined)).toBe("graduate");
+    expect(requirementView("fits")).toBe("options");
+    expect(requirementView("all")).toBe("options");
+    expect(requirementView("options")).toBe("options");
   });
 });

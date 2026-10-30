@@ -139,7 +139,7 @@ describe("approved requirement choices", () => {
     expect(result.results["000002|"].list).toBeDefined();
   });
 
-  it("does not load alternatives for completed-only requirements", async () => {
+  it("does not load alternatives for completed-only requirements unless asked", async () => {
     await loadRequirementChoices(
       {
         ...audit,
