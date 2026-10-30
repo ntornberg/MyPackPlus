@@ -172,6 +172,8 @@ async function loadGradeProfData(
       if (responseData?.profs) {
         (gradeProfData.profs ??= []).push(...responseData.profs);
       }
+      // Show partial grades/ratings, but don't cache them as the final answer.
+      failed = responseData?.incomplete === true;
     } catch (error) {
       // Grades are an enhancement; still show registrar sections without them.
       AppLogger.error("Error fetching grade/professor data:", error);

@@ -41,6 +41,10 @@ import {
   hasGradeDistribution,
   isSatUnsatDistribution,
 } from "../shared/GradeDistributionChart";
+import {
+  GradientSignInLink,
+  useGradientSignedOut,
+} from "../shared/GradientSignIn";
 
 import { InCartBadge } from "./InCartBadge";
 import { InstructorPopover } from "./InstructorPopover";
@@ -104,6 +108,7 @@ export function SectionGradeDistributionBlock({
       ? formatGradePointAsLetter(averageGradePoint)
       : null;
   const classAverage = g ? formatGradeAverage(g) : null;
+  const gradientSignedOut = useGradientSignedOut();
 
   const detailRows = useMemo(() => {
     if (!hasSample || !g) {
@@ -213,7 +218,11 @@ export function SectionGradeDistributionBlock({
             className="text-muted-foreground/35"
           />
           <span className="text-center text-[10px] font-medium text-muted-foreground">
-            {emptyGradeLabel(section)}
+            {gradientSignedOut && !section.grade_distribution ? (
+              <GradientSignInLink />
+            ) : (
+              emptyGradeLabel(section)
+            )}
           </span>
         </div>
       ) : (

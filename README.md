@@ -39,7 +39,8 @@ MyPack Plus runs as a Manifest V3 browser extension.
 - A content script adds the planning interface to supported MyPack Portal pages.
 - A background service worker handles extension-level requests.
 - Local browser storage and IndexedDB cache course and section data for faster repeat sessions.
-- A hosted Supabase backend provides consolidated grade and professor data through Edge Functions. Backend source and database migrations are maintained separately and are not part of this repository.
+- Grade distributions are loaded directly from WolfTech Gradient (gradient.ncsu.edu) with the student's own NC State session and summarized in the browser.
+- A hosted Supabase backend provides instructor and professor-rating data through Edge Functions. Backend source and database migrations are maintained separately and are not part of this repository.
 - Registrar availability lookups are batched and proxied to reduce repeated manual requests.
 
 ## Tech Stack

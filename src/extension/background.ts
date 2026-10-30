@@ -1,4 +1,8 @@
 import {
+  fetchGradientDirect,
+  isGradientFetchMessage,
+} from "../course-management/services/api/gradient/gradientApi";
+import {
   parseRegistrarSearch,
   SEARCH_COURSES_MESSAGE,
 } from "../course-management/services/api/planner-search/searchService";
@@ -98,6 +102,12 @@ function setupMessageListener() {
           sendResponse({ success: false, error: String(err) });
         });
 
+      return true;
+    }
+
+    if (isGradientFetchMessage(message)) {
+      // Sent with the student's Gradient cookies; the page can't make this request itself.
+      void fetchGradientDirect(message.path, message.params).then(sendResponse);
       return true;
     }
 

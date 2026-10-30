@@ -1,5 +1,9 @@
 import { SUPABASE_URL } from "../config/supabase";
 import {
+  GRADIENT_FETCH_MESSAGE,
+  type GradientPath,
+} from "../course-management/services/api/gradient/gradientApi";
+import {
   parseRegistrarSearch,
   SEARCH_COURSES_MESSAGE,
 } from "../course-management/services/api/planner-search/searchService";
@@ -7,6 +11,7 @@ import { FORCE_UPDATE_CHECK_MESSAGE } from "../extension/updates";
 import type { V2GradeRequest } from "../types/api";
 import { STATUS_WORKER_ORIGIN } from "../user-experience/status/statusWorker";
 
+import { stagingGradient } from "./fixtures/gradient";
 import {
   stagingGrades,
   stagingInstructorSearch,
@@ -80,7 +85,13 @@ function installChromeStub(
   const runtime = {
     lastError: undefined as chrome.runtime.LastError | undefined,
     sendMessage: (
-      message: { type: string; url?: string; formData?: string },
+      message: {
+        type: string;
+        url?: string;
+        formData?: string;
+        path?: GradientPath;
+        params?: Record<string, string>;
+      },
       callback?: (result: unknown) => void,
     ) => {
       if (message.type === SEARCH_COURSES_MESSAGE && realNetwork) {
@@ -99,6 +110,11 @@ function installChromeStub(
           courses: parseRegistrarSearch(
             stagingRegistrarResponse(message.formData ?? ""),
           ),
+        };
+      } else if (message.type === GRADIENT_FETCH_MESSAGE) {
+        response = {
+          success: true,
+          data: stagingGradient(message.path!, message.params ?? {}),
         };
       } else if (message.type === "status_worker_fetch") {
         response = {
@@ -203,6 +219,15 @@ function installFetchStub() {
           return envelope(stagingGrades(body as V2GradeRequest[]));
         case "grades-v2-course":
           return envelope(stagingGrades([body as V2GradeRequest]));
+        case "instructors-v2-resolve": {
+          const { results, instructors } = stagingGrades(
+            body as V2GradeRequest[],
+          );
+          return envelope({
+            results: results.map(({ grade: _grade, ...rest }) => rest),
+            instructors,
+          });
+        }
         case "instructors-v2-search":
           return envelope(stagingInstructorSearch(body.q, body.limit));
         case "instructors-v2-upcoming":

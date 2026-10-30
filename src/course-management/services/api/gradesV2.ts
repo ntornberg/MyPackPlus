@@ -8,10 +8,12 @@ import type {
   V2GradeRequest,
   V2GradeRow,
   V2Instructor,
+  V2ResolveData,
   V2SearchData,
   V2UpcomingData,
 } from "../../../types/api";
 import { fetchWithTimeout } from "../../../utils/fetchWithTimeout";
+import { AppLogger } from "../../../utils/logger";
 import {
   GRADE_DATA_CACHE_VERSION,
   generateCacheKey,
@@ -20,6 +22,16 @@ import {
   setGenericCache,
 } from "../../cache/courseRetrieval";
 
+import { aggregateGradientSections } from "./gradient/gradientAggregate";
+import {
+  type GradientCourse,
+  loadGradientCourse,
+} from "./gradient/gradientClient";
+import {
+  normalizeCourse,
+  sectionsForInstructor,
+} from "./gradient/gradientMatch";
+
 /** Registrar term id for the upcoming-sections snapshot (Spring 2027). */
 export const UPCOMING_TERM_ID = "2271";
 
@@ -27,7 +39,7 @@ const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000;
 
 /**
  * POSTs to a v2 edge function and unwraps `{ data, meta }`. Every response reports the
- * backend dataset version so stale cached grade data can be dropped.
+ * backend dataset version so stale cached instructor/rating data can be dropped.
  */
 async function postV2<T>(slug: string, body: unknown): Promise<T> {
   const response = await fetchWithTimeout(
@@ -51,16 +63,83 @@ async function postV2<T>(slug: string, body: unknown): Promise<T> {
   return envelope.data;
 }
 
+/** Each requested course's Gradient history, keyed by normalized course ("CSC 316"). */
+async function loadGradientCourses(
+  items: V2GradeRequest[],
+): Promise<Map<string, GradientCourse>> {
+  const keys = [...new Set(items.map((item) => normalizeCourse(item.course)))];
+  return new Map(
+    await Promise.all(
+      keys.map(async (key) => [key, await loadGradientCourse(key)] as const),
+    ),
+  );
+}
+
+/**
+ * Grades from Gradient (in the browser, with the student's session) joined with instructor
+ * matches and ratings from the backend, which never sees grade data. Either side failing
+ * leaves its fields empty and marks the result `incomplete`; both failing throws.
+ */
+async function fetchCoursesV2(items: V2GradeRequest[]): Promise<V2CoursesData> {
+  const [resolved, gradient] = await Promise.allSettled([
+    postV2<V2ResolveData>("instructors-v2-resolve", items),
+    loadGradientCourses(items),
+  ]);
+  if (resolved.status === "rejected" && gradient.status === "rejected") {
+    throw gradient.reason;
+  }
+  if (resolved.status === "rejected") {
+    AppLogger.error("Instructor lookup failed:", resolved.reason);
+  }
+  if (gradient.status === "rejected") {
+    AppLogger.warn("Gradient grades unavailable:", gradient.reason);
+  }
+  const base: V2ResolveData =
+    resolved.status === "fulfilled"
+      ? resolved.value
+      : {
+          results: items.map((request) => ({
+            request,
+            instructor_id: null,
+            ambiguous: false,
+          })),
+          instructors: {},
+        };
+  const courses = gradient.status === "fulfilled" ? gradient.value : null;
+  return {
+    results: base.results.map((result) => {
+      const courseKey = normalizeCourse(result.request.course);
+      const course = courses?.get(courseKey);
+      const aliases = result.instructor_id
+        ? (base.instructors[result.instructor_id]?.names ?? [])
+        : [];
+      return {
+        ...result,
+        grade: course
+          ? aggregateGradientSections(
+              sectionsForInstructor(course, result.request, aliases),
+              courseKey,
+            )
+          : null,
+      };
+    }),
+    instructors: base.instructors,
+    ...(resolved.status === "rejected" || gradient.status === "rejected"
+      ? { incomplete: true }
+      : {}),
+  };
+}
+
 export function fetchGradesBatchV2(
   items: V2GradeRequest[],
 ): Promise<V2CoursesData> {
-  return postV2<V2CoursesData>("grades-v2-batch", items);
+  return fetchCoursesV2(items);
 }
 
 export function fetchGradeCourseV2(
   item: V2GradeRequest,
 ): Promise<V2CoursesData> {
-  return postV2<V2CoursesData>("grades-v2-course", item);
+  return fetchCoursesV2([item]);
 }
 
 /**
@@ -217,5 +296,7 @@ export function v2ToBatchResponse(
       );
     }
   }
-  return { courses, profs };
+  return data.incomplete
+    ? { courses, profs, incomplete: true }
+    : { courses, profs };
 }

@@ -50,6 +50,12 @@ vi.mock(
   },
 );
 
+const gradientMocks = vi.hoisted(() => ({ loadGradientCourse: vi.fn() }));
+
+vi.mock("../gradient/gradientClient", () => ({
+  loadGradientCourse: gradientMocks.loadGradientCourse,
+}));
+
 vi.mock("./searchService", () => ({
   searchOpenCoursesByParams: mocks.searchOpenCoursesByParams,
   batchSearchOpenCourses: mocks.batchSearchOpenCourses,
@@ -215,23 +221,6 @@ describe("dataService v2 grade/RMP requests", () => {
           },
           instructor_id: "jrgriggs",
           ambiguous: false,
-          grade: {
-            unique_hash: "1008776286501506839",
-            subject: "MA",
-            course_name: "MA 241",
-            instructor_name: "Griggs,John Richard",
-            a_average: 33.4,
-            b_average: 21.5,
-            c_average: 16.5,
-            d_average: 5.2,
-            f_average: 12.1,
-            class_avg_max: 86.62,
-            class_avg_min: 69.8,
-            link_status: "linked",
-            section_count: 52,
-            has_letter_grades: true,
-            terms: ["Fall '22"],
-          },
         },
       ],
       instructors: {
@@ -267,9 +256,20 @@ describe("dataService v2 grade/RMP requests", () => {
       "fetch",
       vi.fn(async () => Response.json(v2Response)),
     );
+    gradientMocks.loadGradientCourse.mockResolvedValue({
+      instructors: [{ name: "Griggs,John Richard", unityId: "jrgriggs" }],
+      sections: [
+        {
+          instructorName: "Griggs,John Richard",
+          term: "Fall '22",
+          termCode: "2228",
+          counts: { A: 33, B: 22, C: 16, D: 5, F: 12, TOTAL: 88 },
+        },
+      ],
+    });
   });
 
-  it("sends Unity IDs to grades-v2-batch and merges the v2 rating fields", async () => {
+  it("sends Unity IDs to instructors-v2-resolve and merges Gradient grades with ratings", async () => {
     mocks.getGenericCache.mockResolvedValue(null);
     mocks.searchOpenCoursesByParams.mockResolvedValueOnce(courseData);
 
@@ -283,7 +283,8 @@ describe("dataService v2 grade/RMP requests", () => {
     const fetchMock = vi.mocked(fetch);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toMatch(/\/functions\/v1\/grades-v2-batch$/);
+    expect(String(url)).toMatch(/\/functions\/v1\/instructors-v2-resolve$/);
+    expect(gradientMocks.loadGradientCourse).toHaveBeenCalledWith("MA 241");
     expect(JSON.parse(String(init?.body))).toEqual([
       {
         course: "MA 241",
