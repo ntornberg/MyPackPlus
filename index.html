@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyPack Plus Privacy Policy</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#555; --line:#ddd; --link:#b30000; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141414; --fg:#eee; --muted:#aaa; --line:#333; --link:#ff8080; } }
+  body { background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; margin:0; }
+  main { max-width:720px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:1.8rem; margin:0 0 4px; }
+  h2 { font-size:1.15rem; margin:32px 0 8px; padding-top:16px; border-top:1px solid var(--line); }
+  p, li { margin:8px 0; }
+  .muted { color:var(--muted); }
+  a { color:var(--link); }
+</style>
+</head>
+<body>
+<main>
+<h1>MyPack Plus Privacy Policy</h1>
+<p class="muted">Last updated: November 16, 2026</p>
+
+<p>MyPack Plus is a free browser extension for NC State students that adds course search, section comparison, grade history, professor ratings, degree-progress tools, schedule previews, and cart helpers to MyPack Portal. It is an independent project and is not affiliated with, endorsed by, or sponsored by NC State University.</p>
+
+<p>In short: MyPack Plus does not sell your data, show ads, or use analytics or tracking. Your enrollment, cart, and degree-audit information is read in your browser to power the features and is not sent to the developer.</p>
+
+<h2>Information the extension reads</h2>
+<ul>
+  <li><strong>MyPack Portal and NC State registration pages</strong> (<code>portalsp.acs.ncsu.edu</code>, <code>webappprd.acs.ncsu.edu</code>): your term, shopping cart, enrolled classes, class search results, and your degree audit and What-If audit results. The extension requests these from NC State's own systems using your signed-in MyPack session, and uses them to show requirements, progress, conflicts, and course options.</li>
+  <li><strong>Gradient</strong> (<code>gradient.ncsu.edu</code>): historical grade distributions for courses and instructors. Gradient access is an optional permission that you grant when you choose to connect. The extension asks Gradient for a course's grade history using your own NC State sign-in session. When you connect, the extension opens a sign-in window to NC State's own login page; it never sees or stores your password. You can disconnect at any time, which removes the permission.</li>
+</ul>
+<p>This information is processed in your browser. It is not transmitted to the developer or to any third party.</p>
+
+<h2>Information stored on your device</h2>
+<ul>
+  <li>Settings, cached course and schedule data, and your degree-audit results, in the extension's local storage.</li>
+  <li>A cache of Gradient grade totals (per-instructor totals, not raw records) in your browser's IndexedDB for the extension. Entries expire after up to 30 days.</li>
+  <li>A random install ID, used only for feedback (below).</li>
+</ul>
+<p>Some preferences may sync through your Chrome profile if you have Chrome sync on. You can clear cached data with the extension's "Clear cache &amp; reset" button, and uninstalling the extension removes its local storage.</p>
+
+<h2>Information sent to servers</h2>
+<ul>
+  <li><strong>Feedback.</strong> If you submit feedback, the extension sends what you type (the message and category), the optional contact you choose to enter, the page area you submitted from, the extension version, and the random install ID to a Cloudflare Worker run by the developer. The install ID is generated randomly, is not derived from your NC State account or MyPack, and is used only to rate-limit submissions and count one vote per install. Your IP address is used for rate limiting and is not stored with your submission. Please do not put sensitive personal information in feedback.</li>
+  <li><strong>Instructor and ratings lookups.</strong> To match instructors and show professor ratings and upcoming-term sections, the extension sends course codes and instructor names (or instructor IDs) to a Supabase backend run by the developer. These requests do not include your identity, schedule, cart, grades you have received, or degree audit.</li>
+  <li><strong>Status check.</strong> The extension periodically fetches a status and update message from a Cloudflare Worker. The request includes the extension version so the extension can tell you when an update is available.</li>
+</ul>
+<p>Requests to NC State (MyPack, the registrar, and Gradient) go directly from your browser to NC State and are subject to NC State's own policies. As with any internet request, the hosting providers involved (Cloudflare and Supabase) can see technical connection data such as your IP address. The developer does not use it to identify or track you.</p>
+
+<h2>How information is used</h2>
+<p>Information is used only to provide the extension's features and to handle feedback you choose to send. It is not sold, rented, or shared for advertising, and it is not used to determine creditworthiness or for lending. Use of data complies with the <a href="https://developer.chrome.com/docs/webstore/program_policies/#limited_use">Chrome Web Store Limited Use requirements</a>.</p>
+
+<h2>Retention and deletion</h2>
+<p>Feedback submissions are kept so they can be reviewed and acted on, and are deleted on request or when no longer needed. To have your feedback removed, open an issue at the link below and include the contact you gave. "Clear cache &amp; reset" generates a new install ID. Data stored in your browser is under your control as described above.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the date above will be updated. Material changes will be noted in the extension's release notes.</p>
+
+<h2>Contact</h2>
+<p>Questions or deletion requests: <a href="https://github.com/ntornberg/MyPackPlus/issues">github.com/ntornberg/MyPackPlus/issues</a>. Project site: <a href="https://mypackplus.me">mypackplus.me</a>.</p>
+</main>
+</body>
+</html>
